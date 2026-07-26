@@ -149,6 +149,17 @@ if [ -n "${SENZA_AGENTE[$FASE]:-}" ]; then
   exit 0
 fi
 
+# ── Gate di completezza (Sprint 8.5) — solo prima della Fase 3 ───────
+# Chiude il difetto noto: un gap prezzi con categorie "non coperte"
+# poteva dipendere da estrazione incompleta, non da carenza dei dati
+# di riferimento. Blocca esplicitamente invece di lasciare che
+# strategy-auditor lo scopra a metà analisi.
+if [ "$FASE" = "3" ]; then
+  if ! python3 "$(dirname "${BASH_SOURCE[0]}")/verifica_completezza.py" "$GARA_DIR"; then
+    error "Fase 3 bloccata: estrazione documentale incompleta (vedi sopra). Completa document-preprocessor prima di procedere."
+  fi
+fi
+
 # ── Registrazione run (Sprint 3.2) — PRIMA di invocare claude ────────
 RUN_ID="$(python3 -c 'import uuid; print(uuid.uuid4())')"
 AVVIATO_IL="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

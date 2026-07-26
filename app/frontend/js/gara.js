@@ -284,15 +284,42 @@ async function ricarica() {
   }
 }
 
+// Ingestione incrementale (Sprint 8): dopo un upload a gara avviata,
+// chiedi esplicitamente quale fase già completata rieseguire — mai
+// farlo da soli, e mai in silenzio.
+function chiediRiesecuzione(slug, fasiCompletate) {
+  const esito = document.getElementById("upload-esito");
+  if (!fasiCompletate || fasiCompletate.length === 0) return;
+  const box = document.createElement("div");
+  box.className = "approval-panel";
+  box.style.marginTop = "0.75rem";
+  box.innerHTML = `<strong>Rieseguire una fase già completata per tenere conto del nuovo documento?</strong>
+    <p class="sub">Le fasi successive già completate verranno marcate "da rivedere", non cancellate.</p>`;
+  fasiCompletate.forEach((n) => {
+    const b = document.createElement("button");
+    b.textContent = `Riesegui Fase ${n} (${NOMI_FASE[n]})`;
+    b.className = "ghost";
+    b.onclick = async () => {
+      b.disabled = true;
+      try { await Api.riesegui(slug, n); await ricarica(); b.textContent = "Riesecuzione accodata ✓"; }
+      catch (e) { alert(`Errore: ${e.message}`); b.disabled = false; }
+    };
+    box.appendChild(b);
+  });
+  esito.after(box);
+}
+
 document.getElementById("form-upload").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const form = new FormData(ev.target);
   const esito = document.getElementById("upload-esito");
+  document.querySelectorAll(".doc-upload .approval-panel").forEach((el) => el.remove());
   esito.hidden = false; esito.className = "esito"; esito.textContent = "Caricamento…";
   try {
-    await Api.caricaDocumento(SLUG, form.get("categoria"), form.get("file"));
-    esito.textContent = "Caricato."; esito.classList.add("good");
+    const r = await Api.caricaDocumento(SLUG, form.get("categoria"), form.get("file"));
+    esito.textContent = r.messaggio || "Caricato."; esito.classList.add("good");
     ev.target.reset();
+    chiediRiesecuzione(SLUG, r.fasi_completate_da_valutare);
   } catch (e) {
     esito.textContent = `Errore: ${e.message}`; esito.classList.add("crit");
   }

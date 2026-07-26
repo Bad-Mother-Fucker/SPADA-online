@@ -107,7 +107,27 @@ async def carica_documento(slug: str, categoria: str, file: UploadFile):
             "INSERT INTO documenti (gara_slug, nome_file, percorso, categoria, caricato_il) VALUES (?,?,?,?,?)",
             (slug, nome_file, str(dest.relative_to(gara_dir(slug))), categoria, now()),
         )
-    return {"caricato": nome_file, "categoria": categoria}
+
+    # Ingestione incrementale (Sprint 8): un upload a gara avviata non
+    # rilancia nulla da solo — l'interfaccia deve poter chiedere
+    # esplicitamente quale fase già completata rieseguire tenendo conto
+    # del nuovo documento. Qui si limita a segnalare quali fasi sono
+    # già completate (candidate a una riesecuzione informata).
+    fasi = _leggi_json(gara_dir(slug) / "_state" / "fasi.json", {}).get("fasi", {})
+    fasi_completate = sorted(
+        int(k.split("_")[0]) for k, v in fasi.items() if v.get("stato") == "completata"
+    )
+    return {
+        "caricato": nome_file,
+        "categoria": categoria,
+        "fasi_completate_da_valutare": fasi_completate,
+        "messaggio": (
+            f"Documento caricato. Le fasi {fasi_completate} risultano già completate: "
+            "valuta se rieseguirle per tenere conto del nuovo documento."
+            if fasi_completate else
+            "Documento caricato. Nessuna fase ancora completata da rivalutare."
+        ),
+    }
 
 
 def _accoda_job(slug: str, fase: int, tipo: str):
