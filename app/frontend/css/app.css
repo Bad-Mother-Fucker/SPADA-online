@@ -43,6 +43,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .esito { padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); margin-top: var(--sp-3); }
 .esito.good { background: var(--goodbg); color: var(--good); }
 .esito.crit { background: var(--critbg); color: var(--crit); }
+.esito.warn { background: var(--warnbg); color: var(--warn); }
 
 .griglia-gare { display: grid; gap: var(--sp-3); }
 .gara-card { text-decoration: none; color: inherit; cursor: pointer; }

@@ -1,0 +1,31 @@
+[Unit]
+Description=SPADA Online — backend API (FastAPI/uvicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=spada
+Group=spada
+WorkingDirectory=/home/spada/spada-online/app/backend
+EnvironmentFile=/etc/spada/auth.env
+Environment=SPADA_GARE_DIR=/home/spada/spada/gare
+Environment=SPADA_PIPELINE_DIR=/home/spada/spada/_pipeline
+Environment=SPADA_DATA_DIR=/home/spada/spada/_data
+# Origine esplicita in produzione, non "*": impostare all'hostname
+# reale del frontend su Cloudflare Pages.
+Environment=SPADA_FRONTEND_ORIGIN=https://spada.pages.dev
+ExecStart=/home/spada/spada-online/app/backend/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Indurimento minimo — il processo non ha bisogno di scrivere fuori da
+# gare/_data, né di privilegi oltre l'utente dedicato.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/home/spada/spada/gare /home/spada/spada/_data
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target

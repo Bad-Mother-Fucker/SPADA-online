@@ -1,0 +1,30 @@
+[Unit]
+Description=SPADA Online — worker (consumo coda job FIFO)
+After=network.target spada-api.service
+
+[Service]
+Type=simple
+User=spada
+Group=spada
+WorkingDirectory=/home/spada/spada-online/app/worker
+EnvironmentFile=/etc/spada/auth.env
+Environment=SPADA_GARE_DIR=/home/spada/spada/gare
+Environment=SPADA_PIPELINE_DIR=/home/spada/spada/_pipeline
+Environment=SPADA_DATA_DIR=/home/spada/spada/_data
+ExecStart=/home/spada/spada-online/app/backend/.venv/bin/python3 worker.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Il worker lancia `claude` (via spada-fase), che scrive dentro
+# gare/<slug>/: niente ProtectSystem=strict qui, servirebbe negare
+# esattamente le scritture che il worker deve fare. Isolamento minimo
+# comunque utile: nessun privilegio aggiuntivo, home non scrivibile
+# oltre gare/_data.
+NoNewPrivileges=true
+ProtectHome=read-only
+ReadWritePaths=/home/spada/spada/gare /home/spada/spada/_data /home/spada/.claude
+
+[Install]
+WantedBy=multi-user.target

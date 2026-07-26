@@ -57,6 +57,30 @@ async function caricaVersionePipeline() {
   }
 }
 
+// Avviso scadenza token OAuth (Sprint 9.6). Stima approssimativa da
+// mtime di /etc/spada/auth.env — vedi app/backend/auth.py.
+async function caricaStatoAuth() {
+  try {
+    const a = await Api.sistemaAuth();
+    if (!a.disponibile) {
+      const b = document.createElement("p");
+      b.className = "esito crit";
+      b.textContent = `Autenticazione Claude non disponibile: ${a.motivo}`;
+      document.querySelector(".app-top").appendChild(b);
+      return;
+    }
+    const stima = a.stima_scadenza;
+    if (stima && stima.giorni_alla_scadenza_stimata < 30) {
+      const b = document.createElement("p");
+      b.className = "esito warn";
+      b.textContent = stima.giorni_alla_scadenza_stimata < 0
+        ? `Il token OAuth potrebbe essere scaduto (stima). ${stima.nota}`
+        : `Il token OAuth scade tra circa ${stima.giorni_alla_scadenza_stimata} giorni (stima). ${stima.nota}`;
+      document.querySelector(".app-top").appendChild(b);
+    }
+  } catch { /* endpoint non raggiungibile: nessun avviso, non bloccante */ }
+}
+
 document.getElementById("form-nuova-gara").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const form = new FormData(ev.target);
@@ -84,4 +108,5 @@ document.getElementById("form-nuova-gara").addEventListener("submit", async (ev)
 });
 
 caricaVersionePipeline();
+caricaStatoAuth();
 caricaElenco();

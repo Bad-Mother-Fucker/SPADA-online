@@ -1,0 +1,23 @@
+# Cloudflare Tunnel — espone il backend (127.0.0.1:8000) con un
+# hostname stabile, senza aprire alcuna porta in ingresso sulla VM
+# (principio non negoziabile #9 del piano: "nessuna porta aperta su
+# internet").
+#
+# Setup (una tantum, sulla VM):
+#   cloudflared tunnel login
+#   cloudflared tunnel create spada-online
+#   cloudflared tunnel route dns spada-online api.<tuo-dominio>
+#   # copia l'UUID stampato da `tunnel create` qui sotto
+#
+# Poi:
+#   sudo cp config.yml /etc/cloudflared/config.yml
+#   sudo cloudflared service install
+#   sudo systemctl enable --now cloudflared
+
+tunnel: <UUID-DEL-TUNNEL>
+credentials-file: /etc/cloudflared/<UUID-DEL-TUNNEL>.json
+
+ingress:
+  - hostname: api.<tuo-dominio>
+    service: http://127.0.0.1:8000
+  - service: http_status:404
