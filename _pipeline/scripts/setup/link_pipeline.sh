@@ -50,6 +50,17 @@ link "$PIPELINE_DIR/scripts"  "scripts"
 link "$PIPELINE_DIR/settings.json" "settings.json"
 
 echo ""
+echo "▶ Espongo spada-fase sul PATH (~/.local/bin)..."
+mkdir -p "$HOME/.local/bin"
+[ -L "$HOME/.local/bin/spada-fase" ] && rm "$HOME/.local/bin/spada-fase"
+ln -s "$PIPELINE_DIR/scripts/setup/spada_fase.sh" "$HOME/.local/bin/spada-fase"
+chmod +x "$PIPELINE_DIR/scripts/setup/spada_fase.sh"
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) echo "  Nota: ~/.local/bin non è nel PATH di questa shell — aggiungilo al profilo (export PATH=\"\$HOME/.local/bin:\$PATH\")." ;;
+esac
+
+echo ""
 echo "▶ Preparo il venv del server MCP prezzario..."
 bash "$PIPELINE_DIR/mcp/prezzario/setup.sh"
 

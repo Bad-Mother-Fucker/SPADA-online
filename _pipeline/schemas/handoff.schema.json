@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spada-online/_pipeline/schemas/handoff.schema.json",
+  "title": "Artefatto di handoff tra fasi",
+  "description": "Scritto da ogni fase in _state/handoff/<n>_<nome>.json a fine esecuzione (Sprint 3.3). Contiene SOLO ciò che serve alle fasi successive — mai contenuto sintetizzato non tracciabile: ogni riferimento deve puntare a un file o nodo del grafo realmente esistente (regola anti-fabbricazione). La fase successiva carica questo file al posto di rileggere l'intero workspace.",
+  "type": "object",
+  "required": ["fase", "generato_il", "entita_chiave", "riferimenti"],
+  "additionalProperties": true,
+  "properties": {
+    "fase": { "type": "integer", "minimum": 1, "maximum": 7 },
+    "generato_il": { "type": "string", "format": "date-time" },
+    "entita_chiave": {
+      "type": "array",
+      "description": "Fatti puntuali che la fase successiva deve conoscere senza rileggere tutto (es. criteri individuati, importo lavori, regione prezzario).",
+      "items": { "type": "string" }
+    },
+    "decisioni": {
+      "type": "array",
+      "description": "Decisioni prese in questa fase (dall'agente o dal professionista) rilevanti a valle.",
+      "items": { "type": "string" }
+    },
+    "riferimenti": {
+      "type": "array",
+      "description": "Percorsi file o ID nodo del grafo REALMENTE ESISTENTI. Ogni voce deve essere verificabile (il file/nodo esiste). Mai un riassunto non ancorato.",
+      "items": {
+        "type": "object",
+        "required": ["percorso_o_nodo"],
+        "properties": {
+          "percorso_o_nodo": { "type": "string" },
+          "descrizione": { "type": "string" }
+        }
+      }
+    },
+    "alert": {
+      "type": "array",
+      "description": "Segnalazioni che la fase successiva non deve ignorare (es. gap di copertura, prezzario mancante, orfani nel grafo).",
+      "items": { "type": "string" }
+    },
+    "vincoli_rilevati": {
+      "type": "array",
+      "description": "Vincoli del disciplinare o di progetto rilevati in questa fase, rilevanti per le fasi successive.",
+      "items": { "type": "string" }
+    }
+  }
+}
