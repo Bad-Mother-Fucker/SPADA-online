@@ -36,8 +36,8 @@ Analizza il criterio C2
 
 ## Prerequisiti obbligatori
 
-- `03_criteria/criteria/criterion_Cx.md` deve esistere
-- `03_criteria/criteria_matrix.md` deve esistere
+- `output/03_criteria/criteria/criterion_Cx.md` deve esistere
+- `output/03_criteria/criteria_matrix.md` deve esistere
 - `02_graph/index.md` deve esistere
 
 Se mancano, avviare prima `start_bid_analysis`.
@@ -47,9 +47,9 @@ Se mancano, avviare prima `start_bid_analysis`.
 | # | Chi | Cosa |
 |---|---|---|
 | 1 | main loop | naviga `02_graph/index.md` + `criterion_Cx.md` → lista documenti rilevanti |
-| 2 | `pdf-reader` + `drawing-reader` | in parallelo, uno per documento → schede in `04_doc_summaries/` |
+| 2 | `pdf-reader` + `drawing-reader` | in parallelo, uno per documento → schede in `output/04_doc_summaries/` |
 | 3 | `criterion-agent` | criterio e sottocriteri, evidenze, gap, proposte, domande guida → bozza `Cx_output.md` (senza Audit) |
-| 4 | `evidence-auditor` | audit in formato tabella, aggiornamento dei registri, `criteri_stato` in `PROJECT_CONFIG.json` |
+| 4 | `evidence-auditor` | audit in formato tabella, aggiornamento dei registri, `criteri_stato` in `manifest.json` |
 | 5 | main loop | presenta proposte e domande guida all'utente, invoca `context-monitor` |
 
 Il feedback del professionista si compila poi direttamente in
@@ -57,11 +57,11 @@ Il feedback del professionista si compila poi direttamente in
 
 ## Output
 
-- `05_criteria_outputs/Cx_output.md` — output completo
-- `04_doc_summaries/[codice]_*.md` — schede documenti
-- `06_registers/proposal_register.md` — aggiornato
-- `06_registers/gap_register.md` — aggiornato
-- `06_registers/audit_summary.md` — aggiornato
+- `output/05_criteria_outputs/Cx_output.md` — output completo
+- `output/04_doc_summaries/[codice]_*.md` — schede documenti
+- `output/06_registers/proposal_register.md` — aggiornato
+- `output/06_registers/gap_register.md` — aggiornato
+- `output/06_registers/audit_summary.md` — aggiornato
 
 Il feedback viene raccolto direttamente nel file `Cx_output.md` (campo `stato_feedback`) ed elaborato con `/process_feedback`.
 

@@ -1,6 +1,6 @@
 ---
 name: strategy-audit
-description: Usa quando devi produrre o rigenerare 03_criteria/strategy_audit.md (Fase 1 Step 4, o /run_strategy_audit). Procedura per le quattro analisi: budget sicurezza, gap prezzi, viabilita' cantiere, capacita' di investimento migliorativo.
+description: Usa quando devi produrre o rigenerare output/03_criteria/strategy_audit.md (Fase 1 Step 4, o /run_strategy_audit). Procedura per le quattro analisi: budget sicurezza, gap prezzi, viabilita' cantiere, capacita' di investimento migliorativo.
 ---
 
 # Skill — Strategy Audit
@@ -98,16 +98,30 @@ e non implica nessuna azione specifica.
 
 ## Analisi 2 — Gap prezzi vs prezzario regionale
 
-### Skill da usare
+### Strumento da usare
 
-```
-prezzario
-```
+Server MCP `prezzario` (Sprint 2 — sostituisce la skill a indice JSON
+del modello precedente). Il prezzario non si carica mai in contesto:
+si interroga voce per voce.
+
+- `versione_prezzario(regione, anno)` — verifica che l'edizione sia
+  importata prima di procedere; l'`identificativo` restituito va
+  registrato come `prezzario_version` in `_state/run_log.json`
+  (tramite `spada-fase`, non da questo agente).
+- `confronta_prezzo(prezzo_offerto, regione, anno, codice_tariffa)` —
+  lookup esatto su `codice_completo` + classificazione BASSO/MEDIO/ALTO
+  gia' calcolata dal server (soglie identiche a quelle di questa
+  skill). E' il tool da usare per ogni voce del campione.
+- `dettaglio_analisi(codice_tariffa, regione, anno)` — scomposizione
+  materiali/manodopera/attrezzature, solo per isolare la causa di uno
+  scostamento ALTO (non necessario per il gap medio).
+- `cerca_voce(testo, regione, anno)` — solo se il codice tariffa non è
+  noto e serve un match per descrizione (vedi passo 3b).
 
 Il confronto si fa per **lookup esatto su codice tariffa**, non per
 ricerca testuale: il computo metrico del progetto cita gia' i codici
-delle voci di capitolato (es. `CAM26_C06.020.062.I`), e il prezzario
-regionale e' indicizzato esattamente su quella chiave. Non serve
+delle voci di capitolato (es. `CAM26_C06.020.062.I`), e
+`confronta_prezzo` fa quel lookup esatto internamente. Non serve
 cercare corrispondenze testuali tra descrizioni.
 
 ### Fonti da leggere
@@ -117,18 +131,17 @@ Dal grafo:
   `subtype: computo_metrico` con `is_latest: true` — e' la fonte dei
   codici tariffa e delle quantita' del progetto
 - Pagina nodo del documento trovato → `extracted_md`
-- `01_extracted/text/[codice_descrizione].md` — testo estratto del documento
+- `output/01_extracted/text/[codice_descrizione].md` — testo estratto del documento
 
 Prezzario regionale:
-- `PROJECT_CONFIG.json` → `gara.prezzario_riferimento.{regione,anno,percorso}`
-- Se `percorso` e' vuoto ma `regione` e `anno` sono compilati: esegui
-  ```bash
-  scripts/prezzario/fetch_prezzario.sh "<regione>" <anno>
-  ```
-  e scrivi il percorso restituito in `prezzario_riferimento.percorso`.
-- Se anche `regione`/`anno` sono vuoti: il professionista non li ha
-  ancora indicati (di norma si compilano a `/new_bid`) — classificazione
-  `NON DISPONIBILE`, non improvvisare una regione.
+- `manifest.json` → `prezzario.{regione,anno}` (compilati alla
+  creazione della gara da `new_gara.sh`, vedi `_pipeline/schemas/manifest.schema.json`)
+- Chiama `versione_prezzario(regione, anno)`. Se `disponibile: false`:
+  quella edizione non e' ancora stata importata in `spada.db` —
+  classificazione `NON DISPONIBILE`, non improvvisare una regione ne'
+  un'edizione. Segnala che serve eseguire
+  `import_prezzario.py` (vedi `_pipeline/mcp/prezzario/README.md`)
+  prima di poter completare questa analisi.
 
 ### Procedura
 
@@ -138,11 +151,10 @@ Prezzario regionale:
    - Se piu' versioni: usa `is_latest: true`
    - Se nessun documento: classificazione `NON DISPONIBILE`
 
-2. **Individua il prezzario regionale** (vedi skill `prezzario` per la
-   procedura di fetch/cache completa). Se non disponibile per questa
-   regione/anno: scrivi la sezione con classificazione `NON DISPONIBILE`
-   e le istruzioni per renderlo disponibile (vedi template sotto) —
-   **non stimare un prezzo a occhio**.
+2. **Individua il prezzario regionale** con `versione_prezzario(regione, anno)`.
+   Se non disponibile per questa regione/anno: scrivi la sezione con
+   classificazione `NON DISPONIBILE` e le istruzioni per renderlo
+   disponibile (vedi template sotto) — **non stimare un prezzo a occhio**.
 
 3. **Se entrambi disponibili — calcola il gap:**
    a. Dal documento prezzi/computo del progetto: estrai un campione di
@@ -157,20 +169,22 @@ Prezzario regionale:
       dell'importo lavori**. Se il testo estratto non contiene affatto
       una di quelle categorie, quella categoria e' **non coperta**:
       registrala come tale, non ignorarla in silenzio.
-   b. Per ogni voce del campione: lookup esatto nel prezzario regionale
-      su `codice_completo` (skill `prezzario`, sezione "Lookup esatto
-      per codice"). Se il codice non esiste nel prezzario (voce a corpo,
-      prezzo custom del progettista): segnala quella voce come
-      "non confrontabile", escludila dalla media — non forzare un match
-      approssimativo per descrizione.
-   c. Per ogni coppia trovata, confronta col campo `prezzo` (comprensivo
-      di S.G. e U.I. — vedi skill `prezzario`):
-      - `gap% = (prezzo_progetto - prezzo_prezzario) / prezzo_prezzario * 100`
-      - Positivo = il progetto usa prezzi piu' alti del prezzario
-      - Negativo = il progetto usa prezzi piu' bassi
-   d. `gap_medio% = media aritmetica dei gap% del campione` (sulle sole
-      voci confrontabili)
-   e. Classifica il gap medio:
+   b. Per ogni voce del campione: chiama
+      `confronta_prezzo(prezzo_offerto=<prezzo di progetto>, regione, anno, codice_tariffa=<codice_completo>)`.
+      Se ritorna `comparabile: false` (codice assente dal prezzario —
+      voce a corpo, prezzo custom del progettista): segnala quella voce
+      come "non confrontabile", escludila dalla media — non forzare un
+      match approssimativo per descrizione.
+   c. Il campo `scostamento_pct` di ogni risposta e' gia' il gap% per
+      quella voce (positivo = il progetto usa prezzi piu' alti del
+      prezzario regionale, negativo = piu' bassi). Il confronto avviene
+      internamente sul campo `prezzo` del prezzario (comprensivo di
+      S.G. e U.I.).
+   d. `gap_medio% = media aritmetica degli `scostamento_pct` del
+      campione (sulle sole voci con `comparabile: true`)
+   e. Classifica il gap medio con le stesse soglie che il server applica
+      per voce (cosi' la classificazione aggregata resta coerente con
+      quelle puntuali):
       - `|gap_medio| < 5%`: BASSO
       - `5% ≤ |gap_medio| < 15%`: MEDIO
       - `|gap_medio| ≥ 15%`: ALTO
@@ -259,15 +273,16 @@ Prezzario regionale:
 > rieseguire `/run_strategy_audit`.
 
 [Se NON DISPONIBILE — regione/anno non indicati]:
-> ℹ️ Confronto non eseguibile: `prezzario_riferimento.regione`/`.anno`
-> non sono compilati in `PROJECT_CONFIG.json`. Indicali (di norma a
-> `/new_bid`) e riesegui strategy-auditor.
+> ℹ️ Confronto non eseguibile: `prezzario.regione`/`.anno` non sono
+> compilati in `manifest.json`. Vanno indicati alla creazione della
+> gara (`new_gara.sh --regione ... --anno-prezzario ...`); se mancano,
+> segnalalo e non procedere con questa analisi.
 
-[Se NON DISPONIBILE — prezzario non ancora pubblicato per questa regione/anno]:
+[Se NON DISPONIBILE — prezzario non ancora importato per questa regione/anno]:
 > ℹ️ Confronto non eseguibile: il prezzario [Regione] [Anno] non e'
-> disponibile in `prometeus-prezzari`. Per abilitare questa analisi
-> vedi il README di quel repo (estrazione da Excel ufficiale +
-> pubblicazione di una release), poi riesegui strategy-auditor.
+> ancora stato importato in `spada.db`. Serve eseguire
+> `import_prezzario.py` (vedi `_pipeline/mcp/prezzario/README.md`) con
+> i due file sorgente di quella regione/anno, poi riesegui strategy-auditor.
 
 [Se NON DISPONIBILE — documento prezzi mancante]:
 > ℹ️ Nessun documento di tipo elenco_prezzi o analisi_prezzi trovato
@@ -284,7 +299,7 @@ Prezzario regionale:
 Dal grafo:
 - `02_graph/index.md` → cerca nodi con `subtype: relazione_generale`
   (sezione 01) e `subtype: PSC` (sezione 09)
-- Testi estratti dei documenti trovati in `01_extracted/text/`
+- Testi estratti dei documenti trovati in `output/01_extracted/text/`
 
 ### Procedura
 
@@ -539,7 +554,7 @@ OK o dati non disponibili senza motivo specifico.
 ## Template output completo — strategy_audit.md
 
 ```markdown
-# Audit Strategico — [PROJECT_CONFIG.gara.nome]
+# Audit Strategico — [manifest.json → nome]
 
 **Generato il:** [data]
 **Agente:** strategy-auditor

@@ -47,7 +47,7 @@ Se manca la motivazione: chiedi prima di procedere.
    Usa `priority: media` come default — il professionista puo'
    specificare alta o bassa nella motivazione.
 3. Aggiorna il campo `graph_updated` nella pagina criterio
-   `03_criteria/criteria/criterion_Cx.md`: aggiungi il documento appena
+   `output/03_criteria/criteria/criterion_Cx.md`: aggiungi il documento appena
    collegato alla lista `supported_by`.
 4. Esegui `graph-lint` (`.claude/skills/graph-lint/SKILL.md`)
    per verificare che il documento non sia piu' nella lista orfani.

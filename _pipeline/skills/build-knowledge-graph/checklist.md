@@ -2,10 +2,10 @@
 
 ## Prima di iniziare
 - [ ] Ho letto `references/graph-schema.md`
-- [ ] Ho letto `PROJECT_CONFIG.json` (nome gara, prezzario_riferimento)
-- [ ] Esiste `03_criteria/criteria_matrix.md`
-- [ ] Esiste almeno un file in `01_extracted/text/`
-- [ ] Ho cercato l'elenco elaborati in `00_input/elaborati/`
+- [ ] Ho letto `manifest.json` (nome gara, prezzario_riferimento)
+- [ ] Esiste `output/03_criteria/criteria_matrix.md`
+- [ ] Esiste almeno un file in `output/01_extracted/text/`
+- [ ] Ho cercato l'elenco elaborati in `input/elaborati/`
 
 ## Fase A — Elenco elaborati
 - [ ] Ho localizzato l'elenco elaborati (o documentato la sua assenza)
@@ -14,7 +14,7 @@
 - [ ] Ho segnalato file nell'elenco non trovati nel filesystem (missing)
 
 ## Fase B — Censimento
-- [ ] Ho eseguito `find` per tutti i PDF/p7m in `00_input/`
+- [ ] Ho eseguito `find` per tutti i PDF/p7m in `input/`
 - [ ] Ho riconciliato con il manifest `_manifest_input.md`
 
 ## Fase C — Estrazione contenuto

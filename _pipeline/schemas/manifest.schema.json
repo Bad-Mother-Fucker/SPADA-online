@@ -48,6 +48,24 @@
           "items": { "type": "string", "pattern": "^C[0-9]+$" }
         }
       }
+    },
+    "deliverables": {
+      "type": "object",
+      "description": "Scritto da disciplinare-analyst in Fase 1: elenco dei documenti richiesti per criterio, stessi dati delle schede del gara brief. offer-writer lo legge per verificare che la bozza copra ogni documento richiesto.",
+      "propertyNames": { "pattern": "^C[0-9]+$" },
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["nome", "vincolo_formato", "fonte"],
+          "additionalProperties": false,
+          "properties": {
+            "nome": { "type": "string" },
+            "vincolo_formato": { "type": "string" },
+            "fonte": { "type": "string" }
+          }
+        }
+      }
     }
   }
 }

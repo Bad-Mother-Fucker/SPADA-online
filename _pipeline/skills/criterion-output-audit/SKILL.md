@@ -37,7 +37,7 @@ Per ogni proposta controllare:
 |---|---|---|
 | `approvata` | Tutte le verifiche positive | Entra nel registro proposte |
 | `approvata con riserva` | Verifiche positive ma con nota di attenzione | Entra nel registro con nota |
-| `da integrare` | Mancano informazioni, diventa domanda guida | Non entra nel registro, va in `07_questions/` |
+| `da integrare` | Mancano informazioni, diventa domanda guida | Non entra nel registro, va in `output/07_questions/` |
 | `scartata` | Evidenza assente o contraddice il disciplinare | Non entra nel registro, archiviata con motivo |
 
 ## Regole

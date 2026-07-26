@@ -2,9 +2,9 @@
 
 ## Prima dell'audit
 
-- [ ] Ho letto tutte le proposte in `05_criteria_outputs/Cx_output.md`
-- [ ] Ho letto il criterio `03_criteria/criteria/criterion_Cx.md`
-- [ ] Ho letto le schede documenti rilevanti in `04_doc_summaries/`
+- [ ] Ho letto tutte le proposte in `output/05_criteria_outputs/Cx_output.md`
+- [ ] Ho letto il criterio `output/03_criteria/criteria/criterion_Cx.md`
+- [ ] Ho letto le schede documenti rilevanti in `output/04_doc_summaries/`
 
 ## Per ogni proposta
 
@@ -22,6 +22,6 @@
 - [ ] Ho documentato le note per proposte con riserva
 - [ ] Ho generato domande guida per proposte `da integrare`
 - [ ] Ho documentato il motivo per proposte scartate
-- [ ] Ho aggiornato `06_registers/proposal_register.md` (solo approvate)
-- [ ] Ho aggiornato `06_registers/audit_summary.md`
+- [ ] Ho aggiornato `output/06_registers/proposal_register.md` (solo approvate)
+- [ ] Ho aggiornato `output/06_registers/audit_summary.md`
 - [ ] Ho segnalato a `context-monitor` per aggiornamento snapshot

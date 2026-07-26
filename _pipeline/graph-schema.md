@@ -36,7 +36,7 @@ immediatamente dopo il frontmatter.
 Campi universali su ogni nodo:
 ```yaml
 type: <tipo-nodo>
-gara: "[nome gara da PROJECT_CONFIG]"
+gara: "[nome gara da manifest.json]"
 date: YYYY-MM-DD
 ai-first: true
 ```
@@ -125,7 +125,7 @@ section: "08"
 version_group: "computo"
 is_latest: true
 status: estratto             # estratto | non_estratto
-extracted_md: "01_extracted/text/08.Q.R02_Computo_Metrico.md"
+extracted_md: "output/01_extracted/text/08.Q.R02_Computo_Metrico.md"
 confidence: verificato
 supports_criteria:
   - { criterion: "[[C1]]", priority: alta, reason: "Importi di riferimento per le opere del criterio" }
@@ -270,7 +270,7 @@ Il file piu' recente ha `is_latest: true`, tutti gli altri `false`.
 ### Documento testuale
 ```markdown
 ## Per Claude futuro
-Questo e' il [subtype] [codice] della gara [[PROJECT_CONFIG.gara.nome]].
+Questo e' il [subtype] [codice] della gara [[manifest.json → nome]].
 [Descrizione ufficiale dall'elenco elaborati.] Contiene [entita' chiave].
 Confidence: [livello].
 ```
@@ -278,7 +278,7 @@ Confidence: [livello].
 ### Tavola
 ```markdown
 ## Per Claude futuro
-Questa e' la tavola [codice] della gara [[PROJECT_CONFIG.gara.nome]].
+Questa e' la tavola [codice] della gara [[manifest.json → nome]].
 Rappresenta [oggetto grafico] per la sezione [xx].
 Lettura approfondita differita a drawing-reader on-demand.
 ```

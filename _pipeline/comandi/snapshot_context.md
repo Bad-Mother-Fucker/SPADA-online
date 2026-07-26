@@ -24,18 +24,18 @@ context-monitor
 
 Prima di eseguire, verificare che siano aggiornati:
 
-- `03_criteria/criteria_matrix.md`
-- `06_registers/proposal_register.md`
-- `06_registers/audit_summary.md`
-- `05_criteria_outputs/Cx_output.md` — per ogni criterio analizzato (verificare `stato_feedback`)
+- `output/03_criteria/criteria_matrix.md`
+- `output/06_registers/proposal_register.md`
+- `output/06_registers/audit_summary.md`
+- `output/05_criteria_outputs/Cx_output.md` — per ogni criterio analizzato (verificare `stato_feedback`)
 
 ## Output
 
-- `08_state/project_state_snapshot.md` — snapshot operativo completo
-- `08_state/context_monitor_report.md` — stato contesto e soglie
-- `08_state/decision_log.md` — decisioni prese (incluse decisioni utente)
-- `08_state/open_issues.md` — problemi aperti e domande senza risposta
-- `08_state/next_actions.md` — prossime azioni raccomandate
+- `_state/project_state_snapshot.md` — snapshot operativo completo
+- `_state/context_monitor_report.md` — stato contesto e soglie
+- `_state/decision_log.md` — decisioni prese (incluse decisioni utente)
+- `_state/open_issues.md` — problemi aperti e domande senza risposta
+- `_state/next_actions.md` — prossime azioni raccomandate
 
 ## Soglie operative
 

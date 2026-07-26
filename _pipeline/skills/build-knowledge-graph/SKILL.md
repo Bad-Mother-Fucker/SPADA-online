@@ -41,14 +41,14 @@ regole anti-fabrication. Non procedere senza averlo letto.
 
 ## Input obbligatori
 
-- `00_input/elaborati/` — tutti gli elaborati della gara
-- `01_extracted/text/` — testi gia' estratti da `document-preprocessor`
-- `01_extracted/extraction_log.md` — stato delle estrazioni
-- `00_input/_manifest_input.md` — censimento file con ID
-- `03_criteria/criteria_matrix.md` — criteri e subcriteri
-- `03_criteria/criteria/criterion_Cx.md` — pagine criterio (create
+- `input/elaborati/` — tutti gli elaborati della gara
+- `output/01_extracted/text/` — testi gia' estratti da `document-preprocessor`
+- `output/01_extracted/extraction_log.md` — stato delle estrazioni
+- `input/_manifest_input.md` — censimento file con ID
+- `output/03_criteria/criteria_matrix.md` — criteri e subcriteri
+- `output/03_criteria/criteria/criterion_Cx.md` — pagine criterio (create
   da `disciplinare-analyst`; graph-builder le ARRICCHISCE nel frontmatter)
-- `PROJECT_CONFIG.json` — nome gara e `prezzario_riferimento`
+- `manifest.json` — nome gara e `prezzario_riferimento`
 - `02_graph/index.md` — SE ESISTE: leggi prima di scrivere qualsiasi
   pagina per rilevare cosa e' gia' presente nel grafo
 
@@ -59,7 +59,7 @@ regole anti-fabrication. Non procedere senza averlo letto.
 Cerca il documento "elenco elaborati":
 
 ```bash
-find 00_input/elaborati -iname "*elenco*elaborati*" -o -iname "*00*R00*" \
+find input/elaborati -iname "*elenco*elaborati*" -o -iname "*00*R00*" \
   -o -iname "*indice*elaborati*" 2>/dev/null | head -5
 ```
 
@@ -70,7 +70,7 @@ su tutti i nodi costruiti da filename.
 ## Fase B — Censimento e riconciliazione
 
 ```bash
-find 00_input -type f \( -name "*.pdf" -o -name "*.PDF" \
+find input -type f \( -name "*.pdf" -o -name "*.PDF" \
   -o -name "*.p7m" \) | sort
 ```
 
@@ -87,7 +87,7 @@ Classifica ogni file: `subtype`, sezione, tipo. Separa in:
 ## Fase C — Estrazione contenuto (ibrida e mirata)
 
 **Documenti numerici** (Lista ECONOMICI): se il .md esiste in
-`01_extracted/text/`, leggi e estrai entita' strutturate.
+`output/01_extracted/text/`, leggi e estrai entita' strutturate.
 Se non estratto: richiedi estrazione a `document-preprocessor` (Fase C
 dell'agente preprocessor). Se non ottenibile: scrivi `TBD`.
 
@@ -152,7 +152,7 @@ Aggiorna le pagine con REWRITE della sola sezione `related_documents`.
 
 ## Fase G — Arricchimento pagine criterio (Subagente F)
 
-Per ogni `03_criteria/criteria/criterion_Cx.md`:
+Per ogni `output/03_criteria/criteria/criterion_Cx.md`:
 1. Scansiona tutte le pagine nodo, raccogli quelle con `[[Cx]]`
    in `supports_criteria`
 2. Aggiungi al FRONTMATTER (non al corpo):
@@ -196,7 +196,7 @@ Obbligatori:
 - `02_graph/nodes/[codice]_[descrizione].md` — una per documento
 - `02_graph/scope.md`
 - `02_graph/economic_framework.md`
-- `03_criteria/criteria/criterion_Cx.md` — frontmatter aggiornato
+- `output/03_criteria/criteria/criterion_Cx.md` — frontmatter aggiornato
 - `02_graph/synthesis/*.md` — se synthesis hook attivato
 
 ---

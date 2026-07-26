@@ -3,7 +3,7 @@ name: feedback-processor
 description: >
   Usa questo agente quando il professionista dice "feedback [Cx] pronto"
   o "elabora feedback C1" dopo aver compilato le decisioni nel file
-  05_criteria_outputs/Cx_output.md. Legge le decisioni, crea i nodi
+  output/05_criteria_outputs/Cx_output.md. Legge le decisioni, crea i nodi
   proposta nel knowledge graph, aggiorna i registri e chiude il ciclo
   di analisi del criterio.
 tools: Read, Write, Edit, Grep, Glob
@@ -35,10 +35,10 @@ Se il criterio non e' chiaro: chiedi prima di procedere.
 
 Leggi nell'ordine:
 1. `references/graph-schema.md` — schema nodo `proposal`
-2. `05_criteria_outputs/Cx_output.md` — file con le decisioni
+2. `output/05_criteria_outputs/Cx_output.md` — file con le decisioni
 3. `02_graph/index.md` — per aggiornare il catalogo
 
-Verifica che `05_criteria_outputs/Cx_output.md` esista e abbia
+Verifica che `output/05_criteria_outputs/Cx_output.md` esista e abbia
 `stato_feedback: in_attesa`. Se e' gia' `completato`: avvisa il
 professionista e chiedi conferma prima di rielaborare.
 
@@ -48,7 +48,7 @@ professionista e chiedi conferma prima di rielaborare.
 
 ## Step 1 — Lettura decisioni
 
-Leggi `05_criteria_outputs/Cx_output.md`. Estrai:
+Leggi `output/05_criteria_outputs/Cx_output.md`. Estrai:
 
 **Proposte approvate** (campo **Decisione** nella scheda proposta,
 sezione 4: Approva o Approva con modifiche):
@@ -102,20 +102,20 @@ Aggiungi una nuova sezione `## Proposte approvate` a
 
 ## Step 4 — Aggiornamento registri
 
-Aggiorna `06_registers/proposal_register.md`: aggiungi una riga per
+Aggiorna `output/06_registers/proposal_register.md`: aggiungi una riga per
 ogni proposta approvata con ID, criterio, titolo, stato, punteggio,
 link al nodo proposta.
 
-Aggiorna `06_registers/score_forecast.md`: aggiorna il punteggio
+Aggiorna `output/06_registers/score_forecast.md`: aggiorna il punteggio
 stimato per il criterio Cx con la somma dei punteggi delle proposte
 approvate.
 
 ## Step 5 — Chiusura file output e stato criterio
 
-Nel file `05_criteria_outputs/Cx_output.md`, aggiorna il campo
+Nel file `output/05_criteria_outputs/Cx_output.md`, aggiorna il campo
 frontmatter: `stato_feedback: completato`
 
-Poi allinea `PROJECT_CONFIG.json`, nell'oggetto `criteri_stato`, la
+Poi allinea `manifest.json`, nell'oggetto `criteri_stato`, la
 voce del criterio appena chiuso:
 
 ```json
@@ -131,7 +131,7 @@ sono chiusi e quali attendono ancora feedback.
 
 ## Step 6 — Aggiornamento gara brief
 
-In `03_criteria/gara_brief.md`, sezione "Criteri in dettaglio",
+In `output/03_criteria/gara_brief.md`, sezione "Criteri in dettaglio",
 sostituisci il blocco `**Stato analisi:** ...` del solo criterio
 elaborato — dalla riga "Stato analisi" fino alla fine del suo elenco
 puntato — con:

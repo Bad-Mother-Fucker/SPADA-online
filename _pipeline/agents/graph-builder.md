@@ -125,9 +125,9 @@ Leggi questi file nell'ordine indicato:
    al termine per la verifica.
 4. `02_graph/index.md` — SE ESISTE: leggi per capire cosa c'e' gia'
    nel grafo prima di scrivere qualsiasi pagina.
-5. `PROJECT_CONFIG.json` — estrai: `gara.nome`, `prezzario_riferimento`.
-6. `00_input/_manifest_input.md` — elenco documenti con ID.
-7. `03_criteria/criteria_matrix.md` — criteri e subcriteri.
+5. `manifest.json` — estrai: `gara.nome`, `prezzario_riferimento`.
+6. `input/_manifest_input.md` — elenco documenti con ID.
+7. `output/03_criteria/criteria_matrix.md` — criteri e subcriteri.
 
 ---
 
@@ -148,7 +148,7 @@ Cerca il documento "elenco elaborati" (tipicamente `00.G.R00`,
 `Elenco_Elaborati`, o `indice_elaborati` nella sezione 00 o 01):
 
 ```bash
-find 00_input -iname "*elenco*elaborati*" -o -iname "*00*R00*" \
+find input -iname "*elenco*elaborati*" -o -iname "*00*R00*" \
   -o -iname "*indice*elaborati*" 2>/dev/null | head -5
 ```
 
@@ -165,7 +165,7 @@ Appendi a `02_graph/log.md`:
 ## Fase 1 — Censimento e riconciliazione
 
 ```bash
-find 00_input -type f \( -iname "*.pdf" -o -iname "*.p7m" \) | sort
+find input -type f \( -iname "*.pdf" -o -iname "*.p7m" \) | sort
 ```
 
 Riconcilia con il manifest:
@@ -187,7 +187,7 @@ Per ogni documento in Lista ECONOMICI e Lista TESTUALI prioritari
 (relazione generale, PSC), verifica se esiste il `.md` estratto:
 
 ```bash
-ls 01_extracted/text/
+ls output/01_extracted/text/
 ```
 
 Per i documenti MANCANTI che servono ai subagenti: richiedi
@@ -241,7 +241,7 @@ quadro manodopera 08.R03, piano esproprio 08.R05).
 4. Scrivi o RISCRIVI `02_graph/scope.md`:
    - Tabella lavorazioni da computo metrico (confidence per ogni riga)
    - Sezione "Limiti di modifica" dai campi `modification_limits`
-     delle pagine criterio in `03_criteria/criteria/`
+     delle pagine criterio in `output/03_criteria/criteria/`
    - Se computo non estratto: tabella vuota con nota `# da estrarre`
    - Applica il preambolo "Per Claude futuro" da graph-schema.md
 
@@ -395,7 +395,7 @@ Fasi del **round 2**, invocate dal main loop in parallelo tra loro:
 
 ### Fase F — Criteri
 
-**Scope**: tutte le pagine criterio in `03_criteria/criteria/`.
+**Scope**: tutte le pagine criterio in `output/03_criteria/criteria/`.
 
 **Istruzioni**:
 
@@ -498,7 +498,7 @@ Quando viene fornita una nuova versione di un documento gia' nel grafo:
 - `02_graph/nodes/[codice]_[descrizione].md` — una pagina per ogni documento
 - `02_graph/scope.md` — creata o aggiornata
 - `02_graph/economic_framework.md` — creata o aggiornata
-- `03_criteria/criteria/criterion_Cx.md` — frontmatter arricchito
+- `output/03_criteria/criteria/criterion_Cx.md` — frontmatter arricchito
   (solo il frontmatter, mai il corpo)
 - `02_graph/synthesis/*.md` — se synthesis hook si e' attivato
 
@@ -508,10 +508,10 @@ Quando viene fornita una nuova versione di un documento gia' nel grafo:
 
 1. Leggi sempre `02_graph/index.md` PRIMA di scrivere qualsiasi
    pagina — la falsa assenza e' piu' pericolosa della falsa presenza.
-2. Non eliminare mai file in `00_input/` o `01_extracted/`.
+2. Non eliminare mai file in `input/` o `output/01_extracted/`.
 3. Non modificare mai il corpo delle pagine criterio.
-4. Non creare file in `05_criteria_outputs/`, `06_registers/`,
-   `07_questions/` — non e' il tuo dominio.
+4. Non creare file in `output/05_criteria_outputs/`, `output/06_registers/`,
+   `output/07_questions/` — non e' il tuo dominio.
 5. Ogni arco doc->criterio deve avere `reason` non vuoto.
 6. Ogni dato numerico deve avere `confidence` esplicito.
 7. `TBD` e' sempre preferibile a un valore inventato.

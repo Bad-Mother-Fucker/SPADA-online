@@ -3,7 +3,7 @@
 ## Identificare file .p7m
 
 ```bash
-find 00_input/p7m -name "*.p7m"
+find input/p7m -name "*.p7m"
 ```
 
 ## Tentativo estrazione con openssl (formato CMS/PKCS7)

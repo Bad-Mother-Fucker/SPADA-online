@@ -22,7 +22,7 @@ i TBD nelle singole analisi.
 ## Comportamento
 
 Attiva `strategy-auditor` che esegue le quattro analisi dalla skill
-e produce `03_criteria/strategy_audit.md`.
+e produce `output/03_criteria/strategy_audit.md`.
 
 Se `strategy_audit.md` esiste gia': lo sovrascrive (run successivi
 aggiornano l'audit — es. dopo aggiornamento del knowledge graph).
@@ -37,5 +37,5 @@ Audit strategico completato.
 | Gap prezzi       | [classe]        | [—/testo] |
 | Viabilita'       | [classe]        | [—/testo] |
 
-Report completo: 03_criteria/strategy_audit.md
+Report completo: output/03_criteria/strategy_audit.md
 ```

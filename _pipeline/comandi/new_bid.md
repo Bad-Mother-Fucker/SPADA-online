@@ -10,9 +10,9 @@ Nel modello a pipeline condivisa la cartella di gara non è un clone:
 è stata creata da `new_gara.sh` (Sprint 1.4), che ha già scritto
 `manifest.json` con slug, nome esteso, regione e anno del prezzario,
 modello ed effort — vedi schema in `_pipeline/schemas/manifest.schema.json`.
-Non c'è nessun template da verificare, non c'è `PROJECT_CONFIG.json`:
-il file da leggere e completare è `manifest.json` nella radice della
-gara.
+Non c'è nessun template da verificare e non c'è un clone da controllare:
+il file da leggere e completare è semplicemente `manifest.json`, già
+presente nella radice della gara.
 
 ## Prerequisiti
 - Il disciplinare deve essere già presente in `input/disciplinare/`

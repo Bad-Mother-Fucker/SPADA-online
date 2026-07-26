@@ -50,8 +50,20 @@ link "$PIPELINE_DIR/scripts"  "scripts"
 link "$PIPELINE_DIR/settings.json" "settings.json"
 
 echo ""
+echo "▶ Preparo il venv del server MCP prezzario..."
+bash "$PIPELINE_DIR/mcp/prezzario/setup.sh"
+
+echo ""
+echo "▶ Registro il server MCP prezzario (scope user, idempotente)..."
+claude mcp remove prezzario --scope user >/dev/null 2>&1 || true
+claude mcp add --transport stdio prezzario --scope user \
+  --env "SPADA_DB_PATH=${SPADA_DB_PATH:-$HOME/spada/_data/spada.db}" \
+  -- bash "$PIPELINE_DIR/mcp/prezzario/run.sh"
+
+echo ""
 echo "Pipeline condivisa collegata: $PIPELINE_DIR"
 echo "Versione: $(cat "$PIPELINE_DIR/VERSION" 2>/dev/null || echo sconosciuta)"
 echo ""
 echo "Verifica:"
 echo "  claude --setting-sources user -p 'elenca gli agenti disponibili'"
+echo "  claude mcp list   # deve comparire 'prezzario'"

@@ -3,7 +3,7 @@
 ## Prima di iniziare
 - [ ] Ho letto `02_graph/index.md`
 - [ ] Ho letto `02_graph/economic_framework.md`
-- [ ] Ho letto `PROJECT_CONFIG.json` (prezzario_riferimento)
+- [ ] Ho letto `manifest.json` (campo `prezzario`: regione/anno)
 - [ ] Il knowledge graph e' stato costruito (index.md esiste)
 
 ## Analisi 1 — Budget sicurezza
@@ -16,7 +16,7 @@
 
 ## Analisi 2 — Gap prezzi
 - [ ] Ho cercato nodi elenco_prezzi / computo_metrico in index.md
-- [ ] Ho cercato il prezzario in PROJECT_CONFIG (skill `prezzario`)
+- [ ] Ho chiamato `versione_prezzario(regione, anno)` (server MCP `prezzario`)
 - [ ] Ho ricavato le categorie di lavorazione del computo con il loro peso
 - [ ] Il campione tocca almeno una voce per ogni categoria >= 5% dell'importo
 - [ ] Gap% calcolato per ogni voce del campione
@@ -53,7 +53,7 @@
 - [ ] Almeno una domanda trasversale sulle priorita'
 
 ## Output
-- [ ] `03_criteria/strategy_audit.md` creato con il template completo
+- [ ] `output/03_criteria/strategy_audit.md` creato con il template completo
 - [ ] Riepilogo tabella alla fine del file
 - [ ] Nessun valore inventato — tutti i dati hanno fonte citata
 - [ ] Nessuna raccomandazione strategica nel testo

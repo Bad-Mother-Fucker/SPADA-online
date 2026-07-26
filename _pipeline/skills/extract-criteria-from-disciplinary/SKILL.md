@@ -31,10 +31,10 @@ Estrarre con precisione criteri valutativi, subcriteri, punteggi, vincoli e moda
 
 ## Output
 
-- `03_criteria/criteria_matrix.md`
-- `03_criteria/criteria_matrix.json`
-- `03_criteria/criteria_checklist.md`
-- `03_criteria/criteria/criterion_Cx.md` (uno per criterio)
+- `output/03_criteria/criteria_matrix.md`
+- `output/03_criteria/criteria_matrix.json`
+- `output/03_criteria/criteria_checklist.md`
+- `output/03_criteria/criteria/criterion_Cx.md` (uno per criterio)
 
 ## Regole
 

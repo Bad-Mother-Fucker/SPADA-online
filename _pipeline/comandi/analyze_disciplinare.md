@@ -20,18 +20,18 @@ E' il punto di ingresso della Fase 0 del processo operativo.
 
 ## Prerequisiti
 
-- `00_input/disciplinare/` deve contenere almeno un file (il disciplinare)
-- `PROJECT_CONFIG.json` deve esistere con almeno `gara.nome` compilato
+- `input/disciplinare/` deve contenere almeno un file (il disciplinare)
+- `manifest.json` deve esistere con almeno `gara.nome` compilato
 
 Se i prerequisiti non sono soddisfatti:
-"Carica il disciplinare in 00_input/disciplinare/ e compila
-PROJECT_CONFIG.json prima di procedere."
+"Carica il disciplinare in input/disciplinare/ e compila
+manifest.json prima di procedere."
 
 ## Procedura
 
 ### Step 1 — Verifica input
 ```bash
-find 00_input/disciplinare -type f | head -5
+find input/disciplinare -type f | head -5
 ```
 Se vuota: interrompi con messaggio esplicativo.
 
@@ -40,14 +40,14 @@ Esegui `disciplinare-analyst` con le istruzioni standard
 piu' la produzione del gara brief (Step 3).
 
 Output standard:
-- `03_criteria/criteria_matrix.md` + `.json`
-- `03_criteria/criteria_checklist.md`
-- `03_criteria/criteria/criterion_Cx.md` per ogni criterio
+- `output/03_criteria/criteria_matrix.md` + `.json`
+- `output/03_criteria/criteria_checklist.md`
+- `output/03_criteria/criteria/criterion_Cx.md` per ogni criterio
 
 ### Step 3 — Produzione gara brief
 
-Dopo l'estrazione dei criteri, produci `03_criteria/gara_brief.md`
-seguendo il template `03_criteria/gara_brief_template.md`.
+Dopo l'estrazione dei criteri, produci `output/03_criteria/gara_brief.md`
+seguendo il template `output/03_criteria/gara_brief_template.md`.
 
 Il gara brief si costruisce interamente dalle informazioni del
 disciplinare — nessun elaborato richiesto.
@@ -65,7 +65,7 @@ formato, articolo del disciplinare). Ogni scheda chiude con
 la pipeline della Fase 2 aggiorna (evidence-auditor a fine audit,
 feedback-processor a feedback elaborato).
 Gli stessi deliverables vanno registrati anche in
-`PROJECT_CONFIG.json → deliverables` (una voce per documento
+`manifest.json → deliverables` (una voce per documento
 richiesto, per criterio — vedi agente disciplinare-analyst).
 
 **Sezione "Dove si concentra il potenziale":**
@@ -94,15 +94,15 @@ Analisi disciplinare completata.
 
 Criteri estratti: N (tot. X punti)
 File prodotti:
-  03_criteria/criteria_matrix.md
-  03_criteria/criteria/criterion_Cx.md (N file)
-  03_criteria/gara_brief.md  ← leggi questo
-  11_view/03_criteria/gara_brief.html  ← versione da condividere
+  output/03_criteria/criteria_matrix.md
+  output/03_criteria/criteria/criterion_Cx.md (N file)
+  output/03_criteria/gara_brief.md  ← leggi questo
+  output/11_view/output/03_criteria/gara_brief.html  ← versione da condividere
 
 Prossimi passi:
   1. Apri l'artifact HTML e condividilo con il professionista
      (si apre nel browser, funziona offline, ha i campi per le risposte)
-  2. Carica gli elaborati in 00_input/elaborati/
+  2. Carica gli elaborati in input/elaborati/
   3. Avvia la Fase 1 completa con: start_bid_analysis
 ```
 

@@ -38,13 +38,13 @@ Ricevi:
 
 - codice elaborato (es. `04.S.T03_Planimetria`)
 - Criterio di riferimento (`Cx`)
-- Percorso file tavola originale in `00_input/elaborati/`
+- Percorso file tavola originale in `input/elaborati/`
 
 # Output
 
 Produci o aggiorna:
 
-- `04_doc_summaries/[codice-elaborato]_drawing_reading.md`
+- `output/04_doc_summaries/[codice-elaborato]_drawing_reading.md`
   (es. `04.S.T03_Planimetria_drawing_reading.md`)
 
 # Schema scheda tavola

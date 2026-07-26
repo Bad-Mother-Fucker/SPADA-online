@@ -20,8 +20,8 @@ extract-criteria-from-disciplinary
 
 Leggi:
 
-- `00_input/disciplinare/` — file del disciplinare originale
-- `01_extracted/text/` — versione `.md` estratta, se disponibile
+- `input/disciplinare/` — file del disciplinare originale
+- `output/01_extracted/text/` — versione `.md` estratta, se disponibile
 
 Se la versione `.md` è incompleta o ambigua, riaprire il file originale.
 
@@ -29,18 +29,18 @@ Se la versione `.md` è incompleta o ambigua, riaprire il file originale.
 
 Produci o aggiorna:
 
-- `03_criteria/criteria_matrix.md`
-- `03_criteria/criteria_matrix.json`
-- `03_criteria/criteria_checklist.md`
-- `03_criteria/criteria/criterion_C1.md`
-- `03_criteria/criteria/criterion_C2.md`
+- `output/03_criteria/criteria_matrix.md`
+- `output/03_criteria/criteria_matrix.json`
+- `output/03_criteria/criteria_checklist.md`
+- `output/03_criteria/criteria/criterion_C1.md`
+- `output/03_criteria/criteria/criterion_C2.md`
 - ecc. (numero criteri = numero criteri reali nel disciplinare)
-- `modification_limits` e `fuori_scope_risks` nel frontmatter di ogni `03_criteria/criteria/criterion_Cx.md`
+- `modification_limits` e `fuori_scope_risks` nel frontmatter di ogni `output/03_criteria/criteria/criterion_Cx.md`
 - **`vincoli_offerta_tecnica.md`** — compila la Sezione A con i vincoli
   di formato estratti dal disciplinare (vedi sezione dedicata sotto)
-- **`03_criteria/gara_brief.md`** — il documento di sintesi per il
+- **`output/03_criteria/gara_brief.md`** — il documento di sintesi per il
   professionista e l'operatore (vedi sezione dedicata sotto)
-- **`PROJECT_CONFIG.json` → `deliverables`** — l'elenco dei deliverables
+- **`manifest.json` → `deliverables`** — l'elenco dei deliverables
   per criterio (vedi sezione dedicata sotto)
 
 Non creare file criterio oltre quelli effettivamente presenti nel disciplinare.
@@ -48,8 +48,8 @@ Non creare file criterio oltre quelli effettivamente presenti nel disciplinare.
 ## Produzione del gara brief (obbligatoria)
 
 Dopo aver scritto la matrice criteri e le pagine criterio, produci
-`03_criteria/gara_brief.md` seguendo il template
-`03_criteria/gara_brief_template.md`, sezione per sezione.
+`output/03_criteria/gara_brief.md` seguendo il template
+`output/03_criteria/gara_brief_template.md`, sezione per sezione.
 
 Il brief risponde a una sola domanda — *cosa dobbiamo produrre per
 questa gara?* — e si costruisce **interamente dal disciplinare**:
@@ -87,7 +87,7 @@ Contenuto delle sezioni:
 - **Elaborati citati nel disciplinare** — ogni documento di progetto
   nominato nel testo (relazione tecnica, computo, planimetrie, PSC...),
   con l'articolo che lo cita. E' la pre-checklist di cosa dovra' essere
-  caricato in `00_input/elaborati/`.
+  caricato in `input/elaborati/`.
 - **Domande aperte per il professionista** — massimo 5, sugli aspetti
   ambigui che condizionano la strategia.
 
@@ -101,15 +101,15 @@ Regole:
 - Se `gara_brief.md` esiste gia' (rilancio dell'analisi disciplinare):
   RISCRIVILO, non accodare. **Unica eccezione:** i blocchi
   `**Stato analisi:**` dei criteri gia' analizzati (leggi
-  `criteri_stato` in PROJECT_CONFIG.json) vanno ricopiati tal quali
+  `criteri_stato` in manifest.json) vanno ricopiati tal quali
   dalla versione precedente del brief — li scrivono altri agenti, e
   riportarli a "non ancora analizzato" cancellerebbe lo stato reale
   dell'analisi.
 
-## Scrittura deliverables in PROJECT_CONFIG.json (obbligatoria)
+## Scrittura deliverables in manifest.json (obbligatoria)
 
 Gli stessi deliverables che scrivi nelle schede "Criteri in dettaglio"
-del gara brief vanno registrati anche in `PROJECT_CONFIG.json`, campo
+del gara brief vanno registrati anche in `manifest.json`, campo
 `deliverables` (Edit mirato del solo campo): e' l'informazione che
 accompagna la gara per tutto il suo ciclo di vita — la legge
 `offer-writer` per verificare che la bozza copra ogni documento
@@ -141,7 +141,7 @@ termini come: "facciate", "pagine", "carattere", "interlinea", "margini",
 
 Compila la Sezione A di `vincoli_offerta_tecnica.md` con i valori trovati:
 
-- **CIG e data scadenza** — da PROJECT_CONFIG.json
+- **CIG e data scadenza** — da manifest.json
 - **Tipo limite** — TIPO A (fisso per subcriterio) o TIPO B (totale distribuibile)
 - **Limite complessivo** — numero facciate/pagine
 - **Font, dimensione, interlinea, righe per facciata, margini** — esattamente

@@ -10,7 +10,7 @@ Sei l'agente responsabile della preparazione documentale.
 
 Operi in tre fasi distinte:
 
-1. **Fase A — Censimento**: cataloga TUTTI i file in `00_input/` senza convertire
+1. **Fase A — Censimento**: cataloga TUTTI i file in `input/` senza convertire
 2. **Fase B — Estrazione on-demand**: converte un singolo PDF su richiesta
 3. **Fase C — Estrazione batch per graph-builder**: converte una lista
    di codici elaborato, solo su richiesta esplicita di `graph-builder`
@@ -23,14 +23,14 @@ Usi bash **solo** per: `find`, `pdftotext`, operazioni su `.p7m`.
 
 **Quando attivarla**: prima esecuzione o aggiornamento manifest.
 
-**Scopo**: manifest completo di TUTTI i file in `00_input/`, con il
+**Scopo**: manifest completo di TUTTI i file in `input/`, con il
 codice elaborato del progetto, senza estrarre nulla.
 
 ## Procedura censimento
 
 1. `find` reale:
 ```bash
-find 00_input -type f | sort
+find input -type f | sort
 ```
 
 2. Per ogni file: estrai il **codice elaborato** dal nome file, poi
@@ -55,7 +55,7 @@ find 00_input -type f | sort
    R06=capitolato
    Tipi sezione 09: R02=PSC, R04=cronoprogramma, R05=stima_sicurezza
 
-3. Scrivi/aggiorna `00_input/_manifest_input.md`:
+3. Scrivi/aggiorna `input/_manifest_input.md`:
 ```markdown
 # Manifest Input
 ## Stato
@@ -67,7 +67,7 @@ Compilato — [data]. Modalita': [completa|incrementale].
 
 ## Modalita' incrementale
 
-Se manifest esiste e `01_extracted/text/` non e' vuota:
+Se manifest esiste e `output/01_extracted/text/` non e' vuota:
 1. Leggi manifest esistente
 2. `find` per nuovi file non ancora censiti
 3. Aggiungi solo i nuovi (codice estratto dal nome file di ciascuno)
@@ -84,7 +84,7 @@ specifico non ancora estratto.
 
 ## Procedura estrazione singola
 
-1. Verifica che `01_extracted/text/[codice]_nomefile.md` NON esista.
+1. Verifica che `output/01_extracted/text/[codice]_nomefile.md` NON esista.
    Se esiste: restituisci il percorso senza fare altro.
 
 2. Estrai con `pdftotext`:
@@ -95,7 +95,7 @@ cat /tmp/raw_extract.txt
 
 3. Pulisci il testo (vedi sezione Pulizia sotto).
 
-4. Salva in `01_extracted/text/[codice]_[descrizione].md`:
+4. Salva in `output/01_extracted/text/[codice]_[descrizione].md`:
 ```markdown
 # [codice] — [Nome file originale]
 **File originale:** [percorso]
@@ -107,7 +107,7 @@ cat /tmp/raw_extract.txt
 ```
 
 5. Aggiorna manifest: `Stato` → `estratto`, `File estratto` → percorso .md
-6. Appendi voce in `01_extracted/extraction_log.md`
+6. Appendi voce in `output/01_extracted/extraction_log.md`
 
 ---
 
@@ -124,7 +124,7 @@ documenti necessari per costruire `scope.md` e `economic_framework.md`.
 ## Procedura estrazione batch
 
 Per ogni codice nella lista:
-1. Verifica se il `.md` esiste gia' in `01_extracted/text/`.
+1. Verifica se il `.md` esiste gia' in `output/01_extracted/text/`.
    Se esiste: salta senza rielaborare. Aggiungi a lista "gia' estratti".
 2. Se non esiste: applica la procedura della Fase B su quel documento.
 
@@ -194,23 +194,23 @@ riferimenti normativi, dati quantitativi.
 
 # Gestione file .p7m
 
-Usa la skill `handle-p7m-files` per file `.p7m` in `00_input/p7m/`.
+Usa la skill `handle-p7m-files` per file `.p7m` in `input/p7m/`.
 
 ---
 
 # Output
 
-- `00_input/_manifest_input.md`
-- `01_extracted/extraction_log.md`
-- `01_extracted/p7m_extracted/`
-- `01_extracted/text/[codice]_*.md`
+- `input/_manifest_input.md`
+- `output/01_extracted/extraction_log.md`
+- `output/01_extracted/p7m_extracted/`
+- `output/01_extracted/text/[codice]_*.md`
 
 # Regole
 
 1. Mai convertire tutti i PDF in blocco — solo Fase B (singolo) o
    Fase C (batch, solo su richiesta di graph-builder)
 2. Usa sempre `find` reale — non inferire da struttura cartelle
-3. Conserva i file originali in `00_input/` senza alterarli
+3. Conserva i file originali in `input/` senza alterarli
 4. Il codice elaborato deriva dal nome file del progetto: non assegnare
    numerazioni interne, non rinominare gli identificatori
 5. Errore di estrazione → registra in extraction_log.md, non inventare

@@ -35,9 +35,9 @@ La tavola può e deve essere riaperta ogni volta che le informazioni nella sched
 ## Procedura
 
 1. Identificare il criterio di analisi e leggere la sua checklist
-2. Aprire la tavola originale in `00_input/elaborati/`
+2. Aprire la tavola originale in `input/elaborati/`
 3. Osservare elementi filtrati per il criterio
-4. Produrre scheda in `04_doc_summaries/Dxxx_drawing_reading.md`
+4. Produrre scheda in `output/04_doc_summaries/Dxxx_drawing_reading.md`
 5. Indicare livello di confidenza per ogni osservazione
 6. Non descrivere elementi non rilevanti per il criterio
 

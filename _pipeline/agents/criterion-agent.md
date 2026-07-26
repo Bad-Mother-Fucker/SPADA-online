@@ -28,7 +28,7 @@ esegue per te:
 ```
 main loop: seleziona documenti da 02_graph/index.md + criterion_Cx.md
 main loop: invoca pdf-reader e drawing-reader (in parallelo)
-           → schede in 04_doc_summaries/
+           → schede in output/04_doc_summaries/
 main loop: invoca TE               → bozza Cx_output.md (senza Audit)
 main loop: invoca evidence-auditor → sezione Audit + registri
 main loop: presenta all'utente, invoca context-monitor
@@ -44,18 +44,18 @@ deliberatamente **senza** la sezione Audit.
 Leggi nell'ordine:
 
 - `CLAUDE.md`
-- `PROJECT_CONFIG.json` → estrai: `gara.nome`, `gara.scadenza_offerta`,
+- `manifest.json` → estrai: `gara.nome`, `gara.scadenza_offerta`,
   `criteri_attivi`, `stato`
 - `02_graph/index.md` — LEGGI PER PRIMO. Identifica i documenti
   collegati al criterio e lo stato del grafo.
   Se non esiste: interrompi e segnala "Grafo non costruito. Esegui
   prima la Fase 1 completa." Non usare fallback alternativi al grafo.
-- `03_criteria/criteria/criterion_Cx.md`
-- `03_criteria/criteria_matrix.md`
-- `03_criteria/criteria_checklist.md`
+- `output/03_criteria/criteria/criterion_Cx.md`
+- `output/03_criteria/criteria_matrix.md`
+- `output/03_criteria/criteria_checklist.md`
 - `02_graph/scope.md`
 - `02_graph/economic_framework.md`
-- `03_criteria/strategy_audit.md` — SE PRESENTE: leggi per calibrare
+- `output/03_criteria/strategy_audit.md` — SE PRESENTE: leggi per calibrare
   la conservativita' delle proposte (classificazione gap prezzi),
   inclusa la sezione "Indicazioni strategiche del professionista"
   se compilata dal professionista — e' la fonte della "cornice
@@ -68,7 +68,7 @@ Leggi nell'ordine:
 
 ## Step 1 — Caricamento criterio
 
-Leggere `03_criteria/criteria/criterion_Cx.md`. Estrarre: obiettivo,
+Leggere `output/03_criteria/criteria/criterion_Cx.md`. Estrarre: obiettivo,
 subcriteri, punteggio, elementi premianti, vincoli, rischi fuori scope,
 `modification_limits`, `fuori_scope_risks`.
 
@@ -82,9 +82,9 @@ Ti serve comunque il contesto del grafo per interpretare le schede.
 Leggi quindi, per tuo conto:
 
 - `02_graph/scope.md` e `02_graph/economic_framework.md`
-- il frontmatter di `03_criteria/criteria/criterion_Cx.md`
+- il frontmatter di `output/03_criteria/criteria/criterion_Cx.md`
   (`supported_by`, `modification_limits`, `fuori_scope_risks`)
-- `03_criteria/strategy_audit.md` se presente: usa la classificazione
+- `output/03_criteria/strategy_audit.md` se presente: usa la classificazione
   gap prezzi per calibrare la conservativita' delle proposte nello
   Step 6 —
   - BASSO: proposte conservative, poche variazioni dai prezzi base
@@ -96,8 +96,8 @@ Leggi quindi, per tuo conto:
 Le schede dei documenti prioritari **devono gia' esistere** quando
 vieni invocato:
 
-- `04_doc_summaries/[codice]_summary.md` — prodotte da `pdf-reader`
-- `04_doc_summaries/[codice]_drawing_reading.md` — da `drawing-reader`
+- `output/04_doc_summaries/[codice]_summary.md` — prodotte da `pdf-reader`
+- `output/04_doc_summaries/[codice]_drawing_reading.md` — da `drawing-reader`
 
 Leggile: sono la tua fonte di evidenza. Non puoi invocare tu
 `pdf-reader` o `drawing-reader`.
@@ -196,7 +196,7 @@ con quali materiali/tecnologie, in che punto del progetto.]
 ### G-C1-001 — [titolo breve]
 
 **Sottocriterio:** [C1.1 / —]
-**Fonte:** [[codice_descrizione]] ([scheda](../04_doc_summaries/[codice]_summary.md)), sez. [X]
+**Fonte:** [[codice_descrizione]] ([scheda](../output/04_doc_summaries/[codice]_summary.md)), sez. [X]
 **Evidenza:** [E-C1-001](#E-C1-001)
 **Interpretazione:** [cosa significa il dato per la gara]
 **Impatto sul punteggio:** [dove si perdono/guadagnano punti]
@@ -209,7 +209,7 @@ con quali materiali/tecnologie, in che punto del progetto.]
 
 > "[estratto verbatim completo]"
 
-**Scheda di provenienza:** [08.Q.R02 summary](../04_doc_summaries/08.Q.R02_Computo_Metrico_summary.md)
+**Scheda di provenienza:** [08.Q.R02 summary](../output/04_doc_summaries/08.Q.R02_Computo_Metrico_summary.md)
 **Usata da:** [G-C1-001](#G-C1-001), [P-C1-001](#P-C1-001)
 
 ## 7. Audit
@@ -331,7 +331,7 @@ Lascia anche la riga `**Audit:** *(da compilare da evidence-auditor)*`
 nella scheda di ogni proposta: sara' `evidence-auditor` a sostituirla
 con l'esito.
 
-Non aggiornare `06_registers/*`: lo stato di ogni proposta nei registri
+Non aggiornare `output/06_registers/*`: lo stato di ogni proposta nei registri
 dipende dall'esito dell'audit, che non hai ancora. Scriverli ora
 significherebbe registrare come approvate proposte che l'audit potrebbe
 scartare.
@@ -348,13 +348,13 @@ domande guida, con campo **Risposta:** vuoto per ognuna) e 9 (come
 dare il feedback, con l'elenco delle proposte in attesa di decisione),
 come da template. Restano nel file e non vengono stampate in chat.
 
-Non creare ne' modificare il vecchio file di feedback in `07_questions/`
+Non creare ne' modificare il vecchio file di feedback in `output/07_questions/`
 (flusso deprecato dallo Sprint 3): le decisioni si compilano direttamente
 in `Cx_output.md` ed e' `feedback-processor` a elaborarle.
 
 ## Output finale
 
-Un solo file: `05_criteria_outputs/Cx_output.md`, con le sezioni 1-6
+Un solo file: `output/05_criteria_outputs/Cx_output.md`, con le sezioni 1-6
 e 8-9 di CLAUDE.md §4.6 compilate, la sezione 7 (Audit) e le righe
 `**Audit:**` delle schede proposta a segnaposto, e nel frontmatter
 `stato_feedback: in_attesa`.

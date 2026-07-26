@@ -83,12 +83,12 @@ Il feedback viene raccolto direttamente nel file `Cx_output.md` di ogni criterio
 
 Per ogni Cx:
 
-- `05_criteria_outputs/Cx_output.md`
-- `04_doc_summaries/[codice]_*.md`
+- `output/05_criteria_outputs/Cx_output.md`
+- `output/04_doc_summaries/[codice]_*.md`
 
 Registri aggiornati una volta completato il ciclo:
 
-- `06_registers/proposal_register.md`
-- `06_registers/gap_register.md`
-- `06_registers/audit_summary.md`
-- `08_state/project_state_snapshot.md` (via `context-monitor`)
+- `output/06_registers/proposal_register.md`
+- `output/06_registers/gap_register.md`
+- `output/06_registers/audit_summary.md`
+- `_state/project_state_snapshot.md` (via `context-monitor`)

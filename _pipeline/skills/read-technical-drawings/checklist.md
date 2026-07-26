@@ -20,7 +20,7 @@
 
 ## Dopo la lettura
 
-- [ ] Ho prodotto la scheda in `04_doc_summaries/Dxxx_drawing_reading.md`
+- [ ] Ho prodotto la scheda in `output/04_doc_summaries/Dxxx_drawing_reading.md`
 - [ ] Ho indicato il livello di confidenza complessivo
 - [ ] Ho segnalato eventuali limiti di leggibilità
 - [ ] La scheda è pronta per la sezione "Integrazioni successive" se necessario

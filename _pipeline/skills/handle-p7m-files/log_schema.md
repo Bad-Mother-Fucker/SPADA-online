@@ -6,11 +6,11 @@
 ## Estrazione [codice] — nomefile.pdf.p7m
 
 - **Data:** YYYY-MM-DD
-- **File originale:** 00_input/p7m/nomefile.pdf.p7m
+- **File originale:** input/p7m/nomefile.pdf.p7m
 - **Comando usato:** openssl cms ...
 - **Esito:** successo / fallimento parziale / fallimento totale
-- **File estratto:** 01_extracted/p7m_extracted/[codice]_nomefile.pdf
-- **Versione .md:** 01_extracted/text/[codice]_nomefile.md (se disponibile)
+- **File estratto:** output/01_extracted/p7m_extracted/[codice]_nomefile.pdf
+- **Versione .md:** output/01_extracted/text/[codice]_nomefile.md (se disponibile)
 - **Note:** eventuali problemi, pagine mancanti, qualità OCR, ecc.
 ```
 

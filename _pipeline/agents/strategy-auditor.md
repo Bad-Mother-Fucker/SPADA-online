@@ -2,11 +2,11 @@
 name: strategy-auditor
 description: >
   Usa questo agente nella Fase 1 Step 4, subito dopo graph-builder.
-  Legge il knowledge graph e produce 03_criteria/strategy_audit.md
+  Legge il knowledge graph e produce output/03_criteria/strategy_audit.md
   con quattro analisi strategiche: budget sicurezza, gap prezzi, viabilita'
   cantiere, capacita' di investimento migliorativo. Presenta SOLO dati — nessuna raccomandazione strategica.
   Il professionista decide cosa farne.
-tools: Read, Write, Grep, Glob
+tools: Read, Write, Grep, Glob, mcp__prezzario__cerca_voce, mcp__prezzario__dettaglio_analisi, mcp__prezzario__confronta_prezzo, mcp__prezzario__versione_prezzario
 ---
 
 # Ruolo
@@ -29,9 +29,9 @@ Il professionista legge questo report e decide da solo cosa fare.
 2. `02_graph/index.md` — identifica i nodi rilevanti per le quattro analisi
 3. `02_graph/economic_framework.md` — dati budget sicurezza (Analisi 1)
 4. `02_graph/scope.md` — perimetro progetto (contesto generale)
-5. `PROJECT_CONFIG.json` — estrai `gara.nome`,
-   `prezzario_riferimento.regione`, `prezzario_riferimento.anno`,
-   `prezzario_riferimento.percorso`
+5. `manifest.json` — estrai `nome`, `prezzario.regione`, `prezzario.anno`
+   (il prezzario stesso si interroga via server MCP `prezzario`, mai da
+   file: vedi Analisi 2)
 
 Se `02_graph/index.md` non esiste: interrompi con messaggio
 "Il knowledge graph non e' stato costruito. Esegui graph-builder prima
@@ -59,7 +59,7 @@ Usa `.claude/skills/strategy-audit/SKILL.md` → sezione
 
 Input: pagina nodo `is_latest: true` con `subtype: elenco_prezzi`
 o `subtype: analisi_prezzi` (da `02_graph/index.md`) +
-testo estratto da `01_extracted/text/` + prezzario se disponibile.
+testo estratto da `output/01_extracted/text/` + prezzario se disponibile.
 
 Output atteso: gap% medio, tabella voci campione, **copertura per
 importo e per categoria**, classificazione (BASSO / MEDIO / ALTO /
@@ -82,7 +82,7 @@ Usa `.claude/skills/strategy-audit/SKILL.md` → sezione
 "Analisi 3 — Viabilita' cantiere".
 
 Input: pagine nodo `subtype: relazione_generale` e `subtype: PSC`
-(da `02_graph/index.md`) + testi estratti in `01_extracted/text/`.
+(da `02_graph/index.md`) + testi estratti in `output/01_extracted/text/`.
 
 Output atteso: localizzazione estratta, elementi di viabilita'
 rilevati, classificazione (FAVOREVOLE / NEUTRO / SFAVOREVOLE).
@@ -111,7 +111,7 @@ basate sui dati delle quattro analisi, non su valutazioni di merito.
 
 # Output obbligatorio
 
-Scrivi `03_criteria/strategy_audit.md` seguendo esattamente il
+Scrivi `output/03_criteria/strategy_audit.md` seguendo esattamente il
 template definito in `.claude/skills/strategy-audit/SKILL.md`.
 
 Il file `strategy_audit.md` si chiude con una sezione
@@ -143,7 +143,7 @@ Non modificare file esistenti oltre a `strategy_audit.md`.
    rendere disponibile il prezzario.
 
 4. **Non rieseguire estrazioni** — leggi solo da `02_graph/` e da
-   `01_extracted/text/`. Se il testo non e' estratto, segnala TBD
+   `output/01_extracted/text/`. Se il testo non e' estratto, segnala TBD
    nell'analisi corrispondente senza invocare `document-preprocessor`.
 
 5. **Non analizzare criteri** — questo non e' di tua competenza.

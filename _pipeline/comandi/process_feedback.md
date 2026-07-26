@@ -1,6 +1,6 @@
 ---
 argument-hint: <criterio, es. C1>
-description: Elabora il feedback compilato dal professionista in 05_criteria_outputs/Cx_output.md.
+description: Elabora il feedback compilato dal professionista in output/05_criteria_outputs/Cx_output.md.
 ---
 
 # Command — Process Feedback
@@ -21,7 +21,7 @@ Usa agente: `.claude/agents/feedback-processor`
 
 ## Prerequisito
 
-`05_criteria_outputs/Cx_output.md` deve esistere con almeno
+`output/05_criteria_outputs/Cx_output.md` deve esistere con almeno
 una proposta con campo Decisione compilato.
 `02_graph/index.md` deve esistere.
 

@@ -25,17 +25,17 @@ nei nodi proposta.
 
 ```
 Step 1-3   →  lettura, mappatura, calcolo budget facciate
-Step 4     →  Technical Offer Draft  →  10_offer/technical_offer_draft.md
+Step 4     →  Technical Offer Draft  →  output/10_offer/technical_offer_draft.md
            →  STOP: attendi approvazione professionista
-Step 5     →  Scaletta dettagliata   →  10_offer/scaletta.md
+Step 5     →  Scaletta dettagliata   →  output/10_offer/scaletta.md
            →  STOP: attendi approvazione professionista
-Step 6     →  Bozza contenuto        →  10_offer/bozza_contenuto.md
+Step 6     →  Bozza contenuto        →  output/10_offer/bozza_contenuto.md
 Step 7     →  Verifica word count e stima facciate
-Step 8     →  Conversione            →  10_offer/bozza_offerta_tecnica.docx
+Step 8     →  Conversione            →  output/10_offer/bozza_offerta_tecnica.docx
 Step 9     →  Aggiunta commenti Word (sezioni DA REVISIONARE)
 Step 10    →  Validazione docx
 Step 11    →  Riepilogo finale
-Step 12    →  Aggiornamento PROJECT_CONFIG.json
+Step 12    →  Aggiornamento manifest.json
 ```
 
 **Perche' quattro passaggi con STOP:**
@@ -58,7 +58,7 @@ scripts/offer/md_to_docx.js
 Non usare librerie diverse da `docx` (npm).
 
 Nello Step 8, verifica che il file esista prima di eseguirlo.
-Se non esiste, crealo leggendo i parametri di gara da `PROJECT_CONFIG.json`
+Se non esiste, crealo leggendo i parametri di gara da `manifest.json`
 (mai hardcodarli nello script) e usando i vincoli di formato da
 `vincoli_offerta_tecnica.md` — Sezione A (font, dimensione, interlinea,
 margini, righe per facciata). I valori di formato cambiano per ogni gara.
@@ -71,19 +71,19 @@ margini, righe per facciata). I valori di formato cambiano per ogni gara.
 
 | File | Cosa estrai |
 |---|---|
-| `PROJECT_CONFIG.json` | nome gara, CIG, CUP, stazione appaltante, data, `deliverables` (documenti richiesti per criterio: la bozza deve coprirli tutti) |
-| `03_criteria/criteria_matrix.md` | criteri attivi, subcriteri, punteggi massimi |
-| `06_registers/proposal_register.md` | lista proposte approvate con ID e criterio |
+| `manifest.json` | nome gara, CIG, CUP, stazione appaltante, data, `deliverables` (documenti richiesti per criterio: la bozza deve coprirli tutti) |
+| `output/03_criteria/criteria_matrix.md` | criteri attivi, subcriteri, punteggi massimi |
+| `output/06_registers/proposal_register.md` | lista proposte approvate con ID e criterio |
 | `02_graph/proposals/` | nodi proposta con evidenze documentali, punteggi, note professionista |
-| `03_criteria/strategy_audit.md` | sezione "Indicazioni strategiche" per priorita' per criterio |
+| `output/03_criteria/strategy_audit.md` | sezione "Indicazioni strategiche" per priorita' per criterio |
 | `vincoli_offerta_tecnica.md` | budget facciate, criteri esclusi, elementi speciali |
 
 ## Opzionali
 
 | File | Quando leggerlo |
 |---|---|
-| `05_criteria_outputs/Cx_output.md` | per recuperare dettaglio tecnico aggiuntivo |
-| `06_registers/gap_register.md` | per contestualizzare le proposte rispetto ai gap |
+| `output/05_criteria_outputs/Cx_output.md` | per recuperare dettaglio tecnico aggiuntivo |
+| `output/06_registers/gap_register.md` | per contestualizzare le proposte rispetto ai gap |
 
 ## Come leggere i nodi proposta
 
@@ -134,7 +134,7 @@ Per ogni criterio da includere (vedi vincoli_offerta_tecnica.md):
   - Priorita' per criterio (da strategy_audit.md)
   - Flag DA REVISIONARE con motivi (da feedback_professionista dei nodi)
   - Elementi speciali (da vincoli_offerta_tecnica.md)
-  - Deliverables richiesti dal disciplinare (da PROJECT_CONFIG.deliverables:
+  - Deliverables richiesti dal disciplinare (da manifest.json → deliverables:
     ogni documento elencato deve avere una sezione o un allegato nella
     bozza — un deliverable scoperto va segnalato allo STOP 1, non taciuto)
 ```
@@ -165,7 +165,7 @@ disciplinare indicato in `vincoli_offerta_tecnica.md`.
 # Step 3 — Mostra struttura
 
 ```
-STRUTTURA OFFERTA TECNICA — [Nome Gara da PROJECT_CONFIG]
+STRUTTURA OFFERTA TECNICA — [Nome Gara da manifest.json]
 
 Criterio [X] — [Titolo] | Limite: [tipo e valore]
 
@@ -191,7 +191,7 @@ conciso. Permette al professionista di verificare contenuto e tono
 prima dello sviluppo in prosa estesa.
 
 ## Output
-File: `10_offer/technical_offer_draft.md`
+File: `output/10_offer/technical_offer_draft.md`
 
 ## Struttura
 
@@ -229,7 +229,7 @@ valutativo porta, quale indicatore misurabile viene dichiarato.]
 
 ```
 Technical Offer Draft completato.
-File: 10_offer/technical_offer_draft.md
+File: output/10_offer/technical_offer_draft.md
 Proposte incluse: N | Facciate stimate: ~N
 
 Controlla il draft e conferma per procedere con la scaletta.
@@ -241,7 +241,7 @@ Se vuoi modifiche, indicale prima di procedere.
 # Step 5 — Scaletta dettagliata
 
 ## Output
-File: `10_offer/scaletta.md`
+File: `output/10_offer/scaletta.md`
 
 ## Struttura
 
@@ -266,7 +266,7 @@ evidenze da citare, indicatori da dichiarare]
 
 ```
 Scaletta completata.
-File: 10_offer/scaletta.md
+File: output/10_offer/scaletta.md
 
 Controlla la struttura e conferma per procedere con la bozza di contenuto.
 ```
@@ -276,7 +276,7 @@ Controlla la struttura e conferma per procedere con la bozza di contenuto.
 # Step 6 — Bozza contenuto
 
 ## Output
-File: `10_offer/bozza_contenuto.md`
+File: `output/10_offer/bozza_contenuto.md`
 
 Segui la scaletta punto per punto. Per ogni paragrafo:
 - Sviluppa il testo tecnico al budget di righe indicato
@@ -297,7 +297,7 @@ Interruzioni di pagina: `<!-- PAGEBREAK -->`
 # Step 7 — Verifica word count
 
 ```bash
-wc -w 10_offer/bozza_contenuto.md
+wc -w output/10_offer/bozza_contenuto.md
 ```
 
 Per ogni subcriterio calcola:
@@ -320,8 +320,8 @@ Non procedere allo Step 8 se il word count totale e' insufficiente.
 ls scripts/offer/md_to_docx.js 2>/dev/null || echo "DA CREARE"
 ```
 
-Lo script `scripts/offer/md_to_docx.js` converte `10_offer/bozza_contenuto.md`
-in `10_offer/bozza_offerta_tecnica.docx` usando la libreria `docx` (npm v9+).
+Lo script `scripts/offer/md_to_docx.js` converte `output/10_offer/bozza_contenuto.md`
+in `output/10_offer/bozza_offerta_tecnica.docx` usando la libreria `docx` (npm v9+).
 
 Il documento prodotto include:
 - **Numerazione righe nel margine sinistro** — si riparte da 1 ad ogni
@@ -332,7 +332,7 @@ Il documento prodotto include:
   `vincoli_offerta_tecnica.md` — Sezione A.
 
 Se lo script non esiste, crearlo leggendo i dati di gara da
-`PROJECT_CONFIG.json` (mai hardcodarli nello script).
+`manifest.json` (mai hardcodarli nello script).
 
 ## 8.2 — Esegui
 
@@ -367,10 +367,10 @@ Se la validazione fallisce: unpack → correggi → repack → rivalidate.
 ```
 Bozza offerta tecnica generata.
 
-File draft:     10_offer/technical_offer_draft.md
-File scaletta:  10_offer/scaletta.md
-File contenuto: 10_offer/bozza_contenuto.md
-File Word:      10_offer/bozza_offerta_tecnica.docx
+File draft:     output/10_offer/technical_offer_draft.md
+File scaletta:  output/10_offer/scaletta.md
+File contenuto: output/10_offer/bozza_contenuto.md
+File Word:      output/10_offer/bozza_offerta_tecnica.docx
 
 Word count totale: N parole
 Facciate stimate:  ~N / [limite] consentite
@@ -388,7 +388,7 @@ Sezioni DA REVISIONARE: N
 
 # Step 12 — Aggiornamento stato
 
-Aggiorna `PROJECT_CONFIG.json`: imposta `stato` a `bozza_completata`.
+Aggiorna `manifest.json`: imposta `stato` a `bozza_completata`.
 
 ---
 
@@ -402,7 +402,7 @@ Aggiorna `PROJECT_CONFIG.json`: imposta `stato` a `bozza_completata`.
 "rigenera la bozza"
 ```
 
-**Prerequisiti:** `06_registers/proposal_register.md` con almeno una
+**Prerequisiti:** `output/06_registers/proposal_register.md` con almeno una
 proposta approvata, `vincoli_offerta_tecnica.md` esistente.
 
 ---
@@ -418,4 +418,4 @@ proposta approvata, `vincoli_offerta_tecnica.md` esistente.
 - Non consegnare il Word se la validazione fallisce
 - Non inventare fatti — espandi solo con dettaglio coerente con le
   evidenze documentali nei nodi proposta
-- Leggere i dati di gara da PROJECT_CONFIG.json — mai hardcodarli
+- Leggere i dati di gara da manifest.json — mai hardcodarli

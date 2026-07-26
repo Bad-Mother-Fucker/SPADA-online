@@ -11,7 +11,7 @@ Documento aggiornato: `$ARGUMENTS`
 
 Atteso: il codice elaborato (es. `08.Q.R02`) o il nome del file nuovo.
 Se `$ARGUMENTS` e' vuoto, chiedi quale documento e' stato aggiornato —
-non dedurlo dal file piu' recente in `00_input/`.
+non dedurlo dal file piu' recente in `input/`.
 
 ## Trigger
 
@@ -32,7 +32,7 @@ criteri invalida le analisi gia' fatte. Vedi lo Step 5.
 ## Prerequisiti
 
 - `02_graph/index.md` deve esistere (grafo gia' costruito)
-- Il file aggiornato deve essere gia' in `00_input/` (elaborati o
+- Il file aggiornato deve essere gia' in `input/` (elaborati o
   disciplinare)
 
 Se il grafo non esiste, non serve un re-ingest: esegui
@@ -86,7 +86,7 @@ aggiornato dopo che dei criteri sono gia' stati analizzati puo' aver
 invalidato quelle analisi.
 
 Per ogni criterio con `criteri_stato[Cx].analizzato: true`
-(`PROJECT_CONFIG.json`), verifica se il documento aggiornato compare nel
+(`manifest.json`), verifica se il documento aggiornato compare nel
 suo `supported_by`. In caso affermativo, presenta:
 
 ```
@@ -110,7 +110,7 @@ non tua.
 
 Se il documento aggiornato e' il **disciplinare** (chiarimento), verifica
 anche se cambiano criteri, punteggi o vincoli in
-`03_criteria/criteria_matrix.md`. Se cambiano, segnalalo come blocco:
+`output/03_criteria/criteria_matrix.md`. Se cambiano, segnalalo come blocco:
 tutte le analisi in corso poggiano su quella matrice.
 
 ## Output
@@ -118,7 +118,7 @@ tutte le analisi in corso poggiano su quella matrice.
 - `02_graph/nodes/` — pagina nuova creata, pagina precedente aggiornata
 - `02_graph/index.md` — rigenerato
 - `02_graph/log.md` — entry `re-ingest`
-- `01_extracted/text/[codice].md` — testo estratto del documento nuovo
+- `output/01_extracted/text/[codice].md` — testo estratto del documento nuovo
 - Report a schermo con l'impatto sui criteri gia' analizzati
 
 ## Cosa questo comando non fa
@@ -126,4 +126,4 @@ tutte le analisi in corso poggiano su quella matrice.
 - Non rianalizza criteri di sua iniziativa
 - Non cancella la pagina della versione precedente: resta nel grafo con
   `is_latest: false`, perche' le analisi gia' fatte la citano
-- Non modifica `05_criteria_outputs/Cx_output.md` ne' i registri
+- Non modifica `output/05_criteria_outputs/Cx_output.md` ne' i registri

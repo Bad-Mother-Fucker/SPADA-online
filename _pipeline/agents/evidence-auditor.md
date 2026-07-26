@@ -21,9 +21,9 @@ criterion-output-audit
 
 Leggi:
 
-- `05_criteria_outputs/Cx_output.md` (sezioni gap e proposte)
-- `04_doc_summaries/` (schede documenti e tavole)
-- `03_criteria/criteria/criterion_Cx.md`
+- `output/05_criteria_outputs/Cx_output.md` (sezioni gap e proposte)
+- `output/04_doc_summaries/` (schede documenti e tavole)
+- `output/03_criteria/criteria/criterion_Cx.md`
 - `02_graph/scope.md` — per il check fuori scope
 - `02_graph/economic_framework.md` — per il check sostenibilita'
 
@@ -41,7 +41,7 @@ dell'esito, aggiorni i registri.
 # Output
 
 1. Sostituisci il segnaposto della sezione **7. Audit** in
-   `05_criteria_outputs/Cx_output.md` con la tabella audit compilata
+   `output/05_criteria_outputs/Cx_output.md` con la tabella audit compilata
    (una tabella per il criterio, piu' una per ogni sottocriterio).
 
    Poi, nella scheda di ogni proposta (sezione 4), sostituisci la riga
@@ -59,10 +59,10 @@ dell'esito, aggiorni i registri.
 
    | Registro | Cosa scriverci |
    |---|---|
-   | `06_registers/proposal_register.md` | solo proposte `approvata` e `approvata con riserva` (queste ultime con la nota di riserva) |
-   | `06_registers/gap_register.md` | tutti i gap del criterio, con ID, fonte, evidenza, impatto, confidenza |
-   | `06_registers/audit_summary.md` | esito dell'audit per ogni proposta, incluse `da integrare` e `scartata` con motivazione |
-   | `06_registers/score_forecast.md` | punteggio stimato del criterio sulle sole proposte approvate o con riserva |
+   | `output/06_registers/proposal_register.md` | solo proposte `approvata` e `approvata con riserva` (queste ultime con la nota di riserva) |
+   | `output/06_registers/gap_register.md` | tutti i gap del criterio, con ID, fonte, evidenza, impatto, confidenza |
+   | `output/06_registers/audit_summary.md` | esito dell'audit per ogni proposta, incluse `da integrare` e `scartata` con motivazione |
+   | `output/06_registers/score_forecast.md` | punteggio stimato del criterio sulle sole proposte approvate o con riserva |
 
    Le proposte `da integrare` e `scartata` **non** entrano in
    `proposal_register.md`: restano tracciate in `audit_summary.md`.
@@ -72,7 +72,7 @@ dell'esito, aggiorni i registri.
    Aggiungi righe per questo criterio senza toccare quelle degli altri
    criteri gia' presenti nei registri (Edit mirato, non riscrittura).
 
-3. Aggiorna `PROJECT_CONFIG.json`, nell'oggetto `criteri_stato`, la
+3. Aggiorna `manifest.json`, nell'oggetto `criteri_stato`, la
    voce del criterio appena auditato (Edit mirato, senza toccare le
    altre voci), e `ultimo_aggiornamento`:
 
@@ -85,7 +85,7 @@ dell'esito, aggiorni i registri.
    feedback". Sara' poi `feedback-processor` a portarlo a `completato`.
 
 4. Aggiorna la scheda del criterio nel **gara brief**
-   (`03_criteria/gara_brief.md`, sezione "Criteri in dettaglio"):
+   (`output/03_criteria/gara_brief.md`, sezione "Criteri in dettaglio"):
    sostituisci la riga `**Stato analisi:** ...` del solo criterio
    auditato (Edit mirato, non toccare le schede degli altri criteri)
    con questo blocco:

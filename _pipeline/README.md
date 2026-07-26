@@ -68,9 +68,14 @@ ogni commit.
 
 ## Cosa manca ancora (prossimi sprint)
 
-- `mcp/prezzario/`: server MCP di interrogazione (Sprint 2). Fino ad
-  allora resta transitoriamente disponibile
-  `scripts/prezzario/fetch_prezzario.sh` (cache JSON locale), da
-  rimuovere quando il server MCP legge direttamente `spada.db`.
 - `comandi/spada-fase`: wrapper di invocazione per fase, handoff,
   telemetria (Sprint 3).
+
+## Sprint 2 — prezzario in database
+
+`mcp/prezzario/` sostituisce integralmente il vecchio meccanismo a
+indice JSON (`scripts/prezzario/fetch_prezzario.sh` + skill
+`prezzario` di `_riferimento/`, entrambi non portati). Vedi
+`mcp/prezzario/README.md` per schema, importazione e registrazione del
+server. `link_pipeline.sh` lo registra automaticamente
+(`claude mcp add ... --scope user`).
