@@ -184,16 +184,45 @@ def assistente(slug: str, body: AssistenteRequest):
             409, "L'assistente è disponibile solo dopo il completamento della Fase 2 "
                  "(costruzione del knowledge graph)."
         )
+    # Non deve girare mentre una fase sta scrivendo sulla stessa gara:
+    # leggerebbe file a metà scrittura, e "sola lettura" deve restare
+    # vero anche nel senso di "non interferisce con una scrittura in corso".
+    with get_conn() as con:
+        in_corso = con.execute(
+            "SELECT 1 FROM job WHERE gara_slug=? AND stato='in_esecuzione'", (slug,)
+        ).fetchone()
+    if in_corso:
+        raise HTTPException(409, "Una fase è in esecuzione su questa gara: riprova a conversazione conclusa.")
+
     with get_conn() as con:
         con.execute(
             "INSERT INTO conversazioni (gara_slug, ruolo, testo, creato_il) VALUES (?,?,?,?)",
             (slug, "utente", body.messaggio, now()),
         )
-    # L'invocazione reale di una sessione claude -p in sola lettura è
-    # Sprint 7: qui il contratto dati (richiesta persistita) è pronto,
-    # l'esecuzione effettiva verrà innestata nel worker/endpoint quando
-    # la sessione read-only sarà implementata.
-    raise HTTPException(501, "Assistente non ancora implementato (Sprint 7).")
+
+    from assistente import invoca_assistente
+    try:
+        risposta = invoca_assistente(slug, body.messaggio)
+    except Exception as e:
+        raise HTTPException(500, f"Assistente non disponibile: {e}")
+
+    with get_conn() as con:
+        con.execute(
+            "INSERT INTO conversazioni (gara_slug, ruolo, testo, creato_il) VALUES (?,?,?,?)",
+            (slug, "assistente", risposta, now()),
+        )
+    return {"risposta": risposta}
+
+
+@router.get("/{slug}/assistente")
+def cronologia_assistente(slug: str):
+    _gara_o_404(slug)
+    with get_conn() as con:
+        righe = con.execute(
+            "SELECT ruolo, testo, creato_il FROM conversazioni WHERE gara_slug=? ORDER BY creato_il ASC",
+            (slug,),
+        ).fetchall()
+    return [dict(r) for r in righe]
 
 
 @router.get("/{slug}/stream")
