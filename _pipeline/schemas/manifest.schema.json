@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spada-online/_pipeline/schemas/manifest.schema.json",
+  "title": "Manifest di gara",
+  "description": "Dati statici di una gara, scritti da new_gara.sh alla creazione e completati da /new_bid (Fase 1). Non contiene stato di esecuzione: quello vive in _state/fasi.json.",
+  "type": "object",
+  "required": ["slug", "nome", "creato_il", "prezzario", "esecuzione", "gara"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Identificativo di cartella, immutabile dopo la creazione."
+    },
+    "nome": { "type": "string", "description": "Nome esteso della gara (oggetto del contratto)." },
+    "creato_il": { "type": "string", "format": "date-time" },
+    "prezzario": {
+      "type": "object",
+      "required": ["regione", "anno"],
+      "additionalProperties": false,
+      "properties": {
+        "regione": { "type": "string" },
+        "anno": { "type": "integer", "minimum": 2000, "maximum": 2100 }
+      }
+    },
+    "esecuzione": {
+      "type": "object",
+      "required": ["modello", "effort"],
+      "additionalProperties": false,
+      "properties": {
+        "modello": { "type": "string", "description": "Es. claude-sonnet-5, claude-opus-5." },
+        "effort": { "type": "string", "enum": ["low", "medium", "high", "xhigh", "max"] }
+      }
+    },
+    "gara": {
+      "type": "object",
+      "description": "Estratti dal disciplinare in Fase 1 (/new_bid). Stringhe vuote finché non estratti.",
+      "additionalProperties": false,
+      "properties": {
+        "stazione_appaltante": { "type": "string" },
+        "CIG": { "type": "string" },
+        "CUP": { "type": "string" },
+        "importo_base_asta": { "type": "string" },
+        "scadenza_offerta": { "type": "string" },
+        "criteri_attivi": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^C[0-9]+$" }
+        }
+      }
+    }
+  }
+}

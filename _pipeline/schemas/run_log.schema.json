@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spada-online/_pipeline/schemas/run_log.schema.json",
+  "title": "Storico esecuzioni di fase",
+  "description": "Registro append-only scritto da spada-fase prima di ogni esecuzione (Sprint 3.2). Rende ricostruibile a posteriori con quale versione di pipeline e prezzario è stata prodotta ogni proposta — requisito non negoziabile del piano (principio 4).",
+  "type": "object",
+  "required": ["runs"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "runs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/run" }
+    }
+  },
+  "$defs": {
+    "run": {
+      "type": "object",
+      "required": ["run_id", "fase", "avviato_il", "pipeline_version", "modello", "effort", "esito"],
+      "additionalProperties": false,
+      "properties": {
+        "run_id": { "type": "string", "description": "UUID o timestamp+contatore univoco." },
+        "fase": { "type": "integer", "minimum": 1, "maximum": 7 },
+        "riesecuzione": { "type": "boolean", "default": false },
+        "avviato_il": { "type": "string", "format": "date-time" },
+        "concluso_il": { "type": "string", "format": "date-time" },
+        "pipeline_version": {
+          "type": "string",
+          "description": "Da _pipeline/VERSION + tag git corrispondente, es. '0.1.0 (git 3f2a9c1)'."
+        },
+        "prezzario_version": {
+          "type": ["string", "null"],
+          "description": "Identificativo regione+anno+hash dati da mcp prezzario.versione_prezzario (Sprint 2). null se la fase non ha consultato il prezzario."
+        },
+        "modello": { "type": "string" },
+        "effort": { "type": "string", "enum": ["low", "medium", "high", "xhigh", "max"] },
+        "esito": { "type": "string", "enum": ["completato", "errore", "annullato"] },
+        "errore": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

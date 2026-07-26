@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spada-online/_pipeline/schemas/fasi.schema.json",
+  "title": "Stato delle sette fasi di una gara",
+  "description": "Stato operativo, non narrativo: una riga per fase con stato macchina e sintesi in linguaggio naturale generata dal sistema (§Sprint 3.5). Scritto a fine di ogni fase; letto dal frontend per la barra di avanzamento e dal main loop per decidere cosa proporre.",
+  "type": "object",
+  "required": ["fase_corrente", "fasi"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "fase_corrente": { "type": "integer", "minimum": 1, "maximum": 7 },
+    "fasi": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "1_acquisizione_documenti",
+        "2_costruzione_grafo",
+        "3_analisi_strategica",
+        "4_elaborazione_criteri",
+        "5_revisione_proposte",
+        "6_stesura_offerta",
+        "7_approvazione_finale"
+      ],
+      "patternProperties": {
+        "^[1-7]_[a-z_]+$": { "$ref": "#/$defs/fase" }
+      }
+    }
+  },
+  "$defs": {
+    "fase": {
+      "type": "object",
+      "required": ["stato", "sintesi"],
+      "additionalProperties": false,
+      "properties": {
+        "stato": {
+          "type": "string",
+          "enum": ["da_eseguire", "in_esecuzione", "completata", "errore", "da_rivedere"],
+          "description": "'da_rivedere' è impostato dal main loop sulle fasi a valle quando una fase precedente viene rieseguita (Sprint 3.6): non cancella il risultato, segnala solo che va riconvalidato."
+        },
+        "sintesi": {
+          "type": "string",
+          "description": "Riga leggibile generata dal sistema, es. 'sei agenti stanno leggendo i documenti, quattro hanno finito'. Mai ricostruita dal frontend."
+        },
+        "iniziata_il": { "type": "string", "format": "date-time" },
+        "conclusa_il": { "type": "string", "format": "date-time" },
+        "richiede_approvazione": {
+          "type": "boolean",
+          "description": "true per le fasi 3, 5, 7 in attesa di intervento umano."
+        }
+      }
+    }
+  }
+}
