@@ -1,0 +1,207 @@
+/*
+ * design-system.css — token e componenti ricorrenti unici per la UI
+ * dell'app (Sprint 6) e per gli output HTML delle gare (Sprint 1,
+ * scripts/render/md_to_html.js). Sprint 5.
+ *
+ * Autorato una sola volta a partire dalla palette/tipografia già
+ * collaudata negli artifact HTML di _riferimento/ (non reinventata da
+ * zero: quella era già un sistema coerente, qui viene solo estratto
+ * in un file condiviso invece di restare duplicato dentro lo script
+ * di rendering). I token non si rinegoziano ad ogni generazione.
+ *
+ * Consumo:
+ *  - md_to_html.js inlinea questo file dentro <style> ad ogni
+ *    generazione di artifact (l'HTML deve restare autoconsistente e
+ *    funzionare offline — un <link> esterno romperebbe quella regola).
+ *  - Il frontend app (Sprint 6) lo importa come foglio di stile
+ *    normale (build-time o <link>), essendo servito online.
+ *
+ * Provisioning: questo file vive in _pipeline/design/ (versionato,
+ * condiviso) e viene copiato/collegato in _data/design-system.css in
+ * fase di setup — _data/ è per-macchina e non versionato (vedi
+ * struttura target del piano), ma il file sorgente sì.
+ */
+
+:root {
+  /* ── Palette (chiaro) ────────────────────────────────────────── */
+  --bg:     #f6f5f2;
+  --card:   #ffffff;
+  --ink:    #1c1b19;
+  --mut:    #6b6862;
+  --line:   #e2ded6;
+  --acc:    #8a5a2b;
+
+  --crit:   #b3261e; --critbg: #fdf1f0;
+  --warn:   #a56a00; --warnbg: #fdf6e8;
+  --good:   #2c6e49; --goodbg: #eef6f1;
+  --na:     #6b6862; --nabg:   #f2f1ee;
+  --info:   #3a6ea5; --infobg: #eaf1f8;
+
+  /* ── Tipografia ──────────────────────────────────────────────── */
+  --font-serif: ui-serif, Georgia, "Times New Roman", serif;
+  --font-sans:  ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:  ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text-xs:   .74rem;
+  --text-sm:   .88rem;
+  --text-base: 1rem;
+  --text-lg:   1.15rem;
+  --text-xl:   1.4rem;
+  --text-2xl:  clamp(1.6rem, 4vw, 2.3rem);
+
+  /* ── Spaziatura (scala 4px) ──────────────────────────────────── */
+  --sp-1: .25rem; --sp-2: .5rem; --sp-3: .75rem; --sp-4: 1rem;
+  --sp-5: 1.5rem; --sp-6: 2rem;  --sp-7: 2.5rem; --sp-8: 3rem;
+
+  /* ── Raggi ───────────────────────────────────────────────────── */
+  --radius-sm: 4px; --radius-md: 8px; --radius-lg: 10px; --radius-pill: 999px;
+
+  /* ── Motion ──────────────────────────────────────────────────── */
+  --dur-fast: 120ms; --dur-base: 200ms; --dur-slow: 320ms;
+  --ease-standard: cubic-bezier(.4, 0, .2, 1);
+  --ease-out: cubic-bezier(0, 0, .2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:     #16150f;
+    --card:   #1f1e19;
+    --ink:    #eceae4;
+    --mut:    #a09c92;
+    --line:   #332f27;
+    --acc:    #d8a76a;
+
+    --crit:   #f2b8b5; --critbg: #2c1a19;
+    --warn:   #e8c06a; --warnbg: #2a2216;
+    --good:   #8fd6ac; --goodbg: #18271f;
+    --na:     #a09c92; --nabg:   #232219;
+    --info:   #9dc3e6; --infobg: #16222e;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#16150f; --card:#1f1e19; --ink:#eceae4; --mut:#a09c92; --line:#332f27;
+  --acc:#d8a76a; --crit:#f2b8b5; --warn:#e8c06a; --good:#8fd6ac; --na:#a09c92; --info:#9dc3e6;
+  --critbg:#2c1a19; --warnbg:#2a2216; --goodbg:#18271f; --nabg:#232219; --infobg:#16222e;
+}
+:root[data-theme="light"] {
+  --bg:#f6f5f2; --card:#fff; --ink:#1c1b19; --mut:#6b6862; --line:#e2ded6; --acc:#8a5a2b;
+  --crit:#b3261e; --warn:#a56a00; --good:#2c6e49; --na:#6b6862; --info:#3a6ea5;
+  --critbg:#fdf1f0; --warnbg:#fdf6e8; --goodbg:#eef6f1; --nabg:#f2f1ee; --infobg:#eaf1f8;
+}
+
+/* ══ Componenti ricorrenti ═══════════════════════════════════════ */
+
+/* Badge di stato — usato per classificazioni (BASSO/MEDIO/ALTO,
+   stati fase, esiti audit) sia negli output di gara sia nell'app. */
+.badge, .status-badge {
+  display: inline-block;
+  font: 600 var(--text-xs)/1.4 var(--font-sans);
+  letter-spacing: .03em;
+  padding: .15em .55em;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+.badge.crit, .status-badge.crit { color: var(--crit); background: var(--critbg); }
+.badge.warn, .status-badge.warn { color: var(--warn); background: var(--warnbg); }
+.badge.good, .status-badge.good { color: var(--good); background: var(--goodbg); }
+.badge.na,   .status-badge.na   { color: var(--na);   background: var(--nabg); }
+.badge.info, .status-badge.info { color: var(--info); background: var(--infobg); }
+
+/* Card di fase — le 7 fasi nella pagina gara (Sprint 6). */
+.phase-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-4) var(--sp-5);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  transition: border-color var(--dur-base) var(--ease-standard),
+              background var(--dur-base) var(--ease-standard);
+}
+.phase-card[data-stato="completata"] { border-color: var(--good); }
+.phase-card[data-stato="errore"] { border-color: var(--crit); }
+.phase-card[data-stato="in_esecuzione"] { border-color: var(--acc); }
+.phase-card[data-stato="da_rivedere"] { border-color: var(--warn); }
+.phase-card .titolo { font: 600 var(--text-base)/1.4 var(--font-sans); flex: 1; }
+.phase-card .numero {
+  font: 700 var(--text-lg)/1 var(--font-sans); color: var(--mut);
+  min-width: 2rem; text-align: center;
+}
+.phase-card .sintesi { color: var(--mut); font: var(--text-sm)/1.5 var(--font-sans); }
+
+/* Riga di attività agente — vista agenti adattiva (Sprint 6). */
+.agent-row {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  font: var(--text-sm)/1.5 var(--font-sans);
+  animation: agent-row-in var(--dur-slow) var(--ease-out) both;
+}
+.agent-row .agente { font-weight: 600; min-width: 9rem; }
+.agent-row .unita { color: var(--mut); flex: 1; }
+.agent-row .stato-dot {
+  width: .55rem; height: .55rem; border-radius: 50%; flex-shrink: 0;
+  background: var(--mut);
+}
+.agent-row[data-stato="in_corso"] .stato-dot { background: var(--acc); animation: pulse 1.6s ease-in-out infinite; }
+.agent-row[data-stato="completato"] .stato-dot { background: var(--good); }
+.agent-row[data-stato="errore"] .stato-dot { background: var(--crit); }
+
+/* Entrata a stagger per liste di agenti: applicare
+   `style="animation-delay: calc(var(--i) * 40ms)"` con --i = indice riga. */
+@keyframes agent-row-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .35; }
+}
+
+/* Pannello di approvazione — fasi 3/5/7 (Sprint 6). */
+.approval-panel {
+  background: var(--card);
+  border: 1px solid var(--acc);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+}
+.approval-panel .esito {
+  display: flex; align-items: center; gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  font: var(--text-sm)/1.4 var(--font-sans);
+  transition: opacity var(--dur-base) var(--ease-standard);
+}
+.approval-panel button {
+  font: 600 var(--text-sm)/1 var(--font-sans);
+  cursor: pointer;
+  border: 1px solid var(--acc);
+  background: var(--acc);
+  color: var(--bg);
+  padding: .55rem .9rem;
+  border-radius: var(--radius-sm);
+  transition: transform var(--dur-fast) var(--ease-standard),
+              opacity var(--dur-fast) var(--ease-standard);
+}
+.approval-panel button:active { transform: scale(.97); }
+.approval-panel button.ghost { background: none; color: var(--acc); }
+.approval-panel button.scarta { background: none; color: var(--crit); border-color: var(--crit); }
+
+/* Blocco di output — elaborati prodotti, resi con lo stesso token set
+   dell'artifact HTML delle gare (Sprint 6, sezione "Elaborati prodotti"). */
+.output-block {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  margin: var(--sp-4) 0;
+}
+.output-block .kind {
+  font: 600 var(--text-xs)/1 var(--font-sans);
+  letter-spacing: .14em; text-transform: uppercase; color: var(--acc);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-row, .phase-card, .approval-panel button { animation: none !important; transition: none !important; }
+  .agent-row[data-stato="in_corso"] .stato-dot { animation: none; }
+}

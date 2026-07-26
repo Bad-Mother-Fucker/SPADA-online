@@ -10,9 +10,9 @@ const {
 } = require('docx');
 
 // ── Percorsi ──────────────────────────────────────────────────────────────────
-const ROOT        = path.resolve(__dirname, '../..');
-const INPUT_FILE  = path.join(ROOT, '10_offer/bozza_contenuto.md');
-const OUTPUT_FILE = path.join(ROOT, '10_offer/bozza_offerta_tecnica.docx');
+const ROOT        = process.cwd();
+const INPUT_FILE  = path.join(ROOT, 'output/10_offer/bozza_contenuto.md');
+const OUTPUT_FILE = path.join(ROOT, 'output/10_offer/bozza_offerta_tecnica.docx');
 
 // ── Configurazione tipografica ─────────────────────────────────────────────────
 const FONT        = 'Times New Roman';

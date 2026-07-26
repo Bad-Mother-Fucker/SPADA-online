@@ -21,7 +21,7 @@ const path = require('path');
 
 const GRAPH_DIR = '02_graph';
 const NODES_DIR = path.join(GRAPH_DIR, 'nodes');
-const CRITERIA_DIR = path.join('03_criteria', 'criteria');
+const CRITERIA_DIR = path.join('output', '03_criteria', 'criteria');
 const PROPOSALS_DIR = path.join(GRAPH_DIR, 'proposals');
 const INDEX_FILE = path.join(GRAPH_DIR, 'index.md');
 

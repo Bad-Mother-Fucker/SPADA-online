@@ -61,6 +61,13 @@ case ":$PATH:" in
 esac
 
 echo ""
+echo "▶ Pubblico il design system in _data/ (Sprint 5)..."
+DATA_DIR="${SPADA_DATA_DIR:-$HOME/spada/_data}"
+mkdir -p "$DATA_DIR"
+[ -L "$DATA_DIR/design-system.css" ] && rm "$DATA_DIR/design-system.css"
+ln -s "$PIPELINE_DIR/design/design-system.css" "$DATA_DIR/design-system.css"
+
+echo ""
 echo "▶ Preparo il venv del server MCP prezzario..."
 bash "$PIPELINE_DIR/mcp/prezzario/setup.sh"
 

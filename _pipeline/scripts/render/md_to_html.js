@@ -11,7 +11,7 @@
  * artifact e' disallineato rispetto al suo .md.
  *
  * Uso:
- *   node scripts/render/md_to_html.js 03_criteria/strategy_audit.md
+ *   node scripts/render/md_to_html.js output/03_criteria/strategy_audit.md
  *   node scripts/render/md_to_html.js --all
  *   node scripts/render/md_to_html.js --check          # exit 1 se stale
  *
@@ -22,25 +22,47 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const ROOT = path.resolve(__dirname, '../..');
-const VIEW_DIR = path.join(ROOT, '11_view');
+// ROOT = radice della GARA (working directory), non della pipeline:
+// questo script vive una sola volta in _pipeline/scripts/render/ ed è
+// invocato per ogni gara diversa via il symlink ~/.claude/scripts —
+// __dirname punterebbe sempre a _pipeline/, sbagliato per risolvere
+// output/11_view/ e i pattern DOC_TYPES, che sono relativi alla gara
+// corrente (cwd). PIPELINE_ROOT resta __dirname-based per le risorse
+// condivise (design-system.css).
+const ROOT = process.cwd();
+const PIPELINE_ROOT = path.resolve(__dirname, '../..');
+const VIEW_DIR = path.join(ROOT, 'output', '11_view');
+// output/11_view/ vive DENTRO output/: per rispecchiare
+// output/03_criteria/x.md come output/11_view/03_criteria/x.html (non
+// output/11_view/output/03_criteria/x.html) va tolto il prefisso
+// "output/" quando presente. 02_graph/ e _state/ non ce l'hanno e
+// restano invariati.
+const relForView = (rel) => rel.replace(/^output\//, '');
+
+const DESIGN_SYSTEM_CSS = (() => {
+  try {
+    return fs.readFileSync(path.join(PIPELINE_ROOT, 'design', 'design-system.css'), 'utf8');
+  } catch {
+    return ''; // design-system.css non ancora provisionato: l'artifact usa solo le regole locali sotto
+  }
+})();
 
 // ── Whitelist: quali output diventano artifact, e con che identita' ──────────
 // Il primo pattern che matcha vince. `fillable: true` abilita i campi di
 // risposta per le sezioni con domande al team.
 const DOC_TYPES = [
-  { re: /^03_criteria\/gara_brief\.md$/,           kind: 'Gara Brief',        fillable: true  },
-  { re: /^03_criteria\/strategy_audit\.md$/,       kind: 'Audit Strategico',  fillable: true  },
-  { re: /^05_criteria_outputs\/.+_output\.md$/,    kind: 'Analisi Criterio',  fillable: true  },
-  { re: /^04_doc_summaries\/.+\.md$/,              kind: 'Scheda Documento',  fillable: false },
-  { re: /^03_criteria\/criteria_matrix\.md$/,      kind: 'Matrice Criteri',   fillable: false },
-  { re: /^03_criteria\/criteria_checklist\.md$/,   kind: 'Checklist Criteri', fillable: false },
-  { re: /^06_registers\/.+\.md$/,                  kind: 'Registro',          fillable: false },
-  { re: /^08_state\/.+\.md$/,                      kind: 'Stato Progetto',    fillable: false },
-  { re: /^07_questions\/.+\.md$/,                  kind: 'Domande',           fillable: true  },
-  { re: /^10_offer\/.+\.md$/,                      kind: 'Offerta Tecnica',   fillable: false },
-  { re: /^02_graph\/index\.md$/,                   kind: 'Knowledge Graph',   fillable: false },
-  { re: /^02_graph\/(scope|economic_framework)\.md$/, kind: 'Knowledge Graph', fillable: false },
+  { re: /^output\/03_criteria\/gara_brief\.md$/,           kind: 'Gara Brief',        fillable: true  },
+  { re: /^output\/03_criteria\/strategy_audit\.md$/,       kind: 'Audit Strategico',  fillable: true  },
+  { re: /^output\/05_criteria_outputs\/.+_output\.md$/,    kind: 'Analisi Criterio',  fillable: true  },
+  { re: /^output\/04_doc_summaries\/.+\.md$/,              kind: 'Scheda Documento',  fillable: false },
+  { re: /^output\/03_criteria\/criteria_matrix\.md$/,      kind: 'Matrice Criteri',   fillable: false },
+  { re: /^output\/03_criteria\/criteria_checklist\.md$/,   kind: 'Checklist Criteri', fillable: false },
+  { re: /^output\/06_registers\/.+\.md$/,                  kind: 'Registro',          fillable: false },
+  { re: /^_state\/.+\.md$/,                                kind: 'Stato Progetto',    fillable: false },
+  { re: /^output\/07_questions\/.+\.md$/,                  kind: 'Domande',           fillable: true  },
+  { re: /^output\/10_offer\/.+\.md$/,                      kind: 'Offerta Tecnica',   fillable: false },
+  { re: /^02_graph\/index\.md$/,                           kind: 'Knowledge Graph',   fillable: false },
+  { re: /^02_graph\/(scope|economic_framework)\.md$/,      kind: 'Knowledge Graph',   fillable: false },
 ];
 
 // Heading che aprono una sezione compilabile dal team.
@@ -89,7 +111,7 @@ function inline(text) {
   s = s.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,
     (_, t, l) => `<span class="wl">${l || t}</span>`);
   s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, l, h) => {
-    // I link relativi a .md puntano al gemello .html: dentro 11_view/
+    // I link relativi a .md puntano al gemello .html: dentro output/11_view/
     // la struttura e' speculare, quindi il path relativo resta valido.
     const href = /^[a-z]+:/i.test(h) ? h : h.replace(/\.md(#[^)]*)?$/, '.html$1');
     return `<a href="${href}" rel="noreferrer">${l}</a>`;
@@ -375,18 +397,7 @@ function page({ title, kind, subtitle, contentHtml, fields, rel, mtime, digest }
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)}</title>
 <style>
-  :root {
-    --bg:#f6f5f2; --card:#fff; --ink:#1c1b19; --mut:#6b6862; --line:#e2ded6;
-    --acc:#8a5a2b; --crit:#b3261e; --warn:#a56a00; --good:#2c6e49; --na:#6b6862;
-    --critbg:#fdf1f0; --warnbg:#fdf6e8; --goodbg:#eef6f1; --nabg:#f2f1ee;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg:#16150f; --card:#1f1e19; --ink:#eceae4; --mut:#a09c92; --line:#332f27;
-      --acc:#d8a76a; --crit:#f2b8b5; --warn:#e8c06a; --good:#8fd6ac;
-      --critbg:#2c1a19; --warnbg:#2a2216; --goodbg:#18271f; --nabg:#232219;
-    }
-  }
+${DESIGN_SYSTEM_CSS}
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.65
     ui-serif, Georgia, "Times New Roman", serif; }
@@ -427,12 +438,7 @@ function page({ title, kind, subtitle, contentHtml, fields, rel, mtime, digest }
   th { font-weight:600; font-size:.78rem; letter-spacing:.04em; text-transform:uppercase;
     color:var(--mut); background:var(--nabg); }
   tbody tr:last-child td { border-bottom:0; }
-  .badge { display:inline-block; font:600 .74rem/1.4 ui-sans-serif, system-ui, sans-serif;
-    letter-spacing:.03em; padding:.15em .55em; border-radius:999px; white-space:nowrap; }
-  .badge.crit { color:var(--crit); background:var(--critbg); }
-  .badge.warn { color:var(--warn); background:var(--warnbg); }
-  .badge.good { color:var(--good); background:var(--goodbg); }
-  .badge.na   { color:var(--na);   background:var(--nabg); }
+  /* .badge: definito in design-system.css (condiviso con l'app) */
   blockquote { margin:1.2rem 0; padding:.9rem 1.1rem; border-left:4px solid var(--mut);
     border-radius:0 8px 8px 0; background:var(--nabg); }
   blockquote p { margin:.35rem 0; }
@@ -538,7 +544,7 @@ function render(absPath) {
   const out = page({ title, kind: type.kind, subtitle, contentHtml: html,
                      fields, rel, mtime, digest });
 
-  const dest = path.join(VIEW_DIR, rel.replace(/\.md$/, '.html'));
+  const dest = path.join(VIEW_DIR, relForView(rel).replace(/\.md$/, '.html'));
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.writeFileSync(dest, out, 'utf8');
   return { rel, dest: path.relative(ROOT, dest), fields: fields.length, digest };
@@ -546,7 +552,7 @@ function render(absPath) {
 
 function isStale(absPath) {
   const rel = path.relative(ROOT, absPath).split(path.sep).join('/');
-  const dest = path.join(VIEW_DIR, rel.replace(/\.md$/, '.html'));
+  const dest = path.join(VIEW_DIR, relForView(rel).replace(/\.md$/, '.html'));
   if (!fs.existsSync(dest)) return 'artifact assente';
   const digest = hash(fs.readFileSync(absPath, 'utf8'));
   return fs.readFileSync(dest, 'utf8').includes(`contenuto ${digest}`)
@@ -555,8 +561,8 @@ function isStale(absPath) {
 
 // ── CLI ─────────────────────────────────────────────────────────────────────
 function allTracked() {
-  const dirs = ['02_graph', '03_criteria', '05_criteria_outputs', '06_registers',
-                '07_questions', '08_state', '10_offer'];
+  const dirs = ['02_graph', 'output/03_criteria', 'output/05_criteria_outputs', 'output/06_registers',
+                'output/07_questions', '_state', 'output/10_offer'];
   return dirs.flatMap((d) => walkMd(path.join(ROOT, d)))
     .filter((p) => docType(path.relative(ROOT, p).split(path.sep).join('/')));
 }
@@ -590,7 +596,7 @@ function main(argv) {
     console.log(`  ✓ ${r.dest}${r.fields ? ` (${r.fields} campi compilabili)` : ''}`);
     n++;
   }
-  console.log(`${n} artifact generati in 11_view/`);
+  console.log(`${n} artifact generati in output/11_view/`);
   return 0;
 }
 
