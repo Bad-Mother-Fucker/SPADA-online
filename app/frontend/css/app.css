@@ -1,0 +1,89 @@
+/* app.css — layout specifico dell'app SPADA Online.
+   I token (colore, tipografia, spaziatura, motion) vengono da
+   design-system.css (Sprint 5), caricato prima di questo file. Qui
+   solo struttura di pagina e composizione dei componenti condivisi. */
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: var(--text-base)/1.6 var(--font-sans);
+}
+.wrap { max-width: 64rem; margin: 0 auto; padding: var(--sp-6) var(--sp-4) var(--sp-8); }
+
+.app-top { margin-bottom: var(--sp-6); }
+.app-top h1 { font: 700 var(--text-2xl)/1.2 var(--font-sans); margin: 0 0 var(--sp-2); }
+.app-top .sub { color: var(--mut); font-size: var(--text-sm); }
+
+h2 { font-size: var(--text-lg); margin: var(--sp-6) 0 var(--sp-3); }
+
+.crea-gara, .doc-upload { background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius-lg); padding: var(--sp-5); margin-bottom: var(--sp-6); }
+.crea-gara form { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--sp-3) var(--sp-4); align-items: end; }
+.campo { display: flex; flex-direction: column; gap: var(--sp-1); }
+.campo label { font: 600 var(--text-xs)/1.4 var(--font-sans); letter-spacing: .04em;
+  text-transform: uppercase; color: var(--mut); }
+input, select, textarea {
+  font: var(--text-sm)/1.4 var(--font-sans); color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: var(--radius-sm); padding: .5rem .65rem;
+}
+button {
+  font: 600 var(--text-sm)/1 var(--font-sans); cursor: pointer;
+  border: 1px solid var(--acc); background: var(--acc); color: var(--bg);
+  padding: .6rem 1rem; border-radius: var(--radius-sm);
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+button:active { transform: scale(.97); }
+button.ghost { background: none; color: var(--acc); }
+button.scarta { background: none; color: var(--crit); border-color: var(--crit); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+
+.esito { padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); margin-top: var(--sp-3); }
+.esito.good { background: var(--goodbg); color: var(--good); }
+.esito.crit { background: var(--critbg); color: var(--crit); }
+
+.griglia-gare { display: grid; gap: var(--sp-3); }
+.gara-card { text-decoration: none; color: inherit; cursor: pointer; }
+.gara-card:hover { border-color: var(--acc); }
+
+/* ── Pagina gara ─────────────────────────────────────────────── */
+.gara-top { display: flex; flex-wrap: wrap; justify-content: space-between;
+  align-items: baseline; gap: var(--sp-3); margin-bottom: var(--sp-2); }
+.gara-top h1 { font-size: var(--text-xl); margin: 0; }
+.gara-meta { color: var(--mut); font-size: var(--text-sm); }
+.sintesi-corrente { background: var(--infobg); color: var(--info); border-radius: var(--radius-md);
+  padding: var(--sp-3) var(--sp-4); margin: var(--sp-4) 0; font-size: var(--text-sm); }
+
+.barra-fasi { display: flex; gap: var(--sp-2); margin: var(--sp-5) 0; flex-wrap: wrap; }
+.barra-fasi .step { flex: 1; min-width: 6rem; text-align: center; padding: var(--sp-2);
+  border-radius: var(--radius-sm); background: var(--nabg); font-size: var(--text-xs);
+  border-bottom: 3px solid var(--line); }
+.barra-fasi .step[data-stato="completata"] { border-bottom-color: var(--good); }
+.barra-fasi .step[data-stato="in_esecuzione"] { border-bottom-color: var(--acc); }
+.barra-fasi .step[data-stato="errore"] { border-bottom-color: var(--crit); }
+.barra-fasi .step[data-stato="da_rivedere"] { border-bottom-color: var(--warn); }
+
+.fasi-lista { display: flex; flex-direction: column; gap: var(--sp-3); margin: var(--sp-5) 0; }
+.phase-card .azioni { display: flex; gap: var(--sp-2); }
+.phase-card .azioni button { padding: .4rem .75rem; font-size: var(--text-xs); }
+
+.vista-agenti { background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius-lg); margin: var(--sp-5) 0; overflow: hidden; }
+.vista-agenti h3 { margin: 0; padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line);
+  font-size: var(--text-sm); text-transform: uppercase; letter-spacing: .04em; color: var(--mut); }
+
+.output-lista { display: flex; flex-direction: column; gap: var(--sp-2); margin: var(--sp-4) 0; }
+.output-lista a { color: var(--acc); text-decoration: none; }
+.output-lista a:hover { text-decoration: underline; }
+
+.doc-upload.secondario { order: 99; opacity: .9; }
+.doc-upload h2 { margin-top: 0; }
+
+table.storico { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+table.storico th, table.storico td { text-align: left; padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line); }
+
+details.log-grezzo { margin-top: var(--sp-6); color: var(--mut); font-size: var(--text-sm); }
+details.log-grezzo summary { cursor: pointer; }

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPADA Online — Gare</title>
+<link rel="stylesheet" href="css/app.css">
+<script src="js/config.js"></script>
+<script>
+  // Il design system vive sul backend (Sprint 5 — fonte unica anche per
+  // gli output HTML delle gare), non nel bundle statico del frontend:
+  // il <link> va costruito con la base configurata, non un percorso fisso.
+  document.write('<link rel="stylesheet" href="' + window.SPADA_API_BASE + '/sistema/design-system.css">');
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header class="app-top">
+    <h1>SPADA Online</h1>
+    <p class="sub" id="stato-pipeline">Versione pipeline: —</p>
+  </header>
+
+  <section class="crea-gara">
+    <h2>Nuova gara</h2>
+    <form id="form-nuova-gara">
+      <div class="campo">
+        <label for="f-slug">Slug</label>
+        <input id="f-slug" name="slug" required pattern="[a-z0-9\-]{1,64}" placeholder="2026-comune-bari-scuola">
+      </div>
+      <div class="campo">
+        <label for="f-nome">Nome esteso</label>
+        <input id="f-nome" name="nome" required placeholder="Lavori di efficientamento energetico...">
+      </div>
+      <div class="campo">
+        <label for="f-regione">Regione prezzario</label>
+        <input id="f-regione" name="regione" required placeholder="Campania">
+      </div>
+      <div class="campo">
+        <label for="f-anno">Anno prezzario</label>
+        <input id="f-anno" name="anno_prezzario" type="number" required value="2026">
+      </div>
+      <div class="campo">
+        <label for="f-modello">Modello</label>
+        <select id="f-modello" name="modello">
+          <option value="claude-sonnet-5" selected>claude-sonnet-5</option>
+          <option value="claude-opus-5">claude-opus-5</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label for="f-effort">Effort</label>
+        <select id="f-effort" name="effort">
+          <option value="low">low</option>
+          <option value="medium" selected>medium</option>
+          <option value="high">high</option>
+          <option value="xhigh">xhigh</option>
+          <option value="max">max</option>
+        </select>
+      </div>
+      <button type="submit">Crea gara</button>
+    </form>
+    <p id="crea-esito" class="esito" hidden></p>
+  </section>
+
+  <section class="elenco-gare">
+    <h2>Gare</h2>
+    <div id="lista-gare" class="griglia-gare">Caricamento…</div>
+  </section>
+</div>
+<script src="js/api.js"></script>
+<script src="js/elenco.js"></script>
+</body>
+</html>

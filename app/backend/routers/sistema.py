@@ -2,14 +2,29 @@ import sqlite3
 import subprocess
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from auth import stato_autenticazione
-from paths import DB_PATH, PIPELINE_DIR
+from paths import DATA_DIR, DB_PATH, PIPELINE_DIR
 
 router = APIRouter(prefix="/sistema", tags=["sistema"])
+
+
+@router.get("/design-system.css")
+def design_system_css():
+    """Serve il design system unico (Sprint 5) al frontend statico
+    (Cloudflare Pages), che non ha accesso diretto a _data/ sulla VM.
+    Fonte unica: _pipeline/design/design-system.css, pubblicata in
+    _data/ da link_pipeline.sh."""
+    path = DATA_DIR / "design-system.css"
+    if not path.exists():
+        path = PIPELINE_DIR / "design" / "design-system.css"
+    if not path.exists():
+        raise HTTPException(404, "design-system.css non trovato (link_pipeline.sh non ancora eseguito?)")
+    return FileResponse(str(path), media_type="text/css")
 
 
 @router.get("/auth")
