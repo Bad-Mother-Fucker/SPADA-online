@@ -1,1 +1,4 @@
-mcp>=1.28.0
+mcp>=1.28.0,<2.0
+# Fissato sotto 2.0: la 2.0.0 ha rimosso/rinominato mcp.server.fastmcp.FastMCP
+# (server.py usa l'API 1.x). Scoperto in deploy reale su una VM con Python 3.14
+# che ha risolto mcp==2.0.0 di default — vedi commit che ha introdotto questo pin.
