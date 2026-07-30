@@ -81,6 +81,24 @@ e backend Tunnel) limitata alla singola identità autorizzata
 (l'operatore). Senza Access, il backend è raggiungibile da chiunque
 conosca l'hostname — CORS da solo non è autenticazione.
 
+## 6.5. Prezzario regionale
+
+Senza almeno un'edizione importata il prezzario non è consultabile:
+`GET /sistema/prezzari` risponde `[]`, i tool MCP falliscono e le fasi
+che valorizzano le voci non hanno riferimento. (La gara si crea lo
+stesso — regione e anno diventano campi liberi — ma dalla Fase 4 in poi
+il prezzario serve.)
+
+```bash
+sudo -u spada bash /home/spada/spada/_pipeline/scripts/setup/import_prezzario.sh Campania 2026
+```
+
+Serve `gh` autenticato come utente `spada` (il repo dei prezzari è
+privato). Lo script importa nello stesso `spada.db` di backend e server
+MCP e verifica da sé che tabelle e indice full-text siano popolati.
+Verifica finale: `curl -s https://api.<tuo-dominio>/sistema/prezzari`
+deve elencare l'edizione.
+
 ## 7. Backup
 
 ```bash

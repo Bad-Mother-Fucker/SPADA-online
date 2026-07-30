@@ -66,18 +66,13 @@ schemi; nessuna occorrenza residua dei vecchi percorsi in
 
 ## Limiti noti di questo sprint
 
-- **Import reale non eseguito in questa sessione.** L'edizione
-  `campania-2026` esiste come release in `prometeus-prezzari`
-  (verificato via API: 31.755 voci Articoli, due asset `.json.gz`), ma
-  il sandbox di sviluppo non ha `gh` CLI e il download autenticato via
-  `curl`+token diretto è stato bloccato dal classificatore di sicurezza
-  della sessione (uso di credenziali fuori dai tool sanzionati). Import
-  e server sono stati validati con un fixture sintetico ma fedele allo
-  schema (positivo, negativo — subtotale corrotto bloccato — e
-  convivenza di due annualità nello stesso `spada.db`). **Il primo
-  import reale va fatto sulla VM di Sprint 0**, dove `gh` è installato
-  per contratto (vedi `scripts/prezzario/fetch_prezzario.sh` di
-  `_riferimento/`, stesso meccanismo di download).
+- ~~Import reale non eseguito.~~ **Chiuso**: `campania-2026` è stata
+  scaricata da `prometeus-prezzari` e importata davvero — 31.755
+  articoli, 37.830 sotto-gruppi validati senza mismatch, 71.544 voci
+  elementari. La validazione bloccante dei subtotali passa sul dato
+  vero, non solo sul fixture, e i quattro tool MCP sono stati
+  interrogati sul database risultante. Il passo è ora un comando solo:
+  `_pipeline/scripts/setup/import_prezzario.sh <Regione> <anno>`.
 - Non è stata verificata l'identità aritmetica tra `prezzo_base` di un
   articolo e la somma dei sotto-gruppi della sua Analisi (se dovrebbe
   coincidere è un'assunzione che richiede conferma sul dato reale, non
