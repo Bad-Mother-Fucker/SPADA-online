@@ -1,0 +1,37 @@
+/* grafo.css — vista visuale del knowledge graph (Sprint 10.1).
+   Token di colore/spaziatura da design-system.css (sistema "Liquid Glass"). */
+
+.grafo-wrap { max-width: 90rem; }
+.grafo-wrap h1 { font-family: var(--font-ui); font-size: var(--fs-xl); color: var(--ink-1); margin: var(--s-2) 0 0; }
+.grafo-wrap .hint,
+.grafo-dettaglio #g-dettaglio-hint { margin: 0; font-size: var(--fs-sm); color: var(--ink-3); }
+.grafo-legenda { display: flex; flex-wrap: wrap; gap: var(--s-3); margin: var(--s-3) 0 var(--s-4);
+  font-size: var(--fs-xs); color: var(--ink-3); }
+.grafo-legenda .voce { display: flex; align-items: center; gap: .3rem; }
+.grafo-legenda .pallino { width: .7rem; height: .7rem; border-radius: 50%; display: inline-block; }
+.pallino.tipo-document-bg { background: var(--info); }
+.pallino.tipo-criterion-bg { background: var(--accent); }
+.pallino.tipo-proposal-bg { background: var(--ok); }
+.pallino.tipo-scope-bg, .pallino.tipo-economic_framework-bg { background: var(--neu); }
+.pallino.tipo-sconosciuto-bg { background: var(--crit); }
+
+.grafo-area { display: flex; gap: var(--s-4); }
+#g-svg { flex: 1; min-height: 60vh; cursor: grab; }
+#g-svg:active { cursor: grabbing; }
+
+.grafo-dettaglio { width: 20rem; flex-shrink: 0; padding: var(--s-4); font-size: var(--fs-sm); max-height: 60vh; overflow-y: auto; }
+.grafo-dettaglio h3 { margin: 0 0 var(--s-2); font-size: var(--fs-base); color: var(--ink-1); }
+.grafo-dettaglio .k { color: var(--ink-3); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: var(--track-caps); }
+.grafo-dettaglio .arco-riga { padding: var(--s-2) 0; border-bottom: 1px dotted var(--hairline); }
+
+.nodo-cerchio { stroke: var(--glass-solid); stroke-width: 1.5px; cursor: pointer; }
+.nodo-cerchio.selezionato { stroke: var(--accent); stroke-width: 3px; }
+.nodo-cerchio.orfano { stroke-dasharray: 3,2; stroke: var(--warn); }
+.nodo-cerchio.tipo-document { fill: var(--info); }
+.nodo-cerchio.tipo-criterion { fill: var(--accent); }
+.nodo-cerchio.tipo-proposal { fill: var(--ok); }
+.nodo-cerchio.tipo-scope, .nodo-cerchio.tipo-economic_framework { fill: var(--neu); }
+.nodo-cerchio.tipo-sconosciuto { fill: var(--crit); }
+.nodo-etichetta { font: var(--fs-xs)/1 var(--font-ui); fill: var(--ink-1); pointer-events: none; }
+.arco-linea { stroke: var(--hairline-2); stroke-width: 1.2px; }
+.arco-linea.evidenziato { stroke: var(--accent); stroke-width: 2px; }

@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from db import get_conn
+from grafo import estrai_grafo
 from models import ApprovazioneRequest, AssistenteRequest, CreaGaraRequest
 from paths import PIPELINE_DIR, SlugNonValido, gara_dir, percorso_sotto_gara, valida_slug
 
@@ -88,6 +89,15 @@ def dettaglio_gara(slug: str):
     fasi = _leggi_json(d / "_state" / "fasi.json", {})
     attivita = _leggi_json(d / "_state" / "attivita.json", {})
     return {"manifest": manifest, "fasi": fasi, "attivita": attivita}
+
+
+@router.get("/{slug}/grafo")
+def grafo_gara(slug: str):
+    """Grafo strutturato (nodi/archi) per la vista visuale del frontend
+    (Sprint 10.1). Ricostruito ad ogni richiesta dai file 02_graph/ —
+    nessuna copia, il filesystem resta l'unica fonte di verità."""
+    d = _gara_o_404(slug)
+    return estrai_grafo(d)
 
 
 @router.post("/{slug}/documenti")

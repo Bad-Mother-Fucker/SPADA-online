@@ -11,9 +11,11 @@
 //   #/fase/<n>
 //   #/fase/5/proposta/<id>
 //   #/fase/6/deliverable/<percorso-output-incodificato>
-//   #/grafo[?tipo=<tipo>]
 //   #/attivita
 //   #/impostazioni
+// Il Grafo NON è una vista del guscio: ha una pagina propria
+// (grafo.html?slug=&tipo=, Sprint 10.1, dati reali da GET /grafo). Un
+// vecchio #/grafo viene rimbalzato lì da reindirizzaSeGrafo().
 
 const params = new URLSearchParams(location.search);
 const SLUG = params.get("slug");
@@ -21,7 +23,6 @@ if (!SLUG) {
   document.body.innerHTML = "<p style='padding:2rem'>Slug gara mancante nell'URL (?slug=...).</p>";
   throw new Error("slug mancante");
 }
-
 const NOMI_FASE = {
   1: "Acquisizione documenti", 2: "Estrazione requisiti", 3: "Analisi capitolato",
   4: "Ricerca soluzioni", 5: "Revisione proposte", 6: "Deliverables",
@@ -77,7 +78,6 @@ function parseRoute() {
     if (parts[2] === "deliverable" && parts[3]) return { view: "fase", fase, sub: "deliverable", subId: decodeURIComponent(parts[3]), query };
     return { view: "fase", fase, query };
   }
-  if (parts[0] === "grafo") return { view: "grafo", query };
   if (parts[0] === "attivita") return { view: "attivita", query };
   if (parts[0] === "impostazioni") return { view: "impostazioni", query };
   return null; // nessuna rotta esplicita: si va sulla fase corrente al primo load
@@ -97,7 +97,17 @@ function chiaveFase(fasi, n) {
 
 function navigate(hash) { location.hash = hash; }
 
-window.addEventListener("hashchange", () => { S.route = parseRoute() || S.route; renderAll(); });
+// Compatibilità: un #/grafo (bookmark/link vecchio) rimbalza sulla pagina
+// reale invece di restare bloccato su una vista che non esiste più.
+function reindirizzaSeGrafo() {
+  const h = location.hash.replace(/^#\/?/, "");
+  if (h.split("?")[0] !== "grafo") return false;
+  const query = new URLSearchParams(h.split("?")[1] || "");
+  apriGrafo(query.get("tipo"));
+  return true;
+}
+
+window.addEventListener("hashchange", () => { if (reindirizzaSeGrafo()) return; S.route = parseRoute() || S.route; renderAll(); });
 
 // ══════════════════════ CARICAMENTO DATI ════════════════════════════
 async function ricarica(mostraErrorePagina) {
@@ -141,7 +151,7 @@ function renderTools() {
   const el = document.getElementById("g-tools");
   const r = S.route;
   const tools = [
-    ["grafo", "Grafo", "#/grafo"],
+    ["grafo", "Grafo", null],
     ["attivita", "Attività", "#/attivita"],
     ["impostazioni", "Impostazioni", "#/impostazioni"],
   ];
@@ -151,7 +161,9 @@ function renderTools() {
     b.type = "button"; b.className = "tool-btn";
     b.textContent = label;
     b.setAttribute("aria-pressed", String(r && r.view === key));
-    b.onclick = () => navigate(hash);
+    // Il Grafo è una pagina propria (grafo.html): esce dal guscio invece
+    // di cambiare vista al suo interno, vedi apriGrafo().
+    b.onclick = key === "grafo" ? () => apriGrafo() : () => navigate(hash);
     el.appendChild(b);
   });
 }
@@ -596,28 +608,17 @@ function pannelloUpload() {
   return div;
 }
 
-// ══════════════════════ VISTA: GRAFO (frontend-only, onesta) ════════
-function renderGrafo(container, query) {
-  document.getElementById("g-view-kicker").textContent = "Vista trasversale";
-  document.getElementById("g-view-title").textContent = "Grafo";
-  document.getElementById("g-view-sub").textContent = "Tracciabilità: da un deliverable si risale a proposta, gap, requisito e passaggio del documento che lo impone.";
-  document.getElementById("g-view-status").hidden = true;
-  document.getElementById("g-back").hidden = true;
-
-  const tipo = query.get("tipo");
-  const wrap = document.createElement("section");
-  wrap.className = "card glass-surface";
-  wrap.appendChild(notaNonDisponibile(
-    "Il backend non espone ancora un endpoint /grafo con nodi e archi strutturati (requisiti, gap, proposte, deliverable e i loro collegamenti). Questa vista è pronta lato frontend — filtri, colonne per tipo di nodo, deep-link — e si attiverà collegandola a un endpoint futuro."
-    + (tipo ? ` Filtro richiesto dal link di provenienza: «${tipo}» (verrà applicato non appena i dati sono disponibili).` : "")
-  ));
-  const cols = ["requisito", "gap", "proposta", "deliverable"];
-  const colsWrap = document.createElement("div");
-  colsWrap.className = "graph-cols";
-  colsWrap.style.marginTop = "var(--s-4)";
-  colsWrap.innerHTML = cols.map((c) => `<div><div class="graph-col-title">${c}</div><p style="font-size:var(--fs-micro);color:var(--ink-4);margin:0">0 nodi</p></div>`).join("");
-  wrap.appendChild(colsWrap);
-  container.appendChild(wrap);
+// ══════════════════════ VISTA: GRAFO ═════════════════════════════════
+// Il grafo è servito da una pagina propria (grafo.html, Sprint 10.1):
+// layout force-directed D3 su dati reali da GET /gare/{slug}/grafo. Non
+// è annidata nel router hash del guscio perché è nata come pagina a sé
+// con URL/query string proprie (?slug=&tipo=) — qui ci si limita a
+// portarcisi, preservando il filtro eventualmente richiesto dal link di
+// provenienza (es. Fase 2 → «Apri nel Grafo» → tipo=requisito).
+function apriGrafo(tipo) {
+  const q = new URLSearchParams({ slug: SLUG });
+  if (tipo) q.set("tipo", tipo);
+  location.href = `grafo.html?${q.toString()}`;
 }
 
 // ══════════════════════ VISTA: ATTIVITÀ (reale + chat onesta) ═══════
@@ -753,7 +754,6 @@ async function renderView() {
   const r = S.route;
   if (!r) { container.innerHTML = `<div class="card glass-surface">Caricamento…</div>`; return; }
 
-  if (r.view === "grafo") { renderGrafo(container, r.query); return; }
   if (r.view === "attivita") { await renderAttivita(container); return; }
   if (r.view === "impostazioni") { await renderImpostazioni(container); return; }
   if (r.view === "fase") {
@@ -801,7 +801,9 @@ document.getElementById("tema-chiaro").onclick = () => { localStorage.setItem("s
 document.getElementById("tema-scuro").onclick = () => { localStorage.setItem("spada:tema", "dark"); applicaTema("dark"); };
 applicaTema(localStorage.getItem("spada:tema") || "");
 
-S.route = parseRoute();
-renderSse();
-ricarica(true);
-avviaStream();
+if (!reindirizzaSeGrafo()) {
+  S.route = parseRoute();
+  renderSse();
+  ricarica(true);
+  avviaStream();
+}
