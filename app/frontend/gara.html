@@ -4,151 +4,100 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SPADA Online — Gara</title>
-<link rel="stylesheet" href="css/app.css">
 <script src="js/config.js"></script>
 <script>
   document.write('<link rel="stylesheet" href="' + window.SPADA_API_BASE + '/sistema/design-system.css">');
 </script>
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-<div class="wrap">
-  <a href="index.html" class="sub">← Tutte le gare</a>
+<div aria-hidden="true" class="bg-glow"></div>
 
-  <header class="gara-top">
-    <div>
-      <h1 id="g-nome">—</h1>
-      <div class="gara-meta" id="g-meta">—</div>
-    </div>
-    <nav class="gara-nav">
-      <a id="g-link-grafo" href="#" class="sub">Grafo della gara →</a>
-      <a id="g-link-impostazioni" href="#" class="sub">Impostazioni →</a>
+<!-- ── Guscio: barra applicativa (persistente, non si ricarica al cambio vista) ── -->
+<div class="app-top">
+  <div class="app-top-inner">
+    <a href="index.html" class="brand">
+      <span class="brand-mark"></span>
+      <span class="brand-name">SPADA</span>
+    </a>
+    <nav class="crumb" aria-label="Percorso">
+      <a href="index.html">Gare</a>
+      <span class="sep">/</span>
+      <span class="slug" id="g-crumb-slug">—</span>
+      <span class="sep">/</span>
+      <span class="current" id="g-crumb-vista">Fase 1</span>
     </nav>
-  </header>
-
-  <p class="sintesi-corrente" id="g-sintesi">—</p>
-
-  <!-- Barra fasi = selettore di vista: ogni step e' una tab (Sprint 10.1) -->
-  <div class="barra-fasi" id="g-barra"></div>
-
-  <div class="vista-fase" id="v-1-acquisizione">
-    <div class="phase-card-slot" id="pc-1"></div>
-    <section id="g-upload" class="doc-upload">
-      <h2>Carica documenti</h2>
-      <form id="form-upload">
-        <div class="campo">
-          <label for="u-categoria">Categoria</label>
-          <select id="u-categoria" name="categoria">
-            <option value="disciplinare">Disciplinare</option>
-            <option value="elaborati">Elaborati</option>
-            <option value="p7m">P7M</option>
-          </select>
-        </div>
-        <div class="campo">
-          <label for="u-file">File</label>
-          <input id="u-file" name="file" type="file" required>
-        </div>
-        <button type="submit">Carica</button>
-      </form>
-      <p id="upload-esito" class="esito" hidden></p>
-    </section>
-    <h3>Documenti caricati</h3>
-    <div class="output-lista" id="g-documenti">Caricamento…</div>
-  </div>
-
-  <div class="vista-fase" id="v-2-estrazione" hidden>
-    <div class="phase-card-slot" id="pc-2"></div>
-    <p class="sub">Cosa il sistema ha estratto dal disciplinare e dagli elaborati: criteri, matrice punteggi, e il grafo di conoscenza completo.</p>
-    <div class="output-lista" id="g-output-estrazione">Caricamento…</div>
-  </div>
-
-  <div class="vista-fase" id="v-3-analisi" hidden>
-    <div class="phase-card-slot" id="pc-3"></div>
-    <p class="sub">Analisi strategica del capitolato: budget sicurezza, gap prezzi, viabilità cantiere, capacità di investimento migliorativo.</p>
-    <div class="output-lista" id="g-output-analisi">Caricamento…</div>
-  </div>
-
-  <div class="vista-fase" id="v-4-soluzioni" hidden>
-    <div class="phase-card-slot" id="pc-4"></div>
-    <h3>Gap individuati</h3>
-    <div id="g-gap-lista">Caricamento…</div>
-
-    <h3>Suggerisci una proposta</h3>
-    <form id="form-proposta-operatore" class="doc-upload">
-      <div class="campo">
-        <label for="po-criterio">Criterio</label>
-        <input id="po-criterio" name="criterio" placeholder="es. C1" required>
+    <div class="spacer"></div>
+    <div class="tool-group" role="group" aria-label="Viste trasversali" id="g-tools"></div>
+    <div style="display:flex;align-items:center;gap:var(--s-2)">
+      <span class="sse-pill" id="g-sse">SSE</span>
+      <div class="theme-toggle" role="group" aria-label="Tema">
+        <button type="button" id="tema-chiaro" aria-pressed="false">Chiaro</button>
+        <button type="button" id="tema-scuro" aria-pressed="false">Scuro</button>
       </div>
-      <div class="campo">
-        <label for="po-gap">Gap collegato (opzionale)</label>
-        <input id="po-gap" name="gap_id" placeholder="es. G-C1-002">
-      </div>
-      <div class="campo">
-        <label for="po-titolo">Titolo</label>
-        <input id="po-titolo" name="titolo" required>
-      </div>
-      <div class="campo" style="grid-column: 1 / -1;">
-        <label for="po-descrizione">Descrizione</label>
-        <textarea id="po-descrizione" name="descrizione" rows="3" required></textarea>
-      </div>
-      <button type="submit">Invia proposta</button>
-    </form>
-    <p id="proposta-operatore-esito" class="esito" hidden></p>
-
-    <h3>Proposte suggerite</h3>
-    <div id="g-proposte-operatore">Caricamento…</div>
-  </div>
-
-  <div class="vista-fase" id="v-5-revisione" hidden>
-    <div class="phase-card-slot" id="pc-5"></div>
-    <section id="g-revisione" class="approval-panel" hidden>
-      <h2>Revisione proposte</h2>
-      <p class="sub">Una proposta per riga, non un blocco unico: approva, chiedi modifiche o scarta con nota. Clicca il titolo per il dettaglio.</p>
-      <div id="g-proposte"></div>
-    </section>
-  </div>
-
-  <div class="vista-fase" id="v-6-deliverables" hidden>
-    <div class="phase-card-slot" id="pc-6"></div>
-    <p class="sub">Ogni documento richiesto dal disciplinare è uno spazio di lavoro a sé: si esegue separatamente, con l'agente dedicato al suo tipo.</p>
-    <div class="deliverables-griglia" id="g-deliverables">Caricamento…</div>
-  </div>
-
-  <div class="vista-fase" id="v-7-audit" hidden>
-    <div class="phase-card-slot" id="pc-7"></div>
-    <p class="sub">Approvazione finale prima della consegna: verifica gli elaborati prodotti.</p>
-    <div class="output-lista" id="g-output-finale">Caricamento…</div>
-  </div>
-
-  <div class="vista-agenti">
-    <h3 id="g-agenti-titolo">Agenti al lavoro</h3>
-    <div id="g-agenti"></div>
-  </div>
-</div>
-
-<!-- Modale dettaglio proposta (Sprint 10.1) -->
-<div class="modale-overlay" id="modale-proposta" hidden>
-  <div class="modale">
-    <button class="modale-chiudi" id="modale-chiudi">×</button>
-    <div id="modale-proposta-corpo">Caricamento…</div>
-  </div>
-</div>
-
-<!-- Chat a controllo pieno (Sprint 10.4) -->
-<div class="chat-widget" id="chat-widget">
-  <button class="chat-toggle" id="chat-toggle">Intervento diretto</button>
-  <div class="chat-pannello" id="chat-pannello" hidden>
-    <div class="chat-header">
-      <strong>Intervento diretto</strong>
-      <span class="sub">Controllo pieno, limitato a questa gara</span>
     </div>
-    <div class="chat-storico" id="chat-storico"></div>
-    <form id="chat-form">
-      <textarea id="chat-input" rows="2" placeholder="Descrivi l'intervento…" required></textarea>
-      <button type="submit">Invia</button>
-    </form>
   </div>
 </div>
 
+<div class="page">
+
+  <!-- ── Assistente: pannello flottante, sola lettura, sempre disponibile dopo la Fase 2 ── -->
+  <aside class="assistant-panel" id="g-assistant-panel" hidden aria-label="Assistente di gara">
+    <div class="ap-head">
+      <div class="ap-head-row">
+        <h2>Assistente di gara</h2>
+        <span class="badge info">sola lettura</span>
+        <span class="spacer"></span>
+        <button type="button" class="ap-close" id="g-assistant-close" aria-label="Chiudi assistente">✕</button>
+      </div>
+      <p>Risponde solo su documenti ed elaborati di questa gara. Non modifica nulla: per intervenire serve la chat operativa in Attività.</p>
+    </div>
+    <div class="ap-scope">Contesto: <strong style="color:var(--ink-2)">intera gara</strong></div>
+    <div class="ap-log" id="g-assistant-log" role="log" aria-live="polite"></div>
+    <form class="ap-form" id="g-assistant-form">
+      <input type="text" id="g-assistant-input" placeholder="Chiedi qualcosa sulla gara…" autocomplete="off">
+      <button type="submit" aria-label="Invia">➤</button>
+    </form>
+  </aside>
+  <button type="button" class="assistant-fab" id="g-assistant-fab">💬 Assistente</button>
+
+  <main>
+    <!-- ── Guscio: intestazione gara ── -->
+    <header class="gara-header">
+      <div class="gara-header-inner">
+        <div style="min-width:0;flex:1 1 560px">
+          <div class="gara-tags" id="g-tags"></div>
+          <h1 id="g-nome">—</h1>
+          <p class="gara-sintesi" id="g-sintesi"><span class="kicker">Sintesi ·</span> —</p>
+        </div>
+        <div class="gara-actions">
+          <div class="gara-actions-row">
+            <button type="button" id="g-vai-attivita">Attività</button>
+          </div>
+          <span style="font-size:var(--fs-micro);color:var(--ink-4)" id="g-meta">—</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── Guscio: stepper 7 fasi ── -->
+    <nav class="stepper" aria-label="Fasi della pipeline">
+      <ol id="g-stepper"></ol>
+    </nav>
+
+    <!-- ── Contenuto centrale: swap per vista, guscio invariato ── -->
+    <div class="view-context">
+      <div style="min-width:0">
+        <button type="button" class="view-back" id="g-back" hidden></button>
+        <div class="kicker" id="g-view-kicker">—</div>
+        <h2 id="g-view-title">—</h2>
+        <p class="sub" id="g-view-sub"></p>
+      </div>
+      <span class="status-badge" id="g-view-status" hidden></span>
+    </div>
+
+    <div class="viewport" id="g-viewport">Caricamento…</div>
+  </main>
+</div>
 <script src="js/api.js"></script>
 <script src="js/gara.js"></script>
 </body>
