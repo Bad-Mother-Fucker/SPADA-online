@@ -16,9 +16,24 @@ const Viste = (() => {
       Sono quattro cose diverse e l'operatore deve poterle distinguere. */
   function risorsa(res, { vuoto, render }) {
     if (!res || res.stato === "caricamento") return scheletroBlocco();
+    if (res.stato === "assente") return backendVecchio(res.percorso);
     if (res.stato === "errore") return erroreBlocco(res.errore, res.percorso);
     if (res.stato === "vuoto") return vuoto();
     return render(res.dati);
+  }
+
+  /** Il backend in esecuzione non espone questo endpoint: è più vecchio del
+      frontend. Va detto per quello che è — non c'è nulla da riparare nella
+      gara, e riprovare non serve. */
+  function backendVecchio(percorso) {
+    return h("div", { class: "card card--dashed" },
+      h("div", { class: "row row--tight", style: { marginBottom: "var(--s-2)" } },
+        span(I.avviso(15), "warn"),
+        h("strong", { style: { fontSize: "var(--fs-sm)", color: "var(--ink-1)" } },
+          "Questa vista richiede un backend più recente")),
+      h("p", { style: { margin: 0, fontSize: "var(--fs-sm)", color: "var(--ink-2)" } },
+        "Il servizio non espone ", h("code", { class: "mono" }, percorso || "questo endpoint"),
+        ": l'API in esecuzione è precedente a questa versione dell'interfaccia. I dati della gara sono intatti — manca solo l'aggiornamento del backend sulla VM."));
   }
 
   function scheletroBlocco(righe = 3) {
@@ -1237,6 +1252,7 @@ const Viste = (() => {
   function grafo(stato) {
     const res = stato.registri.grafo;
     if (res.stato === "caricamento") return scheletroBlocco(5);
+    if (res.stato === "assente") return backendVecchio(res.percorso);
     if (res.stato === "errore") return erroreBlocco(res.errore, res.percorso);
 
     const perColonna = nodiGrafo(stato);

@@ -196,7 +196,7 @@ function carica(chiave, forza = false) {
         .then((d) => fine(d.length
           ? { stato: "ok", dati: d, errore: null, percorso: "/documenti" }
           : { stato: "vuoto", dati: [], errore: null, percorso: "/documenti" }))
-        .catch((e) => fine({ stato: "errore", dati: null, errore: e, percorso: `/gare/${SLUG}/documenti` }));
+        .catch((e) => fine(risorsaDaErrore(e, `/gare/${SLUG}/documenti`)));
       break;
 
     case "runLog":
@@ -285,11 +285,15 @@ function carica(chiave, forza = false) {
   }
 }
 
-/** Un 404 su una risorsa Sprint 10 vuol dire "la pipeline non l'ha ancora
-    prodotta" (o, su un backend più vecchio, che l'endpoint non esiste):
-    in entrambi i casi la vista mostra lo stato vuoto, non un errore. */
+/** Tre esiti diversi, che l'operatore deve poter distinguere:
+    · 404 → la pipeline non l'ha ancora prodotta (stato vuoto, previsto);
+    · 405/501 → il backend non espone affatto questo endpoint, cioè è più
+      vecchio del frontend: non è un guasto della gara, è un disallineamento
+      di versione, e dirlo evita di far cercare un problema che non c'è;
+    · altro → errore vero. */
 function risorsaDaErrore(e, percorso) {
   if (e.stato === 404) return { stato: "vuoto", dati: [], errore: null, percorso };
+  if (e.stato === 405 || e.stato === 501) return { stato: "assente", dati: null, errore: e, percorso };
   return { stato: "errore", dati: null, errore: e, percorso };
 }
 
