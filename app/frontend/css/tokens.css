@@ -1,0 +1,293 @@
+/* ==========================================================================
+   SPADA Online — Design tokens "Liquid Glass"
+   Unico file di token, nessuna dipendenza esterna (system font stack + SVG inline).
+   Contesti d'uso:  (a) app web con toggle chiaro/scuro   (b) documenti HTML
+   autoconsistenti generati dalla pipeline (leggibili offline, stampabili).
+   Tema: prefers-color-scheme + override esplicito data-theme="light|dark".
+   ========================================================================== */
+
+:root {
+  /* --- Accento (default: BRONZO). Override con data-accent="ambra|rame" --- */
+  --acc-h: 58;
+  --acc-c: 0.105;
+
+  /* --- Tipografia ---------------------------------------------------- */
+  /* App: sans geometrico. Poppins è usato SOLO se già presente sul sistema o
+     self-hosted dal repo (vedi @font-face opzionale in fondo al file): nessuna
+     richiesta a Google Fonts, così i documenti generati restano offline.      */
+  --font-ui: Poppins, "Century Gothic", "Avenir Next", Avenir, "Segoe UI Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", Helvetica, sans-serif;
+  --font-doc: var(--font-ui);
+  /* Riservato ai documenti HTML prodotti dalla pipeline (prosa lunga, stampa) */
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --fs-micro: 11px;   --lh-micro: 1.45;
+  --fs-xs:    12px;   --lh-xs:    1.5;
+  --fs-sm:    13px;   --lh-sm:    1.55;
+  --fs-base:  14px;   --lh-base:  1.6;
+  --fs-md:    16px;   --lh-md:    1.65;
+  --fs-lg:    19px;   --lh-lg:    1.45;
+  --fs-xl:    24px;   --lh-xl:    1.32;
+  --fs-2xl:   31px;   --lh-2xl:   1.22;
+  --fs-3xl:   40px;   --lh-3xl:   1.12;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --track-tight: -0.011em;
+  --track-caps: 0.085em;
+
+  /* --- Spaziature (scala 4) ------------------------------------------ */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 24px; --s-6: 32px; --s-7: 48px; --s-8: 64px;
+
+  /* --- Raggi --------------------------------------------------------- */
+  --r-xs: 4px; --r-sm: 7px; --r-md: 11px; --r-lg: 16px; --r-xl: 22px; --r-pill: 999px;
+
+  /* --- Livelli di blur (vetro) --------------------------------------- */
+  --blur-1: 8px;    /* chip, badge                */
+  --blur-2: 18px;   /* card, pannelli             */
+  --blur-3: 30px;   /* barre sticky, header       */
+  --blur-4: 48px;   /* overlay modale             */
+  --sat: 160%;      /* saturazione backdrop       */
+
+  /* --- Motion -------------------------------------------------------- */
+  --d-1: 110ms;  --d-2: 200ms;  --d-3: 320ms;  --d-4: 560ms;
+  --e-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --e-std: cubic-bezier(0.4, 0, 0.2, 1);
+  --e-in:  cubic-bezier(0.5, 0, 0.9, 0.3);
+  --stagger: 55ms;
+
+  --z-base: 0; --z-sticky: 20; --z-overlay: 60; --z-toast: 80;
+}
+
+/* =========================== TEMA CHIARO =============================== */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --acc-l: 0.55; --acc-l2: 0.46;
+  --accent:        oklch(var(--acc-l) var(--acc-c) var(--acc-h));
+  --accent-2:      oklch(var(--acc-l2) var(--acc-c) var(--acc-h));
+  --accent-soft:   oklch(var(--acc-l) var(--acc-c) var(--acc-h) / 0.12);
+  --accent-edge:   oklch(var(--acc-l) var(--acc-c) var(--acc-h) / 0.34);
+  --accent-ring:   oklch(var(--acc-l) var(--acc-c) var(--acc-h) / 0.45);
+  --accent-ink:    #fffdf8;
+
+  --bg-base:   #f1eee8;
+  --bg-glow-a: oklch(0.80 0.085 var(--acc-h) / 0.42);
+  --bg-glow-b: oklch(0.74 0.045 250 / 0.30);
+
+  --ink-1: #191713;  /* titoli, testo primario   */
+  --ink-2: #494339;  /* corpo                    */
+  --ink-3: #787064;  /* secondario, label        */
+  --ink-4: #a69c8e;  /* placeholder, disabilitato*/
+
+  --glass-1: rgba(255, 253, 249, 0.72);
+  --glass-2: rgba(255, 253, 249, 0.52);
+  --glass-3: rgba(255, 253, 249, 0.32);
+  --glass-solid: #fbf8f3;          /* fallback pieno dietro al blur */
+  --glass-solid-2: #f6f2eb;
+
+  --hairline: rgba(25, 23, 19, 0.11);
+  --hairline-2: rgba(25, 23, 19, 0.19);
+  --sheen: linear-gradient(155deg, rgba(255,255,255,0.9), rgba(255,255,255,0) 46%);
+  --field: rgba(255, 255, 255, 0.6);
+  --wash: rgba(25, 23, 19, 0.035);
+
+  --el-1: 0 1px 2px rgba(25,23,19,0.05), 0 2px 6px rgba(25,23,19,0.05);
+  --el-2: 0 1px 2px rgba(25,23,19,0.05), 0 8px 22px rgba(25,23,19,0.07), inset 0 1px 0 rgba(255,255,255,0.6);
+  --el-3: 0 3px 8px rgba(25,23,19,0.06), 0 20px 48px rgba(25,23,19,0.12), inset 0 1px 0 rgba(255,255,255,0.66);
+  --el-4: 0 8px 18px rgba(25,23,19,0.09), 0 40px 90px rgba(25,23,19,0.20), inset 0 1px 0 rgba(255,255,255,0.72);
+
+  --crit: oklch(0.50 0.165 27);  --crit-soft: oklch(0.50 0.165 27 / 0.12);  --crit-edge: oklch(0.50 0.165 27 / 0.32);
+  --warn: oklch(0.55 0.125 82);  --warn-soft: oklch(0.60 0.130 82 / 0.15);  --warn-edge: oklch(0.55 0.125 82 / 0.32);
+  --ok:   oklch(0.49 0.105 152); --ok-soft:   oklch(0.49 0.105 152 / 0.13); --ok-edge:   oklch(0.49 0.105 152 / 0.30);
+  --info: oklch(0.50 0.115 249); --info-soft: oklch(0.50 0.115 249 / 0.12); --info-edge: oklch(0.50 0.115 249 / 0.30);
+  --neu:  oklch(0.48 0.010 60);  --neu-soft:  oklch(0.48 0.010 60 / 0.10);  --neu-edge:  oklch(0.48 0.010 60 / 0.24);
+}
+
+/* ============================ TEMA SCURO =============================== */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --acc-l: 0.78; --acc-l2: 0.70;
+  --accent-ink: #17130c;
+
+  --bg-base:   #0e0f11;
+  --bg-glow-a: oklch(0.62 0.10 var(--acc-h) / 0.34);
+  --bg-glow-b: oklch(0.48 0.07 258 / 0.34);
+
+  --ink-1: #f6f3ee;
+  --ink-2: #cdc7bd;
+  --ink-3: #9a938a;
+  --ink-4: #6b655d;
+
+  --glass-1: rgba(38, 40, 44, 0.62);
+  --glass-2: rgba(38, 40, 44, 0.44);
+  --glass-3: rgba(38, 40, 44, 0.26);
+  --glass-solid: #1c1e21;
+  --glass-solid-2: #16181a;
+
+  --hairline: rgba(255, 253, 248, 0.10);
+  --hairline-2: rgba(255, 253, 248, 0.18);
+  --sheen: linear-gradient(155deg, rgba(255,255,255,0.14), rgba(255,255,255,0) 44%);
+  --field: rgba(255, 255, 255, 0.055);
+  --wash: rgba(255, 253, 248, 0.045);
+
+  --el-1: 0 1px 2px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.28);
+  --el-2: 0 2px 4px rgba(0,0,0,0.4), 0 10px 26px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.07);
+  --el-3: 0 4px 10px rgba(0,0,0,0.44), 0 24px 56px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.09);
+  --el-4: 0 10px 22px rgba(0,0,0,0.5), 0 48px 110px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.11);
+
+  --crit: oklch(0.74 0.145 27);  --crit-soft: oklch(0.68 0.150 27 / 0.20);  --crit-edge: oklch(0.74 0.145 27 / 0.36);
+  --warn: oklch(0.84 0.125 88);  --warn-soft: oklch(0.78 0.130 88 / 0.18);  --warn-edge: oklch(0.84 0.125 88 / 0.34);
+  --ok:   oklch(0.78 0.115 155); --ok-soft:   oklch(0.72 0.120 155 / 0.18); --ok-edge:   oklch(0.78 0.115 155 / 0.32);
+  --info: oklch(0.76 0.105 246); --info-soft: oklch(0.70 0.110 246 / 0.20); --info-edge: oklch(0.76 0.105 246 / 0.34);
+  --neu:  oklch(0.72 0.010 60);  --neu-soft:  oklch(0.72 0.010 60 / 0.13);  --neu-edge:  oklch(0.72 0.010 60 / 0.24);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --acc-l: 0.78; --acc-l2: 0.70; --accent-ink: #17130c;
+    --bg-base: #0e0f11;
+    --bg-glow-a: oklch(0.62 0.10 var(--acc-h) / 0.34);
+    --bg-glow-b: oklch(0.48 0.07 258 / 0.34);
+    --ink-1: #f6f3ee; --ink-2: #cdc7bd; --ink-3: #9a938a; --ink-4: #6b655d;
+    --glass-1: rgba(38,40,44,0.62); --glass-2: rgba(38,40,44,0.44); --glass-3: rgba(38,40,44,0.26);
+    --glass-solid: #1c1e21; --glass-solid-2: #16181a;
+    --hairline: rgba(255,253,248,0.10); --hairline-2: rgba(255,253,248,0.18);
+    --sheen: linear-gradient(155deg, rgba(255,255,255,0.14), rgba(255,255,255,0) 44%);
+    --field: rgba(255,255,255,0.055); --wash: rgba(255,253,248,0.045);
+    --el-1: 0 1px 2px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.28);
+    --el-2: 0 2px 4px rgba(0,0,0,0.4), 0 10px 26px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.07);
+    --el-3: 0 4px 10px rgba(0,0,0,0.44), 0 24px 56px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.09);
+    --el-4: 0 10px 22px rgba(0,0,0,0.5), 0 48px 110px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.11);
+    --crit: oklch(0.74 0.145 27);  --crit-soft: oklch(0.68 0.150 27 / 0.20);  --crit-edge: oklch(0.74 0.145 27 / 0.36);
+    --warn: oklch(0.84 0.125 88);  --warn-soft: oklch(0.78 0.130 88 / 0.18);  --warn-edge: oklch(0.84 0.125 88 / 0.34);
+    --ok:   oklch(0.78 0.115 155); --ok-soft:   oklch(0.72 0.120 155 / 0.18); --ok-edge:   oklch(0.78 0.115 155 / 0.32);
+    --info: oklch(0.76 0.105 246); --info-soft: oklch(0.70 0.110 246 / 0.20); --info-edge: oklch(0.76 0.105 246 / 0.34);
+    --neu:  oklch(0.72 0.010 60);  --neu-soft:  oklch(0.72 0.010 60 / 0.13);  --neu-edge:  oklch(0.72 0.010 60 / 0.24);
+  }
+}
+
+/* --- Preset accento ---------------------------------------------------- */
+[data-accent="bronzo"] { --acc-h: 58; --acc-c: 0.105; }
+[data-accent="ambra"]  { --acc-h: 78; --acc-c: 0.130; }
+[data-accent="rame"]   { --acc-h: 42; --acc-c: 0.120; }
+
+/* --- Intensità vetro --------------------------------------------------- */
+[data-glass="sobrio"] {
+  --blur-1: 4px; --blur-2: 10px; --blur-3: 16px; --blur-4: 26px; --sat: 120%;
+  --glass-1: color-mix(in srgb, var(--glass-solid) 82%, transparent);
+  --glass-2: color-mix(in srgb, var(--glass-solid) 66%, transparent);
+}
+[data-glass="pronunciato"] {
+  --blur-1: 12px; --blur-2: 26px; --blur-3: 44px; --blur-4: 66px; --sat: 190%;
+  --glass-1: color-mix(in srgb, var(--glass-solid) 52%, transparent);
+  --glass-2: color-mix(in srgb, var(--glass-solid) 34%, transparent);
+}
+
+/* --- Fallback: nessun backdrop-filter → superfici piene ---------------- */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  :root, [data-theme] {
+    --glass-1: var(--glass-solid);
+    --glass-2: var(--glass-solid);
+    --glass-3: var(--glass-solid-2);
+  }
+}
+
+/* --- Adattamento responsive: si riducono i token, non le regole --------
+   Desktop è il target primario. A tablet/mobile scendono spaziature grandi
+   e scala tipografica dei titoli: ogni layout costruito sui token segue.   */
+@media (max-width: 1024px) {
+  :root { --s-6: 24px; --s-7: 32px; --s-8: 48px; --fs-2xl: 27px; --fs-3xl: 33px; }
+}
+@media (max-width: 640px) {
+  :root { --s-5: 16px; --s-6: 20px; --s-7: 24px; --s-8: 32px; --fs-xl: 21px; --fs-2xl: 23px; --fs-3xl: 27px; }
+  /* Il drift del gradiente di sfondo pesa sulle GPU mobili: fermo, non rimosso. */
+  [data-parallax] { animation: none !important; }
+}
+
+/* --- Keyframes --------------------------------------------------------- */
+@keyframes spada-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.82); }
+}
+@keyframes spada-halo {
+  0%   { box-shadow: 0 0 0 0 var(--info-edge); }
+  70%  { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@keyframes spada-view {
+  from { opacity: 0; transform: translateY(12px) scale(0.996); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes spada-rise {
+  from { opacity: 0; transform: translateY(9px) scale(0.995); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes spada-shimmer {
+  from { background-position: -180% 0; }
+  to   { background-position: 280% 0; }
+}
+@keyframes spada-view-a {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes spada-view-b {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes spada-slide-in {
+  from { opacity: 0; transform: translateX(-14px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes spada-spin { to { transform: rotate(360deg); } }
+@keyframes spada-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(2.5%, -2%, 0) scale(1.06); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes spada-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(320%); }
+}
+
+/* --- Reduced motion: stop a movimento, parallasse e drift del vetro ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  [data-parallax] { animation: none !important; transform: none !important; }
+}
+
+/* --- Reset minimo ------------------------------------------------------ */
+* { box-sizing: border-box; }
+body { margin: 0; }
+:where(button, input, textarea, select) { font: inherit; color: inherit; }
+:where(a) { color: var(--accent); text-decoration-color: var(--accent-edge); text-underline-offset: 2px; }
+:where(a):hover { color: var(--accent-2); text-decoration-color: var(--accent); }
+::selection { background: var(--accent-soft); }
+:where(:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-xs); }
+
+/* --- Poppins self-hosted (opzionale) -----------------------------------
+   Il repo è deployato così com'è: se i due .woff2 sono presenti in /fonts
+   Poppins viene usato, altrimenti si ricade sullo stack di sistema senza
+   alcuna richiesta di rete bloccante.
+@font-face {
+  font-family: Poppins; font-style: normal; font-weight: 400 700;
+  font-display: swap; src: url("/fonts/poppins-variable.woff2") format("woff2");
+}
+   ---------------------------------------------------------------------- */
+
+/* --- Stampa (documenti generati dalla pipeline) ------------------------ */
+@media print {
+  :root { --glass-1: #fff; --glass-2: #fff; --glass-3: #fff; --bg-base: #fff; }
+  * { backdrop-filter: none !important; box-shadow: none !important; }
+}
