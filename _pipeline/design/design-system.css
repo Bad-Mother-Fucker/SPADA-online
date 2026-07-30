@@ -1,207 +1,451 @@
 /*
  * design-system.css — token e componenti ricorrenti unici per la UI
- * dell'app (Sprint 6) e per gli output HTML delle gare (Sprint 1,
- * scripts/render/md_to_html.js). Sprint 5.
+ * dell'app e per gli output HTML delle gare (scripts/render/md_to_html.js).
  *
- * Autorato una sola volta a partire dalla palette/tipografia già
- * collaudata negli artifact HTML di _riferimento/ (non reinventata da
- * zero: quella era già un sistema coerente, qui viene solo estratto
- * in un file condiviso invece di restare duplicato dentro lo script
- * di rendering). I token non si rinegoziano ad ogni generazione.
+ * Sprint "Liquid Glass" (redesign): sostituisce integralmente il set di
+ * token della Sprint 5 (palette piatta chiaro/scuro) con il sistema
+ * "Liquid Glass" — palette oklch, superfici vetro con backdrop-filter,
+ * scala di elevazione/blur/motion, preset di accento e intensità del
+ * vetro. La fonte dei token è `spada-tokens.css`, esportato dallo
+ * strumento di design ("Claude Design") insieme alle schermate che
+ * documentano ogni componente — vedi `Design System.dc.html` e
+ * `Schema Navigazione.dc.html` nell'esportazione, che restano la
+ * documentazione di riferimento (non versionati in questo repo, solo
+ * la fonte del import).
  *
- * Consumo:
+ * Struttura del file:
+ *  1. Token "Liquid Glass" (invariati rispetto all'esportazione).
+ *  2. Componenti ricorrenti dell'app, ridisegnati sopra i nuovi nomi di
+ *     token: .badge/.status-badge, .phase-card, .agent-row,
+ *     .approval-panel, .output-block — più le primitive di base
+ *     (bottoni, campi, tabelle) che l'app e gli output condividono.
+ *  3. Alias di compatibilità verso i vecchi nomi di token (--bg, --card,
+ *     --ink, --mut, --line, --acc, --crit/--critbg, ecc.): servono SOLO
+ *     a `scripts/render/md_to_html.js`, che referenzia questi nomi
+ *     direttamente nel proprio <style> incorporato per ogni artifact di
+ *     gara — non riscritto in questo sprint per restare nello scope
+ *     (rifare quello script con i nomi nuovi è un lavoro indipendente,
+ *     a basso rischio essendo solo output di sola lettura). Senza
+ *     questi alias gli artifact già generati e i futuri smetterebbero
+ *     silenziosamente di avere colore. Non usare questi alias in codice
+ *     nuovo: sono un ponte, non un'API.
+ *
+ * Consumo (invariato dalla Sprint 5):
  *  - md_to_html.js inlinea questo file dentro <style> ad ogni
  *    generazione di artifact (l'HTML deve restare autoconsistente e
  *    funzionare offline — un <link> esterno romperebbe quella regola).
- *  - Il frontend app (Sprint 6) lo importa come foglio di stile
- *    normale (build-time o <link>), essendo servito online.
- *
- * Provisioning: questo file vive in _pipeline/design/ (versionato,
- * condiviso) e viene copiato/collegato in _data/design-system.css in
- * fase di setup — _data/ è per-macchina e non versionato (vedi
- * struttura target del piano), ma il file sorgente sì.
+ *  - Il frontend app lo richiede in runtime da
+ *    {SPADA_API_BASE}/sistema/design-system.css (vedi
+ *    app/backend/routers/sistema.py) — stessa fonte, niente copie che
+ *    possono divergere.
  */
 
+/* ═══════════════════════ 1. TOKEN "LIQUID GLASS" ══════════════════════ */
+
 :root {
-  /* ── Palette (chiaro) ────────────────────────────────────────── */
-  --bg:     #f6f5f2;
-  --card:   #ffffff;
-  --ink:    #1c1b19;
-  --mut:    #6b6862;
-  --line:   #e2ded6;
-  --acc:    #8a5a2b;
+  /* --- Accento (default: BRONZO). Override con data-accent="ambra|rame" --- */
+  --acc-h: 58;
+  --acc-c: 0.105;
 
-  --crit:   #b3261e; --critbg: #fdf1f0;
-  --warn:   #a56a00; --warnbg: #fdf6e8;
-  --good:   #2c6e49; --goodbg: #eef6f1;
-  --na:     #6b6862; --nabg:   #f2f1ee;
-  --info:   #3a6ea5; --infobg: #eaf1f8;
+  /* --- Tipografia ---------------------------------------------------- */
+  --font-ui: Poppins, "Century Gothic", "Avenir Next", Avenir, "Segoe UI Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", Helvetica, sans-serif;
+  --font-doc: var(--font-ui);
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
-  /* ── Tipografia ──────────────────────────────────────────────── */
-  --font-serif: ui-serif, Georgia, "Times New Roman", serif;
-  --font-sans:  ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono:  ui-monospace, SFMono-Regular, Menlo, monospace;
+  --fs-micro: 11px;   --lh-micro: 1.45;
+  --fs-xs:    12px;   --lh-xs:    1.5;
+  --fs-sm:    13px;   --lh-sm:    1.55;
+  --fs-base:  14px;   --lh-base:  1.6;
+  --fs-md:    16px;   --lh-md:    1.65;
+  --fs-lg:    19px;   --lh-lg:    1.45;
+  --fs-xl:    24px;   --lh-xl:    1.32;
+  --fs-2xl:   31px;   --lh-2xl:   1.22;
+  --fs-3xl:   40px;   --lh-3xl:   1.12;
 
-  --text-xs:   .74rem;
-  --text-sm:   .88rem;
-  --text-base: 1rem;
-  --text-lg:   1.15rem;
-  --text-xl:   1.4rem;
-  --text-2xl:  clamp(1.6rem, 4vw, 2.3rem);
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --track-tight: -0.011em;
+  --track-caps: 0.085em;
 
-  /* ── Spaziatura (scala 4px) ──────────────────────────────────── */
-  --sp-1: .25rem; --sp-2: .5rem; --sp-3: .75rem; --sp-4: 1rem;
-  --sp-5: 1.5rem; --sp-6: 2rem;  --sp-7: 2.5rem; --sp-8: 3rem;
+  /* --- Spaziature (scala 4) ------------------------------------------ */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
+  --s-5: 24px; --s-6: 32px; --s-7: 48px; --s-8: 64px;
 
-  /* ── Raggi ───────────────────────────────────────────────────── */
-  --radius-sm: 4px; --radius-md: 8px; --radius-lg: 10px; --radius-pill: 999px;
+  /* --- Raggi --------------------------------------------------------- */
+  --r-xs: 4px; --r-sm: 7px; --r-md: 11px; --r-lg: 16px; --r-xl: 22px; --r-pill: 999px;
 
-  /* ── Motion ──────────────────────────────────────────────────── */
-  --dur-fast: 120ms; --dur-base: 200ms; --dur-slow: 320ms;
-  --ease-standard: cubic-bezier(.4, 0, .2, 1);
-  --ease-out: cubic-bezier(0, 0, .2, 1);
+  /* --- Livelli di blur (vetro) --------------------------------------- */
+  --blur-1: 8px;    /* chip, badge                */
+  --blur-2: 18px;   /* card, pannelli             */
+  --blur-3: 30px;   /* barre sticky, header       */
+  --blur-4: 48px;   /* overlay modale             */
+  --sat: 160%;      /* saturazione backdrop       */
+
+  /* --- Motion -------------------------------------------------------- */
+  --d-1: 110ms;  --d-2: 200ms;  --d-3: 320ms;  --d-4: 560ms;
+  --e-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --e-std: cubic-bezier(0.4, 0, 0.2, 1);
+  --e-in:  cubic-bezier(0.5, 0, 0.9, 0.3);
+  --stagger: 55ms;
+
+  --z-base: 0; --z-sticky: 20; --z-overlay: 60; --z-toast: 80;
+}
+
+/* =========================== TEMA CHIARO =============================== */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --acc-l: 0.55; --acc-l2: 0.46;
+  --accent:        oklch(var(--acc-l) var(--acc-c) var(--acc-h));
+  --accent-2:      oklch(var(--acc-l2) var(--acc-c) var(--acc-h));
+  --accent-soft:   oklch(var(--acc-l) var(--acc-c) var(--acc-h) / 0.12);
+  --accent-edge:   oklch(var(--acc-l) var(--acc-c) var(--acc-h) / 0.34);
+  --accent-ring:   oklch(var(--acc-l) var(--acc-c) var(--acc-h) / 0.45);
+  --accent-ink:    #fffdf8;
+
+  --bg-base:   #f1eee8;
+  --bg-glow-a: oklch(0.80 0.085 var(--acc-h) / 0.42);
+  --bg-glow-b: oklch(0.74 0.045 250 / 0.30);
+
+  --ink-1: #191713;  /* titoli, testo primario   */
+  --ink-2: #494339;  /* corpo                    */
+  --ink-3: #787064;  /* secondario, label        */
+  --ink-4: #a69c8e;  /* placeholder, disabilitato*/
+
+  --glass-1: rgba(255, 253, 249, 0.72);
+  --glass-2: rgba(255, 253, 249, 0.52);
+  --glass-3: rgba(255, 253, 249, 0.32);
+  --glass-solid: #fbf8f3;
+  --glass-solid-2: #f6f2eb;
+
+  --hairline: rgba(25, 23, 19, 0.11);
+  --hairline-2: rgba(25, 23, 19, 0.19);
+  --sheen: linear-gradient(155deg, rgba(255,255,255,0.9), rgba(255,255,255,0) 46%);
+  --field: rgba(255, 255, 255, 0.6);
+  --wash: rgba(25, 23, 19, 0.035);
+
+  --el-1: 0 1px 2px rgba(25,23,19,0.05), 0 2px 6px rgba(25,23,19,0.05);
+  --el-2: 0 1px 2px rgba(25,23,19,0.05), 0 8px 22px rgba(25,23,19,0.07), inset 0 1px 0 rgba(255,255,255,0.6);
+  --el-3: 0 3px 8px rgba(25,23,19,0.06), 0 20px 48px rgba(25,23,19,0.12), inset 0 1px 0 rgba(255,255,255,0.66);
+  --el-4: 0 8px 18px rgba(25,23,19,0.09), 0 40px 90px rgba(25,23,19,0.20), inset 0 1px 0 rgba(255,255,255,0.72);
+
+  --crit: oklch(0.50 0.165 27);  --crit-soft: oklch(0.50 0.165 27 / 0.12);  --crit-edge: oklch(0.50 0.165 27 / 0.32);
+  --warn: oklch(0.55 0.125 82);  --warn-soft: oklch(0.60 0.130 82 / 0.15);  --warn-edge: oklch(0.55 0.125 82 / 0.32);
+  --ok:   oklch(0.49 0.105 152); --ok-soft:   oklch(0.49 0.105 152 / 0.13); --ok-edge:   oklch(0.49 0.105 152 / 0.30);
+  --info: oklch(0.50 0.115 249); --info-soft: oklch(0.50 0.115 249 / 0.12); --info-edge: oklch(0.50 0.115 249 / 0.30);
+  --neu:  oklch(0.48 0.010 60);  --neu-soft:  oklch(0.48 0.010 60 / 0.10);  --neu-edge:  oklch(0.48 0.010 60 / 0.24);
+}
+
+/* ============================ TEMA SCURO =============================== */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --acc-l: 0.78; --acc-l2: 0.70;
+  --accent-ink: #17130c;
+
+  --bg-base:   #0e0f11;
+  --bg-glow-a: oklch(0.62 0.10 var(--acc-h) / 0.34);
+  --bg-glow-b: oklch(0.48 0.07 258 / 0.34);
+
+  --ink-1: #f6f3ee;
+  --ink-2: #cdc7bd;
+  --ink-3: #9a938a;
+  --ink-4: #6b655d;
+
+  --glass-1: rgba(38, 40, 44, 0.62);
+  --glass-2: rgba(38, 40, 44, 0.44);
+  --glass-3: rgba(38, 40, 44, 0.26);
+  --glass-solid: #1c1e21;
+  --glass-solid-2: #16181a;
+
+  --hairline: rgba(255, 253, 248, 0.10);
+  --hairline-2: rgba(255, 253, 248, 0.18);
+  --sheen: linear-gradient(155deg, rgba(255,255,255,0.14), rgba(255,255,255,0) 44%);
+  --field: rgba(255, 255, 255, 0.055);
+  --wash: rgba(255, 253, 248, 0.045);
+
+  --el-1: 0 1px 2px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.28);
+  --el-2: 0 2px 4px rgba(0,0,0,0.4), 0 10px 26px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.07);
+  --el-3: 0 4px 10px rgba(0,0,0,0.44), 0 24px 56px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.09);
+  --el-4: 0 10px 22px rgba(0,0,0,0.5), 0 48px 110px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.11);
+
+  --crit: oklch(0.74 0.145 27);  --crit-soft: oklch(0.68 0.150 27 / 0.20);  --crit-edge: oklch(0.74 0.145 27 / 0.36);
+  --warn: oklch(0.84 0.125 88);  --warn-soft: oklch(0.78 0.130 88 / 0.18);  --warn-edge: oklch(0.84 0.125 88 / 0.34);
+  --ok:   oklch(0.78 0.115 155); --ok-soft:   oklch(0.72 0.120 155 / 0.18); --ok-edge:   oklch(0.78 0.115 155 / 0.32);
+  --info: oklch(0.76 0.105 246); --info-soft: oklch(0.70 0.110 246 / 0.20); --info-edge: oklch(0.76 0.105 246 / 0.34);
+  --neu:  oklch(0.72 0.010 60);  --neu-soft:  oklch(0.72 0.010 60 / 0.13);  --neu-edge:  oklch(0.72 0.010 60 / 0.24);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg:     #16150f;
-    --card:   #1f1e19;
-    --ink:    #eceae4;
-    --mut:    #a09c92;
-    --line:   #332f27;
-    --acc:    #d8a76a;
-
-    --crit:   #f2b8b5; --critbg: #2c1a19;
-    --warn:   #e8c06a; --warnbg: #2a2216;
-    --good:   #8fd6ac; --goodbg: #18271f;
-    --na:     #a09c92; --nabg:   #232219;
-    --info:   #9dc3e6; --infobg: #16222e;
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --acc-l: 0.78; --acc-l2: 0.70; --accent-ink: #17130c;
+    --bg-base: #0e0f11;
+    --bg-glow-a: oklch(0.62 0.10 var(--acc-h) / 0.34);
+    --bg-glow-b: oklch(0.48 0.07 258 / 0.34);
+    --ink-1: #f6f3ee; --ink-2: #cdc7bd; --ink-3: #9a938a; --ink-4: #6b655d;
+    --glass-1: rgba(38,40,44,0.62); --glass-2: rgba(38,40,44,0.44); --glass-3: rgba(38,40,44,0.26);
+    --glass-solid: #1c1e21; --glass-solid-2: #16181a;
+    --hairline: rgba(255,253,248,0.10); --hairline-2: rgba(255,253,248,0.18);
+    --sheen: linear-gradient(155deg, rgba(255,255,255,0.14), rgba(255,255,255,0) 44%);
+    --field: rgba(255,255,255,0.055); --wash: rgba(255,253,248,0.045);
+    --el-1: 0 1px 2px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.28);
+    --el-2: 0 2px 4px rgba(0,0,0,0.4), 0 10px 26px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.07);
+    --el-3: 0 4px 10px rgba(0,0,0,0.44), 0 24px 56px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.09);
+    --el-4: 0 10px 22px rgba(0,0,0,0.5), 0 48px 110px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.11);
+    --crit: oklch(0.74 0.145 27);  --crit-soft: oklch(0.68 0.150 27 / 0.20);  --crit-edge: oklch(0.74 0.145 27 / 0.36);
+    --warn: oklch(0.84 0.125 88);  --warn-soft: oklch(0.78 0.130 88 / 0.18);  --warn-edge: oklch(0.84 0.125 88 / 0.34);
+    --ok:   oklch(0.78 0.115 155); --ok-soft:   oklch(0.72 0.120 155 / 0.18); --ok-edge:   oklch(0.78 0.115 155 / 0.32);
+    --info: oklch(0.76 0.105 246); --info-soft: oklch(0.70 0.110 246 / 0.20); --info-edge: oklch(0.76 0.105 246 / 0.34);
+    --neu:  oklch(0.72 0.010 60);  --neu-soft:  oklch(0.72 0.010 60 / 0.13);  --neu-edge:  oklch(0.72 0.010 60 / 0.24);
   }
 }
-:root[data-theme="dark"] {
-  --bg:#16150f; --card:#1f1e19; --ink:#eceae4; --mut:#a09c92; --line:#332f27;
-  --acc:#d8a76a; --crit:#f2b8b5; --warn:#e8c06a; --good:#8fd6ac; --na:#a09c92; --info:#9dc3e6;
-  --critbg:#2c1a19; --warnbg:#2a2216; --goodbg:#18271f; --nabg:#232219; --infobg:#16222e;
+
+/* --- Preset accento ---------------------------------------------------- */
+[data-accent="bronzo"] { --acc-h: 58; --acc-c: 0.105; }
+[data-accent="ambra"]  { --acc-h: 78; --acc-c: 0.130; }
+[data-accent="rame"]   { --acc-h: 42; --acc-c: 0.120; }
+
+/* --- Intensità vetro --------------------------------------------------- */
+[data-glass="sobrio"] {
+  --blur-1: 4px; --blur-2: 10px; --blur-3: 16px; --blur-4: 26px; --sat: 120%;
+  --glass-1: color-mix(in srgb, var(--glass-solid) 82%, transparent);
+  --glass-2: color-mix(in srgb, var(--glass-solid) 66%, transparent);
 }
-:root[data-theme="light"] {
-  --bg:#f6f5f2; --card:#fff; --ink:#1c1b19; --mut:#6b6862; --line:#e2ded6; --acc:#8a5a2b;
-  --crit:#b3261e; --warn:#a56a00; --good:#2c6e49; --na:#6b6862; --info:#3a6ea5;
-  --critbg:#fdf1f0; --warnbg:#fdf6e8; --goodbg:#eef6f1; --nabg:#f2f1ee; --infobg:#eaf1f8;
+[data-glass="pronunciato"] {
+  --blur-1: 12px; --blur-2: 26px; --blur-3: 44px; --blur-4: 66px; --sat: 190%;
+  --glass-1: color-mix(in srgb, var(--glass-solid) 52%, transparent);
+  --glass-2: color-mix(in srgb, var(--glass-solid) 34%, transparent);
 }
 
-/* ══ Componenti ricorrenti ═══════════════════════════════════════ */
-
-/* Badge di stato — usato per classificazioni (BASSO/MEDIO/ALTO,
-   stati fase, esiti audit) sia negli output di gara sia nell'app. */
-.badge, .status-badge {
-  display: inline-block;
-  font: 600 var(--text-xs)/1.4 var(--font-sans);
-  letter-spacing: .03em;
-  padding: .15em .55em;
-  border-radius: var(--radius-pill);
-  white-space: nowrap;
-}
-.badge.crit, .status-badge.crit { color: var(--crit); background: var(--critbg); }
-.badge.warn, .status-badge.warn { color: var(--warn); background: var(--warnbg); }
-.badge.good, .status-badge.good { color: var(--good); background: var(--goodbg); }
-.badge.na,   .status-badge.na   { color: var(--na);   background: var(--nabg); }
-.badge.info, .status-badge.info { color: var(--info); background: var(--infobg); }
-
-/* Card di fase — le 7 fasi nella pagina gara (Sprint 6). */
-.phase-card {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  padding: var(--sp-4) var(--sp-5);
-  display: flex;
-  align-items: center;
-  gap: var(--sp-4);
-  transition: border-color var(--dur-base) var(--ease-standard),
-              background var(--dur-base) var(--ease-standard);
-}
-.phase-card[data-stato="completata"] { border-color: var(--good); }
-.phase-card[data-stato="errore"] { border-color: var(--crit); }
-.phase-card[data-stato="in_esecuzione"] { border-color: var(--acc); }
-.phase-card[data-stato="da_rivedere"] { border-color: var(--warn); }
-.phase-card .titolo { font: 600 var(--text-base)/1.4 var(--font-sans); flex: 1; }
-.phase-card .numero {
-  font: 700 var(--text-lg)/1 var(--font-sans); color: var(--mut);
-  min-width: 2rem; text-align: center;
-}
-.phase-card .sintesi { color: var(--mut); font: var(--text-sm)/1.5 var(--font-sans); }
-
-/* Riga di attività agente — vista agenti adattiva (Sprint 6). */
-.agent-row {
-  display: flex; align-items: center; gap: var(--sp-3);
-  padding: var(--sp-2) var(--sp-3);
-  border-bottom: 1px solid var(--line);
-  font: var(--text-sm)/1.5 var(--font-sans);
-  animation: agent-row-in var(--dur-slow) var(--ease-out) both;
-}
-.agent-row .agente { font-weight: 600; min-width: 9rem; }
-.agent-row .unita { color: var(--mut); flex: 1; }
-.agent-row .stato-dot {
-  width: .55rem; height: .55rem; border-radius: 50%; flex-shrink: 0;
-  background: var(--mut);
-}
-.agent-row[data-stato="in_corso"] .stato-dot { background: var(--acc); animation: pulse 1.6s ease-in-out infinite; }
-.agent-row[data-stato="completato"] .stato-dot { background: var(--good); }
-.agent-row[data-stato="errore"] .stato-dot { background: var(--crit); }
-
-/* Entrata a stagger per liste di agenti: applicare
-   `style="animation-delay: calc(var(--i) * 40ms)"` con --i = indice riga. */
-@keyframes agent-row-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: .35; }
+/* --- Fallback: nessun backdrop-filter → superfici piene ---------------- */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  :root, [data-theme] {
+    --glass-1: var(--glass-solid);
+    --glass-2: var(--glass-solid);
+    --glass-3: var(--glass-solid-2);
+  }
 }
 
-/* Pannello di approvazione — fasi 3/5/7 (Sprint 6). */
-.approval-panel {
-  background: var(--card);
-  border: 1px solid var(--acc);
-  border-radius: var(--radius-lg);
-  padding: var(--sp-5);
+@media (max-width: 1024px) {
+  :root { --s-6: 24px; --s-7: 32px; --s-8: 48px; --fs-2xl: 27px; --fs-3xl: 33px; }
 }
-.approval-panel .esito {
-  display: flex; align-items: center; gap: var(--sp-2);
-  margin-top: var(--sp-3);
-  font: var(--text-sm)/1.4 var(--font-sans);
-  transition: opacity var(--dur-base) var(--ease-standard);
+@media (max-width: 640px) {
+  :root { --s-5: 16px; --s-6: 20px; --s-7: 24px; --s-8: 32px; --fs-xl: 21px; --fs-2xl: 23px; --fs-3xl: 27px; }
+  [data-parallax] { animation: none !important; }
 }
-.approval-panel button {
-  font: 600 var(--text-sm)/1 var(--font-sans);
-  cursor: pointer;
-  border: 1px solid var(--acc);
-  background: var(--acc);
-  color: var(--bg);
-  padding: .55rem .9rem;
-  border-radius: var(--radius-sm);
-  transition: transform var(--dur-fast) var(--ease-standard),
-              opacity var(--dur-fast) var(--ease-standard);
-}
-.approval-panel button:active { transform: scale(.97); }
-.approval-panel button.ghost { background: none; color: var(--acc); }
-.approval-panel button.scarta { background: none; color: var(--crit); border-color: var(--crit); }
 
-/* Blocco di output — elaborati prodotti, resi con lo stesso token set
-   dell'artifact HTML delle gare (Sprint 6, sezione "Elaborati prodotti"). */
-.output-block {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  padding: var(--sp-4);
-  margin: var(--sp-4) 0;
+/* --- Keyframes --------------------------------------------------------- */
+@keyframes spada-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.82); }
 }
-.output-block .kind {
-  font: 600 var(--text-xs)/1 var(--font-sans);
-  letter-spacing: .14em; text-transform: uppercase; color: var(--acc);
+@keyframes spada-halo {
+  0%   { box-shadow: 0 0 0 0 var(--info-edge); }
+  70%  { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@keyframes spada-view {
+  from { opacity: 0; transform: translateY(12px) scale(0.996); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes spada-rise {
+  from { opacity: 0; transform: translateY(9px) scale(0.995); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes spada-shimmer {
+  from { background-position: -180% 0; }
+  to   { background-position: 280% 0; }
+}
+@keyframes spada-slide-in {
+  from { opacity: 0; transform: translateX(-14px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes spada-spin { to { transform: rotate(360deg); } }
+@keyframes spada-drift {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(2.5%, -2%, 0) scale(1.06); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes spada-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(320%); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-row, .phase-card, .approval-panel button { animation: none !important; transition: none !important; }
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  [data-parallax] { animation: none !important; transform: none !important; }
+}
+
+/* --- Reset minimo ------------------------------------------------------ */
+* { box-sizing: border-box; }
+body { margin: 0; }
+:where(button, input, textarea, select) { font: inherit; color: inherit; }
+:where(a) { color: var(--accent); text-decoration-color: var(--accent-edge); text-underline-offset: 2px; }
+:where(a):hover { color: var(--accent-2); text-decoration-color: var(--accent); }
+::selection { background: var(--accent-soft); }
+:where(:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-xs); }
+
+/* ═══════════════ 2. COMPONENTI RICORRENTI (app + output gara) ═════════ */
+
+/* Badge di stato — classificazioni (BASSO/MEDIO/ALTO, stati fase, esiti). */
+.badge, .status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: var(--fw-semibold) var(--fs-micro)/1.4 var(--font-ui);
+  letter-spacing: .02em;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.badge.crit, .status-badge.crit, .status-badge[data-stato="errore"] { color: var(--crit); background: var(--crit-soft); border-color: var(--crit-edge); }
+.badge.warn, .status-badge.warn, .status-badge[data-stato="da_rivedere"] { color: var(--warn); background: var(--warn-soft); border-color: var(--warn-edge); }
+.badge.good, .status-badge.good, .status-badge[data-stato="completata"] { color: var(--ok); background: var(--ok-soft); border-color: var(--ok-edge); }
+.badge.na,   .status-badge.na   { color: var(--neu); background: var(--neu-soft); border-color: var(--neu-edge); }
+.badge.info, .status-badge.info, .status-badge[data-stato="in_esecuzione"] { color: var(--info); background: var(--info-soft); border-color: var(--info-edge); }
+.badge.accent, .status-badge[data-stato="in_coda"] { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-edge); }
+
+/* Superficie di vetro generica — base per card, pannelli, sezioni. */
+.glass-surface, .phase-card, .approval-panel, .output-block, .agent-panel {
+  border-radius: var(--r-lg);
+  border: 1px solid var(--hairline);
+  background: var(--glass-1);
+  backdrop-filter: blur(var(--blur-2)) saturate(var(--sat));
+  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(var(--sat));
+  box-shadow: var(--el-2);
+}
+
+/* Card di fase — le 7 fasi nella pagina gara. */
+.phase-card {
+  padding: var(--s-4) var(--s-5);
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  transition: border-color var(--d-2) var(--e-std), transform var(--d-2) var(--e-out), box-shadow var(--d-3) var(--e-out);
+}
+.phase-card[data-stato="completata"] { border-color: var(--ok-edge); }
+.phase-card[data-stato="errore"] { border-color: var(--crit-edge); }
+.phase-card[data-stato="in_esecuzione"] { border-color: var(--info-edge); }
+.phase-card[data-stato="da_rivedere"] { border-color: var(--accent-edge); }
+.phase-card .titolo { font: var(--fw-semibold) var(--fs-base)/1.4 var(--font-ui); flex: 1; color: var(--ink-1); display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.phase-card .numero {
+  font: var(--fw-bold) var(--fs-lg)/1 var(--font-mono); color: var(--ink-3);
+  min-width: 2rem; text-align: center;
+}
+.phase-card .sintesi { color: var(--ink-3); font: var(--fs-sm)/1.5 var(--font-ui); }
+.phase-card .azioni { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+
+/* Riga di attività agente — vista agenti adattiva. */
+.agent-row {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--hairline);
+  font: var(--fs-sm)/1.5 var(--font-ui);
+  animation: spada-rise var(--d-3) var(--e-out) both;
+  color: var(--ink-2);
+}
+.agent-row:last-child { border-bottom: none; }
+.agent-row .agente { font-weight: var(--fw-semibold); min-width: 9rem; color: var(--ink-1); font-family: var(--font-mono); font-size: var(--fs-xs); }
+.agent-row .unita { color: var(--ink-3); flex: 1; }
+.agent-row .stato-dot {
+  width: .5rem; height: .5rem; border-radius: 50%; flex-shrink: 0;
+  background: var(--ink-4);
+}
+.agent-row[data-stato="in_corso"] .stato-dot { background: var(--accent); animation: spada-pulse 1.6s var(--e-std) infinite; }
+.agent-row[data-stato="completato"] .stato-dot { background: var(--ok); }
+.agent-row[data-stato="errore"] .stato-dot { background: var(--crit); }
+
+/* Pannello di approvazione — checkpoint umani (fasi 3/5/7). */
+.approval-panel {
+  padding: var(--s-5);
+  border-color: var(--accent-edge);
+}
+.approval-panel .sub { color: var(--ink-3); font-size: var(--fs-xs); margin: 4px 0 var(--s-3); }
+.approval-panel .esito {
+  display: flex; align-items: center; gap: var(--s-2);
+  margin-top: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-sm);
+  font: var(--fs-sm)/1.4 var(--font-ui);
+  transition: opacity var(--d-2) var(--e-std);
+}
+.approval-panel .esito.good { background: var(--ok-soft); color: var(--ok); }
+.approval-panel .esito.crit { background: var(--crit-soft); color: var(--crit); }
+.approval-panel .esito.warn { background: var(--warn-soft); color: var(--warn); }
+
+/* Blocco di output — elaborati prodotti, stesso token set degli
+   artifact HTML delle gare. */
+.output-block {
+  padding: var(--s-4);
+  margin: var(--s-4) 0;
+}
+.output-block .kind {
+  font: var(--fw-semibold) var(--fs-micro)/1 var(--font-ui);
+  letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+}
+
+/* --- Primitive condivise: bottoni, campi, tabelle ----------------------- */
+button {
+  font: var(--fw-semibold) var(--fs-sm)/1 var(--font-ui); cursor: pointer;
+  border: 1px solid var(--accent-edge);
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+  color: var(--accent-ink);
+  padding: .6rem 1rem; border-radius: var(--r-sm);
+  box-shadow: var(--el-1);
+  transition: transform var(--d-1) var(--e-out), box-shadow var(--d-2) var(--e-out), opacity var(--d-1) var(--e-std);
+}
+button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--el-2); }
+button:active:not(:disabled) { transform: scale(.97); }
+button.ghost { background: var(--glass-2); color: var(--ink-1); border-color: var(--hairline-2); box-shadow: none; }
+button.ghost:hover:not(:disabled) { background: var(--glass-1); }
+button.scarta { background: transparent; color: var(--crit); border-color: var(--crit-edge); box-shadow: none; }
+button.scarta:hover:not(:disabled) { background: var(--crit-soft); }
+button:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+input, select, textarea {
+  font: var(--fs-sm)/1.4 var(--font-ui); color: var(--ink-1); background: var(--field);
+  border: 1px solid var(--hairline-2); border-radius: var(--r-sm); padding: .55rem .75rem;
+  transition: border-color var(--d-2) var(--e-std), box-shadow var(--d-2) var(--e-std);
+}
+input:focus, select:focus, textarea:focus {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+table th, table td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--hairline); }
+table th { font: var(--fw-semibold) var(--fs-micro)/1.4 var(--font-ui); letter-spacing: var(--track-caps); text-transform: uppercase; color: var(--ink-3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-row, .phase-card, button { animation: none !important; transition: none !important; }
   .agent-row[data-stato="in_corso"] .stato-dot { animation: none; }
+}
+
+/* ═════ 3. ALIAS DI COMPATIBILITÀ — solo per scripts/render/md_to_html.js ═════
+   Ponte verso i vecchi nomi di token (Sprint 5), usati direttamente nello
+   <style> incorporato di ogni artifact di gara. Non usare in codice nuovo. */
+/* --crit/--warn/--info sono già i nomi giusti nel sistema nuovo: nessun
+   alias necessario. Solo i nomi effettivamente rinominati vanno ripresi. */
+:root, [data-theme] {
+  --bg: var(--bg-base);
+  --card: var(--glass-1);
+  --ink: var(--ink-1);
+  --mut: var(--ink-3);
+  --line: var(--hairline);
+  --acc: var(--accent);
+  --critbg: var(--crit-soft);
+  --warnbg: var(--warn-soft);
+  --good: var(--ok);         --goodbg: var(--ok-soft);
+  --na: var(--neu);          --nabg: var(--neu-soft);
+  --infobg: var(--info-soft);
 }
