@@ -40,7 +40,7 @@ struttura target nel piano e `_pipeline/scripts/setup/new_gara.sh`.
 | 7 | Assistente di gara (sola lettura) | ✅ fatto |
 | 8 | Ingestione incrementale | ✅ fatto |
 | 9 | Deploy e messa in sicurezza | ✅ fatto — in produzione su `api.prometheus-spada.it` / `spada-online.pages.dev` |
-| 10 | UI/UX avanzata + funzionalità emerse dal design (vedi sotto) | 🟡 in corso |
+| 10 | UI/UX avanzata + funzionalità emerse dal design (vedi sotto) | ✅ fatto |
 
 **Sprint 1-9 sono in produzione**, non solo completati in questo repo:
 VM Google Cloud con `spada-api`/`spada-worker` via systemd, Cloudflare
@@ -50,14 +50,23 @@ Access come unico livello di autenticazione (operatore singolo).
 ### Sprint 10 — dettaglio
 
 Nato dall'analisi di un prompt di design per l'interfaccia, che ha fatto
-emergere funzionalità non solo di UI ma di sistema. Quattro sotto-sprint:
+emergere funzionalità non solo di UI ma di sistema. Quattro sotto-sprint,
+tutti conclusi e integrati in `main`:
 
 | # | Oggetto | Stato |
 |---|---|---|
-| 10.1 | Ristrutturazione frontend: grafo visuale (nodi/archi, D3), dettaglio proposta su click, sezione impostazioni, vista dedicata per ciascuna delle 7 fasi (Acquisizione documenti, Estrazione requisiti, Analisi capitolato, Ricerca soluzioni, Revisione proposte, Deliverables, Audit e consegna) | ✅ fatto |
+| 10.1 | Ristrutturazione frontend: grafo visuale (nodi/archi, D3), dettaglio proposta su click, vista Impostazioni, vista dedicata per ciascuna delle 7 fasi (Acquisizione documenti, Estrazione requisiti, Analisi capitolato, Ricerca soluzioni, Revisione proposte, Deliverables, Audit e consegna) | ✅ fatto |
 | 10.2 | Proposte suggerite dal professionista in "Ricerca soluzioni", ancorabili a un gap specifico, valutate da `criterion-agent`/`evidence-auditor` insieme a quelle generate dal sistema | ✅ fatto |
 | 10.3 | Deliverables come workspace indipendenti: 5 tipi con agente dedicato (relazione tecnica, computo metrico, Legge 10, cronoprogramma, tavole tecniche) + fallback generico, ciascuno eseguibile/rieseguibile separatamente | ✅ fatto |
-| 10.4 | Chat "Intervento diretto" a controllo pieno (lettura e scrittura), sempre disponibile nella pagina gara, scoped alla sola directory della gara — per interventi mirati fuori dal flusso a comandi rigido | ✅ fatto |
+| 10.4 | Chat "Intervento diretto" a controllo pieno (lettura e scrittura), sempre disponibile nella vista Attività, scoped alla sola directory della gara — per interventi mirati fuori dal flusso a comandi rigido | ✅ fatto |
+
+In corso d'opera il frontend è stato anche ricostruito su un nuovo
+design system ("Liquid Glass": guscio persistente con barra applicativa,
+stepper a 7 fasi, router ad hash `#/fase/n`, `#/attivita`,
+`#/impostazioni`) — lavoro nato in parallelo su un'altra sessione e
+integrato qui: la struttura visiva è quella del redesign, i quattro
+punti che il redesign lasciava come placeholder ("non ancora esposto
+dal backend") sono ora collegati agli endpoint reali di 10.2/10.3/10.4.
 
 Automatizzato in questo sprint anche il **deploy continuo del
 backend**: ogni push su `main` che tocca `app/backend/`, `app/worker/`
