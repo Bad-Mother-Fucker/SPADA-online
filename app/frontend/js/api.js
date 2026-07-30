@@ -38,6 +38,9 @@ const Api = (() => {
       return resp.json();
     },
     streamUrl: (slug) => `${base()}/gare/${slug}/stream`,
+    cronologiaAssistente: (slug) => richiesta(`/gare/${slug}/assistente`),
+    chiediAssistente: (slug, messaggio) =>
+      richiesta(`/gare/${slug}/assistente`, { method: "POST", body: JSON.stringify({ messaggio }) }),
     sistemaAuth: () => richiesta("/sistema/auth"),
     sistemaPrezzari: () => richiesta("/sistema/prezzari"),
     sistemaPipeline: () => richiesta("/sistema/pipeline"),
