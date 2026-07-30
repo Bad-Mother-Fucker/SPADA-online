@@ -24,7 +24,11 @@ def design_system_css():
         path = PIPELINE_DIR / "design" / "design-system.css"
     if not path.exists():
         raise HTTPException(404, "design-system.css non trovato (link_pipeline.sh non ancora eseguito?)")
-    return FileResponse(str(path), media_type="text/css")
+    # no-cache (non no-store): browser/CDN rivalidano sempre con l'ETag
+    # invece di servire una release vecchia per l'intero max-age di
+    # default di Cloudflare — il file cambia raramente ma quando cambia
+    # deve arrivare subito, non dopo ore di cache stantia.
+    return FileResponse(str(path), media_type="text/css", headers={"Cache-Control": "no-cache"})
 
 
 @router.get("/auth")
