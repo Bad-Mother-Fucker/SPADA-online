@@ -13,20 +13,21 @@
 <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
-<div class="wrap grafo-wrap">
-  <a href="javascript:history.back()" class="sub">← Torna alla gara</a>
+<div aria-hidden="true" class="bg-glow"></div>
+<div class="page narrow grafo-wrap">
+  <button type="button" class="view-back" onclick="history.back()">← Torna alla gara</button>
   <h1 id="g-titolo">Grafo della gara</h1>
 
   <div class="grafo-legenda" id="g-legenda"></div>
 
   <div class="grafo-area">
-    <svg id="g-svg"></svg>
-    <aside class="grafo-dettaglio" id="g-dettaglio">
-      <p class="sub">Clicca un nodo per vederne i dettagli.</p>
+    <svg id="g-svg" class="glass-surface"></svg>
+    <aside class="grafo-dettaglio glass-surface" id="g-dettaglio">
+      <p id="g-dettaglio-hint">Clicca un nodo per vederne i dettagli.</p>
     </aside>
   </div>
 
-  <p class="sub" id="g-stato">Caricamento…</p>
+  <p class="hint" id="g-stato">Caricamento…</p>
 </div>
 <script src="js/api.js"></script>
 <script src="js/grafo.js"></script>
