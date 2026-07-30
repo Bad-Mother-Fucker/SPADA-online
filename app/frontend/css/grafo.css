@@ -1,0 +1,36 @@
+/* grafo.css — vista visuale del knowledge graph (Sprint 10.1).
+   Token di colore/spaziatura da design-system.css. */
+
+.grafo-wrap { max-width: 90rem; }
+.grafo-legenda { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin: var(--sp-3) 0 var(--sp-4);
+  font-size: var(--text-xs); color: var(--mut); }
+.grafo-legenda .voce { display: flex; align-items: center; gap: .3rem; }
+.grafo-legenda .pallino { width: .7rem; height: .7rem; border-radius: 50%; display: inline-block; }
+.pallino.tipo-document-bg { background: var(--info); }
+.pallino.tipo-criterion-bg { background: var(--acc); }
+.pallino.tipo-proposal-bg { background: var(--good); }
+.pallino.tipo-scope-bg, .pallino.tipo-economic_framework-bg { background: var(--mut); }
+.pallino.tipo-sconosciuto-bg { background: var(--crit); }
+
+.grafo-area { display: flex; gap: var(--sp-4); }
+#g-svg { flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  min-height: 60vh; cursor: grab; }
+#g-svg:active { cursor: grabbing; }
+
+.grafo-dettaglio { width: 20rem; flex-shrink: 0; background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius-lg); padding: var(--sp-4); font-size: var(--text-sm); max-height: 60vh; overflow-y: auto; }
+.grafo-dettaglio h3 { margin: 0 0 var(--sp-2); font-size: var(--text-base); }
+.grafo-dettaglio .k { color: var(--mut); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em; }
+.grafo-dettaglio .arco-riga { padding: var(--sp-2) 0; border-bottom: 1px dotted var(--line); }
+
+.nodo-cerchio { stroke: var(--card); stroke-width: 1.5px; cursor: pointer; }
+.nodo-cerchio.selezionato { stroke: var(--acc); stroke-width: 3px; }
+.nodo-cerchio.orfano { stroke-dasharray: 3,2; stroke: var(--warn); }
+.nodo-cerchio.tipo-document { fill: var(--info); }
+.nodo-cerchio.tipo-criterion { fill: var(--acc); }
+.nodo-cerchio.tipo-proposal { fill: var(--good); }
+.nodo-cerchio.tipo-scope, .nodo-cerchio.tipo-economic_framework { fill: var(--mut); }
+.nodo-cerchio.tipo-sconosciuto { fill: var(--crit); }
+.nodo-etichetta { font: var(--text-xs)/1 var(--font-sans); fill: var(--ink); pointer-events: none; }
+.arco-linea { stroke: var(--line); stroke-width: 1.2px; }
+.arco-linea.evidenziato { stroke: var(--acc); stroke-width: 2px; }

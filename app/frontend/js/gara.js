@@ -7,6 +7,7 @@ if (!SLUG) {
   document.body.innerHTML = "<p>Slug gara mancante nell'URL (?slug=...).</p>";
   throw new Error("slug mancante");
 }
+document.getElementById("g-link-grafo").href = `grafo.html?slug=${encodeURIComponent(SLUG)}`;
 
 const NOMI_FASE = {
   1: "Acquisizione documenti", 2: "Costruzione grafo", 3: "Analisi strategica",

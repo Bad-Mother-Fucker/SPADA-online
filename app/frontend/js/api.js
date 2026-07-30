@@ -20,6 +20,7 @@ const Api = (() => {
     elencoGare: () => richiesta("/gare"),
     creaGara: (dati) => richiesta("/gare", { method: "POST", body: JSON.stringify(dati) }),
     dettaglioGara: (slug) => richiesta(`/gare/${slug}`),
+    grafo: (slug) => richiesta(`/gare/${slug}/grafo`),
     runLog: (slug) => richiesta(`/gare/${slug}/run-log`),
     elencoOutput: (slug) => richiesta(`/gare/${slug}/output`),
     percorsoOutput: (slug, p) => `${base()}/gare/${slug}/output/${p}`,
