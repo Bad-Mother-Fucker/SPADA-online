@@ -1,0 +1,77 @@
+name: Deploy backend su VM
+
+# Deploy automatico del backend + worker (Sprint 10): ad ogni push su
+# main, entra nel tailnet come nodo effimero, si collega alla VM via
+# SSH e lancia infra/deploy/deploy.sh. Il frontend (app/frontend) NON
+# passa da qui: Cloudflare Pages lo pubblica da solo ad ogni push,
+# nessuna azione necessaria in questo workflow.
+#
+# Richiede una configurazione una tantum sui secrets del repository —
+# vedi infra/DEPLOY.md § "Deploy automatico (CI/CD)". Senza quei
+# secrets il job fallisce in modo esplicito, non silenzioso.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/backend/**"
+      - "app/worker/**"
+      - "_pipeline/**"
+      - ".github/workflows/deploy.yml"
+      - "infra/deploy/**"
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Verifica secrets richiesti
+        run: |
+          mancanti=""
+          for nome in TS_OAUTH_CLIENT_ID TS_OAUTH_CLIENT_SECRET DEPLOY_SSH_KEY DEPLOY_HOST DEPLOY_USER DEPLOY_PATH; do
+            if [ -z "${!nome}" ]; then mancanti="$mancanti $nome"; fi
+          done
+          if [ -n "$mancanti" ]; then
+            echo "::error::Secrets mancanti nel repository:$mancanti — vedi infra/DEPLOY.md § Deploy automatico (CI/CD)."
+            exit 1
+          fi
+        env:
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          TS_OAUTH_CLIENT_SECRET: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+
+      - name: Connetti al tailnet (nodo effimero)
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+          tags: tag:ci
+
+      - name: Configura chiave SSH del deploy
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy remoto (git pull + dipendenze + restart servizi)
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "bash -s" -- "${{ secrets.DEPLOY_PATH }}" "${{ github.sha }}" \
+            < infra/deploy/deploy.sh
+
+      - name: Verifica salute post-deploy
+        if: always()
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "curl -sf --max-time 10 http://127.0.0.1:8000/ && echo && sudo systemctl is-active spada-api spada-worker"

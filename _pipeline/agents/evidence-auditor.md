@@ -60,7 +60,7 @@ dell'esito, aggiorni i registri.
    | Registro | Cosa scriverci |
    |---|---|
    | `output/06_registers/proposal_register.md` | solo proposte `approvata` e `approvata con riserva` (queste ultime con la nota di riserva) |
-   | `output/06_registers/gap_register.md` | tutti i gap del criterio, con ID, fonte, evidenza, impatto, confidenza |
+   | `output/06_registers/gap_register.md` | tutti i gap del criterio, formato tabella fisso sotto (letto anche dalla vista "Ricerca soluzioni" del frontend, Sprint 10.2 — non cambiare le colonne senza aggiornare `app/frontend/js/gara.js`) |
    | `output/06_registers/audit_summary.md` | esito dell'audit per ogni proposta, incluse `da integrare` e `scartata` con motivazione |
    | `output/06_registers/score_forecast.md` | punteggio stimato del criterio sulle sole proposte approvate o con riserva |
 
@@ -71,6 +71,19 @@ dell'esito, aggiorni i registri.
 
    Aggiungi righe per questo criterio senza toccare quelle degli altri
    criteri gia' presenti nei registri (Edit mirato, non riscrittura).
+
+   **Formato di `gap_register.md`** (tabella unica, una riga per gap,
+   di tutti i criteri):
+
+   ```
+   | ID Gap | Titolo | Criterio | Fonte | Confidenza | Proposta collegata |
+   |---|---|---|---|---|---|
+   | G-C1-001 | Rete sottodimensionata | C1 | 08.Q.R02, sez. "Rete principale" | media | P-C1-001 |
+   ```
+
+   `Fonte` e' il riferimento leggibile (documento + sezione), non un
+   wikilink. `Proposta collegata` e' l'ID proposta o `—` se il gap non
+   ne ha ancora una (es. "da integrare").
 
 3. Aggiorna `manifest.json`, nell'oggetto `criteri_stato`, la
    voce del criterio appena auditato (Edit mirato, senza toccare le

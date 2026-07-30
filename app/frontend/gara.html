@@ -19,58 +19,136 @@
       <h1 id="g-nome">—</h1>
       <div class="gara-meta" id="g-meta">—</div>
     </div>
-    <a id="g-link-grafo" href="#" class="sub">Grafo della gara →</a>
+    <nav class="gara-nav">
+      <a id="g-link-grafo" href="#" class="sub">Grafo della gara →</a>
+      <a id="g-link-impostazioni" href="#" class="sub">Impostazioni →</a>
+    </nav>
   </header>
 
   <p class="sintesi-corrente" id="g-sintesi">—</p>
 
+  <!-- Barra fasi = selettore di vista: ogni step e' una tab (Sprint 10.1) -->
   <div class="barra-fasi" id="g-barra"></div>
 
-  <section id="g-upload" class="doc-upload">
-    <h2>Documenti</h2>
-    <form id="form-upload">
+  <div class="vista-fase" id="v-1-acquisizione">
+    <div class="phase-card-slot" id="pc-1"></div>
+    <section id="g-upload" class="doc-upload">
+      <h2>Carica documenti</h2>
+      <form id="form-upload">
+        <div class="campo">
+          <label for="u-categoria">Categoria</label>
+          <select id="u-categoria" name="categoria">
+            <option value="disciplinare">Disciplinare</option>
+            <option value="elaborati">Elaborati</option>
+            <option value="p7m">P7M</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="u-file">File</label>
+          <input id="u-file" name="file" type="file" required>
+        </div>
+        <button type="submit">Carica</button>
+      </form>
+      <p id="upload-esito" class="esito" hidden></p>
+    </section>
+    <h3>Documenti caricati</h3>
+    <div class="output-lista" id="g-documenti">Caricamento…</div>
+  </div>
+
+  <div class="vista-fase" id="v-2-estrazione" hidden>
+    <div class="phase-card-slot" id="pc-2"></div>
+    <p class="sub">Cosa il sistema ha estratto dal disciplinare e dagli elaborati: criteri, matrice punteggi, e il grafo di conoscenza completo.</p>
+    <div class="output-lista" id="g-output-estrazione">Caricamento…</div>
+  </div>
+
+  <div class="vista-fase" id="v-3-analisi" hidden>
+    <div class="phase-card-slot" id="pc-3"></div>
+    <p class="sub">Analisi strategica del capitolato: budget sicurezza, gap prezzi, viabilità cantiere, capacità di investimento migliorativo.</p>
+    <div class="output-lista" id="g-output-analisi">Caricamento…</div>
+  </div>
+
+  <div class="vista-fase" id="v-4-soluzioni" hidden>
+    <div class="phase-card-slot" id="pc-4"></div>
+    <h3>Gap individuati</h3>
+    <div id="g-gap-lista">Caricamento…</div>
+
+    <h3>Suggerisci una proposta</h3>
+    <form id="form-proposta-operatore" class="doc-upload">
       <div class="campo">
-        <label for="u-categoria">Categoria</label>
-        <select id="u-categoria" name="categoria">
-          <option value="disciplinare">Disciplinare</option>
-          <option value="elaborati">Elaborati</option>
-          <option value="p7m">P7M</option>
-        </select>
+        <label for="po-criterio">Criterio</label>
+        <input id="po-criterio" name="criterio" placeholder="es. C1" required>
       </div>
       <div class="campo">
-        <label for="u-file">File</label>
-        <input id="u-file" name="file" type="file" required>
+        <label for="po-gap">Gap collegato (opzionale)</label>
+        <input id="po-gap" name="gap_id" placeholder="es. G-C1-002">
       </div>
-      <button type="submit">Carica</button>
+      <div class="campo">
+        <label for="po-titolo">Titolo</label>
+        <input id="po-titolo" name="titolo" required>
+      </div>
+      <div class="campo" style="grid-column: 1 / -1;">
+        <label for="po-descrizione">Descrizione</label>
+        <textarea id="po-descrizione" name="descrizione" rows="3" required></textarea>
+      </div>
+      <button type="submit">Invia proposta</button>
     </form>
-    <p id="upload-esito" class="esito" hidden></p>
-  </section>
+    <p id="proposta-operatore-esito" class="esito" hidden></p>
 
-  <h2>Fasi</h2>
-  <div class="fasi-lista" id="g-fasi"></div>
+    <h3>Proposte suggerite</h3>
+    <div id="g-proposte-operatore">Caricamento…</div>
+  </div>
 
-  <section id="g-revisione" class="approval-panel" hidden>
-    <h2>Revisione proposte (Fase 5)</h2>
-    <p class="sub">Una proposta per riga, non un blocco unico: approva, chiedi modifiche o scarta con nota.</p>
-    <div id="g-proposte"></div>
-  </section>
+  <div class="vista-fase" id="v-5-revisione" hidden>
+    <div class="phase-card-slot" id="pc-5"></div>
+    <section id="g-revisione" class="approval-panel" hidden>
+      <h2>Revisione proposte</h2>
+      <p class="sub">Una proposta per riga, non un blocco unico: approva, chiedi modifiche o scarta con nota. Clicca il titolo per il dettaglio.</p>
+      <div id="g-proposte"></div>
+    </section>
+  </div>
+
+  <div class="vista-fase" id="v-6-deliverables" hidden>
+    <div class="phase-card-slot" id="pc-6"></div>
+    <p class="sub">Ogni documento richiesto dal disciplinare è uno spazio di lavoro a sé: si esegue separatamente, con l'agente dedicato al suo tipo.</p>
+    <div class="deliverables-griglia" id="g-deliverables">Caricamento…</div>
+  </div>
+
+  <div class="vista-fase" id="v-7-audit" hidden>
+    <div class="phase-card-slot" id="pc-7"></div>
+    <p class="sub">Approvazione finale prima della consegna: verifica gli elaborati prodotti.</p>
+    <div class="output-lista" id="g-output-finale">Caricamento…</div>
+  </div>
 
   <div class="vista-agenti">
     <h3 id="g-agenti-titolo">Agenti al lavoro</h3>
     <div id="g-agenti"></div>
   </div>
-
-  <h2>Elaborati prodotti</h2>
-  <div class="output-lista" id="g-output">Caricamento…</div>
-
-  <h2>Storico esecuzioni</h2>
-  <table class="storico" id="g-runlog"><tbody></tbody></table>
-
-  <details class="log-grezzo">
-    <summary>Log grezzo (JSON)</summary>
-    <pre id="g-json-grezzo"></pre>
-  </details>
 </div>
+
+<!-- Modale dettaglio proposta (Sprint 10.1) -->
+<div class="modale-overlay" id="modale-proposta" hidden>
+  <div class="modale">
+    <button class="modale-chiudi" id="modale-chiudi">×</button>
+    <div id="modale-proposta-corpo">Caricamento…</div>
+  </div>
+</div>
+
+<!-- Chat a controllo pieno (Sprint 10.4) -->
+<div class="chat-widget" id="chat-widget">
+  <button class="chat-toggle" id="chat-toggle">Intervento diretto</button>
+  <div class="chat-pannello" id="chat-pannello" hidden>
+    <div class="chat-header">
+      <strong>Intervento diretto</strong>
+      <span class="sub">Controllo pieno, limitato a questa gara</span>
+    </div>
+    <div class="chat-storico" id="chat-storico"></div>
+    <form id="chat-form">
+      <textarea id="chat-input" rows="2" placeholder="Descrivi l'intervento…" required></textarea>
+      <button type="submit">Invia</button>
+    </form>
+  </div>
+</div>
+
 <script src="js/api.js"></script>
 <script src="js/gara.js"></script>
 </body>

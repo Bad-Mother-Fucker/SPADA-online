@@ -63,6 +63,19 @@ Leggi nell'ordine:
 - `vincoli_offerta_tecnica.md` — SE PRESENTE: budget facciate del
   criterio/sottocriterio (Sezione B se compilata, altrimenti il limite
   complessivo di Sezione A) per il Colpo d'occhio
+- `output/07_questions/proposte_operatore_Cx.md` — SE PRESENTE (Sprint
+  10.2): proposte suggerite dal professionista prima della tua analisi,
+  da vista "Ricerca soluzioni". Vanno trattate come le tue: incorporale
+  nella sezione 4 con un ID `P-Cx-nnn` regolare, marcando `**Origine:**
+  professionista` nella scheda (contro `**Origine:** sistema` per le
+  tue). Se una voce indica un `gap_id` gia' noto, collega la proposta a
+  quel gap invece di crearne uno nuovo; se il gap non esiste ancora
+  nella tua analisi, trattalo come le altre proposte senza gap
+  esplicito — non inventare un gap per giustificarla a posteriori.
+  Non modificare questo file: e' input, lo consuma anche
+  `evidence-auditor` per capire quali proposte auditare come "suggerite
+  dal professionista, evidenza da verificare" invece che "generate e
+  motivate dal sistema".
 
 # Pipeline obbligatoria
 
@@ -152,6 +165,8 @@ Essenziale ma completa — 1-3 paragrafi.]
 ### Sottocriterio C1.1 — [titolo] ([pt] pt)   ← solo se esistono sottocriteri
 
 #### P-C1-001 — [titolo]
+
+**Origine:** sistema  ← oppure "professionista" se da `output/07_questions/proposte_operatore_Cx.md` (Sprint 10.2)
 
 **Gap collegati:**
 - [G-C1-001](#G-C1-001) — [cosa manca, in linguaggio semplice, 1 frase]

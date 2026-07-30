@@ -118,8 +118,8 @@ richiesto, e resta interrogabile senza aprire il brief.
 ```json
 "deliverables": {
   "C1": [
-    { "nome": "Relazione tecnica C1", "vincolo_formato": "max 5 facciate A4, Arial 11", "fonte": "art. 14" },
-    { "nome": "Cronoprogramma migliorativo", "vincolo_formato": "Gantt allegato, non computato", "fonte": "art. 14.2" }
+    { "nome": "Relazione tecnica C1", "vincolo_formato": "max 5 facciate A4, Arial 11", "fonte": "art. 14", "tipo": "relazione_tecnica" },
+    { "nome": "Cronoprogramma migliorativo", "vincolo_formato": "Gantt allegato, non computato", "fonte": "art. 14.2", "tipo": "cronoprogramma" }
   ],
   "C2": []
 }
@@ -131,6 +131,26 @@ scritto nel disciplinare, `[non indicato]` se assente; criterio senza
 deliverables specifici → lista vuota `[]`, mai omettere la chiave.
 Il gara brief e questo campo derivano dagli stessi dati: se aggiorni
 uno, aggiorna l'altro.
+
+**Campo `tipo` (obbligatorio, Sprint 10.3)** — determina quale agente
+dedicato produce il deliverable (ogni tipo diventa uno spazio di lavoro
+separato nel frontend). Assegnalo per corrispondenza semantica, non
+lessicale, tra `nome` e questi cinque tipi con agente specifico più il
+fallback:
+
+| `tipo` | Quando assegnarlo |
+|---|---|
+| `relazione_tecnica` | Il documento e' la relazione tecnico-illustrativa dell'offerta (quella che finisce in facciate, con budget righe/pagine) |
+| `computo_metrico` | Computo, quadro economico o stima dei costi delle migliorie |
+| `legge_10` | Relazione energetica, calcolo prestazioni energetiche, APE, qualunque riferimento a L. 10/91 o D.Lgs 192/2005 |
+| `cronoprogramma` | Gantt, programma lavori, cronoprogramma delle migliorie |
+| `tavole_tecniche` | Elaborati grafici, tavole, planimetrie delle migliorie |
+| `altro` | Non corrisponde a nessuno dei cinque — verra' prodotto da un agente generico che legge direttamente l'articolo del disciplinare |
+
+Non forzare una corrispondenza dubbia: un deliverable classificato
+`altro` per errore si corregge in un secondo momento (`/update_document`
+o intervento mirato); uno classificato con un tipo sbagliato finisce
+nell'agente sbagliato e produce il documento sbagliato.
 
 ## Compilazione vincoli_offerta_tecnica.md — Sezione A (obbligatoria)
 

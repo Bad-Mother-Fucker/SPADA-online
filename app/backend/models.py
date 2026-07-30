@@ -22,3 +22,19 @@ class ApprovazioneRequest(BaseModel):
 
 class AssistenteRequest(BaseModel):
     messaggio: str
+
+
+class ProposaOperatoreRequest(BaseModel):
+    """Sprint 10.2 — proposta suggerita dal professionista in Ricerca
+    soluzioni, valutata dal sistema insieme alle proprie (criterion-agent
+    la legge da output/07_questions/, evidence-auditor la audita)."""
+    criterio: str = Field(pattern=r"^C[0-9]+$")
+    gap_id: Optional[str] = Field(default=None, pattern=r"^G-C[0-9]+-[0-9]+$")
+    titolo: str
+    descrizione: str
+
+
+class InterventoRequest(BaseModel):
+    """Sprint 10.4 — chat a controllo pieno, scoped alla sola directory
+    della gara. A differenza di AssistenteRequest (sola lettura)."""
+    messaggio: str

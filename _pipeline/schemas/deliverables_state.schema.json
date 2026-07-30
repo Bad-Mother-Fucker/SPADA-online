@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spada-online/_pipeline/schemas/deliverables_state.schema.json",
+  "title": "Stato di esecuzione dei deliverable (Sprint 10.3)",
+  "description": "_state/deliverables.json — analogo a fasi.json ma per singolo deliverable invece che per fase intera. manifest.json → deliverables resta il 'cosa' (nome, vincolo_formato, fonte, tipo); questo file è il 'come va' (stato di esecuzione), scritto da spada_deliverable.sh. Chiave: id stabile '{criterio}-{indice}' (es. 'C1-0'), stesso ordine della lista in manifest.json → deliverables[criterio].",
+  "type": "object",
+  "additionalProperties": { "$ref": "#/$defs/deliverable_stato" },
+  "$defs": {
+    "deliverable_stato": {
+      "type": "object",
+      "required": ["stato"],
+      "additionalProperties": false,
+      "properties": {
+        "stato": {
+          "type": "string",
+          "enum": ["da_eseguire", "in_esecuzione", "completata", "errore", "da_rivedere"]
+        },
+        "agente": { "type": "string", "description": "Nome dell'agente che ha prodotto/produce questo deliverable." },
+        "run_id": { "type": "string" },
+        "iniziata_il": { "type": "string", "format": "date-time" },
+        "conclusa_il": { "type": "string", "format": "date-time" },
+        "output_dir": { "type": "string", "description": "Percorso relativo alla gara dove il deliverable scrive il proprio output." }
+      }
+    }
+  }
+}

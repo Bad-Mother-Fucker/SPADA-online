@@ -106,6 +106,60 @@ in UI, banner rosso/giallo in cima a `index.html` — Sprint 9.6). La
 stima è approssimativa (basata sull'mtime di `auth.env`, non sul
 token stesso): il valore esatto resta `claude /status`.
 
+## 8.5. Deploy automatico (CI/CD, Sprint 10)
+
+Da questo sprint, ogni push su `main` che tocca `app/backend/`,
+`app/worker/` o `_pipeline/` fa scattare `.github/workflows/deploy.yml`:
+si collega alla VM via Tailscale + SSH ed esegue
+`infra/deploy/deploy.sh` (`git reset --hard` al commit pushato,
+aggiorna le dipendenze Python, riavvia `spada-api`/`spada-worker`).
+Il frontend non passa da qui: Cloudflare Pages lo pubblica da solo ad
+ogni push (nessuna azione qui, verifica solo che sia collegato al
+branch `main`).
+
+**Setup una tantum, non evitabile da remoto** (nessuna sessione di
+sviluppo può creare credenziali Tailscale, chiavi SSH sulla VM o
+secrets del repository al posto tuo):
+
+1. **Chiave SSH dedicata al deploy** — sulla tua macchina, non sulla VM:
+   ```bash
+   ssh-keygen -t ed25519 -f deploy_key -N "" -C "spada-deploy-ci"
+   ```
+   Aggiungi `deploy_key.pub` a `~/.ssh/authorized_keys` dell'utente
+   deploy sulla VM (lo stesso utente che già gestisce `spada-api`/
+   `spada-worker`, es. `micheledes1296`).
+
+2. **Sudoers scoped** per riavviare solo i due servizi, senza
+   password e senza allargare i privilegi oltre il necessario — sulla
+   VM:
+   ```bash
+   echo '<utente> ALL=(root) NOPASSWD: /usr/bin/systemctl daemon-reload, /usr/bin/systemctl restart spada-api, /usr/bin/systemctl restart spada-worker, /usr/bin/systemctl is-active spada-api spada-worker' \
+     | sudo tee /etc/sudoers.d/spada-deploy
+   sudo chmod 440 /etc/sudoers.d/spada-deploy
+   ```
+
+3. **Client OAuth Tailscale** (tailnet → Settings → OAuth clients):
+   crea un client con tag `tag:ci` e permesso di generare nodi effimeri;
+   annota client ID e secret. Verifica che la tua ACL Tailscale permetta
+   a `tag:ci` di raggiungere la VM in SSH.
+
+4. **Secrets del repository** (Settings → Secrets and variables →
+   Actions):
+
+   | Secret | Valore |
+   |---|---|
+   | `TS_OAUTH_CLIENT_ID` | dal punto 3 |
+   | `TS_OAUTH_CLIENT_SECRET` | dal punto 3 |
+   | `DEPLOY_SSH_KEY` | contenuto di `deploy_key` (la chiave **privata** generata al punto 1) |
+   | `DEPLOY_HOST` | hostname Tailscale o IP `100.x.x.x` della VM |
+   | `DEPLOY_USER` | utente deploy sulla VM |
+   | `DEPLOY_PATH` | percorso assoluto del clone di questo repo sulla VM (es. `/home/micheledes1296/spada-online`) |
+
+Dopo questo setup, ogni push successivo si deploya da solo — nessun
+intervento manuale ricorrente. `workflow_dispatch` resta disponibile
+per un deploy manuale on-demand dalla tab Actions di GitHub, se serve
+forzarlo senza un nuovo push.
+
 ## 9. Sopravvivenza a un riavvio VM
 
 - `spada-api`/`spada-worker`: `enable`d, ripartono da soli

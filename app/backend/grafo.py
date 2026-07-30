@@ -26,7 +26,7 @@ def _strip_wikilink(value):
     return m.group(1) if m else value
 
 
-def _leggi_frontmatter(path: Path):
+def leggi_frontmatter(path: Path):
     """Ritorna (meta, ok). ok=False se il file non ha frontmatter YAML valido."""
     try:
         testo = path.read_text(encoding="utf-8")
@@ -40,6 +40,17 @@ def _leggi_frontmatter(path: Path):
         return meta, True
     except yaml.YAMLError:
         return {}, False
+
+
+def leggi_corpo(path: Path) -> str:
+    """Testo del file dopo il frontmatter (o l'intero file se non ne ha
+    uno) — per la vista dettaglio proposta del frontend (Sprint 10.1)."""
+    try:
+        testo = path.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+    m = re.match(r"^---\n.*?\n---\n(.*)$", testo, re.DOTALL)
+    return m.group(1).strip() if m else testo.strip()
 
 
 def _nodo_documento(codice, meta):
@@ -92,7 +103,7 @@ def estrai_grafo(gara_dir: Path) -> dict:
     if nodes_dir.exists():
         for f in sorted(nodes_dir.glob("*.md")):
             codice = f.stem
-            meta, ok = _leggi_frontmatter(f)
+            meta, ok = leggi_frontmatter(f)
             if not ok:
                 nodi_senza_frontmatter.append(codice)
                 nodi[codice] = {"id": codice, "tipo": "document", "sottotipo": "TBD",
@@ -115,7 +126,7 @@ def estrai_grafo(gara_dir: Path) -> dict:
     if criteria_dir.exists():
         for f in sorted(criteria_dir.glob("criterion_*.md")):
             codice = f.stem.replace("criterion_", "")
-            meta, ok = _leggi_frontmatter(f)
+            meta, ok = leggi_frontmatter(f)
             if not ok:
                 nodi_senza_frontmatter.append(codice)
                 nodi.setdefault(codice, {"id": codice, "tipo": "criterion", "etichetta": codice, "confidence": "TBD"})
@@ -129,7 +140,7 @@ def estrai_grafo(gara_dir: Path) -> dict:
     proposals_dir = graph_dir / "proposals"
     if proposals_dir.exists():
         for f in sorted(proposals_dir.glob("*.md")):
-            meta, ok = _leggi_frontmatter(f)
+            meta, ok = leggi_frontmatter(f)
             codice = meta.get("id") if ok else f.stem
             if not ok:
                 nodi_senza_frontmatter.append(codice)
@@ -147,7 +158,7 @@ def estrai_grafo(gara_dir: Path) -> dict:
         f = graph_dir / f"{nome}.md"
         if not f.exists():
             continue
-        meta, ok = _leggi_frontmatter(f)
+        meta, ok = leggi_frontmatter(f)
         if not ok:
             continue
         nodi[nome] = {"id": nome, "tipo": tipo, "etichetta": nome, "confidence": meta.get("confidence", "TBD")}

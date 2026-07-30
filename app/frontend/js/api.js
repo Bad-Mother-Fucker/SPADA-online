@@ -42,5 +42,26 @@ const Api = (() => {
     sistemaAuth: () => richiesta("/sistema/auth"),
     sistemaPrezzari: () => richiesta("/sistema/prezzari"),
     sistemaPipeline: () => richiesta("/sistema/pipeline"),
+
+    elencoDocumenti: (slug) => richiesta(`/gare/${slug}/documenti`),
+
+    // Sprint 10.1 — dettaglio proposta (nodo del grafo).
+    dettaglioProposta: (slug, id) => richiesta(`/gare/${slug}/proposte/${id}`),
+
+    // Sprint 10.2 — proposte del professionista, ancorate a un gap.
+    elencoProposteOperatore: (slug, criterio) =>
+      richiesta(`/gare/${slug}/proposte-operatore${criterio ? `?criterio=${criterio}` : ""}`),
+    creaPropostaOperatore: (slug, body) =>
+      richiesta(`/gare/${slug}/proposte-operatore`, { method: "POST", body: JSON.stringify(body) }),
+
+    // Sprint 10.3 — deliverables come workspace separati.
+    elencoDeliverables: (slug) => richiesta(`/gare/${slug}/deliverables`),
+    eseguiDeliverable: (slug, id) => richiesta(`/gare/${slug}/deliverables/${id}/esegui`, { method: "POST" }),
+    rieseguiDeliverable: (slug, id) => richiesta(`/gare/${slug}/deliverables/${id}/riesegui`, { method: "POST" }),
+
+    // Sprint 10.4 — chat a controllo pieno.
+    intervento: (slug, messaggio) =>
+      richiesta(`/gare/${slug}/interventi`, { method: "POST", body: JSON.stringify({ messaggio }) }),
+    cronologiaInterventi: (slug) => richiesta(`/gare/${slug}/interventi`),
   };
 })();

@@ -54,21 +54,68 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   align-items: baseline; gap: var(--sp-3); margin-bottom: var(--sp-2); }
 .gara-top h1 { font-size: var(--text-xl); margin: 0; }
 .gara-meta { color: var(--mut); font-size: var(--text-sm); }
+.gara-nav { display: flex; gap: var(--sp-4); }
 .sintesi-corrente { background: var(--infobg); color: var(--info); border-radius: var(--radius-md);
   padding: var(--sp-3) var(--sp-4); margin: var(--sp-4) 0; font-size: var(--text-sm); }
 
+/* Sprint 10.1 — la barra fasi e' anche il selettore di vista: ogni
+   step e' cliccabile e mostra la vista_fase corrispondente. */
 .barra-fasi { display: flex; gap: var(--sp-2); margin: var(--sp-5) 0; flex-wrap: wrap; }
 .barra-fasi .step { flex: 1; min-width: 6rem; text-align: center; padding: var(--sp-2);
   border-radius: var(--radius-sm); background: var(--nabg); font-size: var(--text-xs);
-  border-bottom: 3px solid var(--line); }
+  border-bottom: 3px solid var(--line); cursor: pointer; transition: background var(--dur-fast) var(--ease-standard); }
+.barra-fasi .step:hover { background: var(--card); }
+.barra-fasi .step.attivo { background: var(--card); border-bottom-width: 4px; font-weight: 600; }
 .barra-fasi .step[data-stato="completata"] { border-bottom-color: var(--good); }
 .barra-fasi .step[data-stato="in_esecuzione"] { border-bottom-color: var(--acc); }
 .barra-fasi .step[data-stato="errore"] { border-bottom-color: var(--crit); }
 .barra-fasi .step[data-stato="da_rivedere"] { border-bottom-color: var(--warn); }
 
-.fasi-lista { display: flex; flex-direction: column; gap: var(--sp-3); margin: var(--sp-5) 0; }
+.vista-fase { margin: var(--sp-5) 0; }
 .phase-card .azioni { display: flex; gap: var(--sp-2); }
 .phase-card .azioni button { padding: .4rem .75rem; font-size: var(--text-xs); }
+
+/* Sprint 10.3 — deliverables come workspace separati */
+.deliverables-griglia { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: var(--sp-3); margin: var(--sp-4) 0; }
+.deliverable-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-2); }
+.deliverable-card .titolo { font-weight: 600; }
+.deliverable-card .azioni { display: flex; gap: var(--sp-2); margin-top: var(--sp-2); }
+.deliverable-card .azioni button { padding: .4rem .75rem; font-size: var(--text-xs); }
+
+/* Sprint 10.1 — modale dettaglio proposta */
+/* [hidden] e .modale-overlay hanno la stessa specificita' (0,0,1,0):
+   senza :not([hidden]) qui, la regola display:flex vincerebbe comunque
+   sull'[hidden] dello user-agent stylesheet (arriva dopo nel cascade) e
+   il modale resterebbe cliccabile/visibile anche da nascosto. */
+.modale-overlay[hidden] { display: none; }
+.modale-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center; z-index: 100; padding: var(--sp-4); }
+.modale { background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  padding: var(--sp-6); max-width: 42rem; width: 100%; max-height: 85vh; overflow-y: auto; position: relative; }
+.modale-chiudi { position: absolute; top: var(--sp-3); right: var(--sp-3); background: none; border: none;
+  color: var(--mut); font-size: var(--text-xl); padding: 0 .5rem; }
+.modale pre.output-block { white-space: pre-wrap; font-size: var(--text-sm); }
+
+/* Sprint 10.4 — chat a controllo pieno */
+.chat-widget { position: fixed; bottom: var(--sp-4); right: var(--sp-4); z-index: 90; }
+.chat-toggle { border-radius: 999px; box-shadow: 0 2px 12px rgba(0,0,0,.2); }
+/* stessa cautela di .modale-overlay: [hidden] va reso esplicitamente
+   piu' specifico o "display: flex" qui sotto lo batte sempre. */
+.chat-pannello[hidden] { display: none; }
+.chat-pannello { position: absolute; bottom: 3rem; right: 0; width: 22rem; max-height: 28rem;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  box-shadow: 0 4px 24px rgba(0,0,0,.25); display: flex; flex-direction: column; overflow: hidden; }
+.chat-header { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line); }
+.chat-header .sub { display: block; }
+.chat-storico { flex: 1; overflow-y: auto; padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2); min-height: 8rem; }
+.chat-msg { padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-md); font-size: var(--text-sm); max-width: 90%; }
+.chat-msg-utente { align-self: flex-end; background: var(--acc); color: var(--bg); }
+.chat-msg-claude { align-self: flex-start; background: var(--card); border: 1px solid var(--line); white-space: pre-wrap; }
+.chat-attesa { opacity: .6; font-style: italic; }
+#chat-form { display: flex; gap: var(--sp-2); padding: var(--sp-3); border-top: 1px solid var(--line); }
+#chat-form textarea { flex: 1; resize: vertical; }
 
 .vista-agenti { background: var(--card); border: 1px solid var(--line);
   border-radius: var(--radius-lg); margin: var(--sp-5) 0; overflow: hidden; }

@@ -29,7 +29,9 @@ CREATE TABLE IF NOT EXISTS job (
   iniziato_il   TEXT,
   concluso_il   TEXT,
   run_id        TEXT,
-  errore        TEXT
+  errore        TEXT,
+  deliverable_id TEXT  -- Sprint 10.3: se valorizzato, il job esegue UN deliverable
+                       -- (spada_deliverable.sh) invece della fase atomica (spada_fase.sh)
 );
 CREATE INDEX IF NOT EXISTS idx_job_stato ON job (stato, creato_il);
 CREATE INDEX IF NOT EXISTS idx_job_gara ON job (gara_slug);
@@ -64,3 +66,40 @@ CREATE TABLE IF NOT EXISTS conversazioni (
   creato_il     TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_conversazioni_gara ON conversazioni (gara_slug, creato_il);
+
+-- Sprint 10.2 — proposte suggerite dal professionista, prima che il
+-- sistema le valuti insieme alle proprie (criterion-agent le legge da
+-- output/07_questions/proposte_operatore_Cx.md, questa tabella è solo
+-- l'indice veloce per il frontend).
+CREATE TABLE IF NOT EXISTS proposte_operatore (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  gara_slug     TEXT NOT NULL REFERENCES gare(slug) ON DELETE CASCADE,
+  criterio      TEXT NOT NULL,
+  gap_id        TEXT,
+  titolo        TEXT NOT NULL,
+  descrizione   TEXT NOT NULL,
+  stato         TEXT NOT NULL DEFAULT 'in_attesa' CHECK (stato IN ('in_attesa', 'valutata')),
+  esito_audit   TEXT,
+  motivazione   TEXT,
+  creato_il     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_proposte_operatore_gara ON proposte_operatore (gara_slug, criterio);
+
+-- Sprint 10.4 — chat a controllo pieno (scrittura consentita, a
+-- differenza di conversazioni/assistente che è in sola lettura).
+-- interventi_sessioni tiene il session_id di claude -p per la
+-- continuità multi-turno (--resume), una sessione attiva per gara.
+CREATE TABLE IF NOT EXISTS interventi (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  gara_slug     TEXT NOT NULL REFERENCES gare(slug) ON DELETE CASCADE,
+  ruolo         TEXT NOT NULL CHECK (ruolo IN ('utente', 'claude')),
+  testo         TEXT NOT NULL,
+  creato_il     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_interventi_gara ON interventi (gara_slug, creato_il);
+
+CREATE TABLE IF NOT EXISTS interventi_sessioni (
+  gara_slug     TEXT PRIMARY KEY REFERENCES gare(slug) ON DELETE CASCADE,
+  session_id    TEXT NOT NULL,
+  aggiornato_il TEXT NOT NULL
+);
