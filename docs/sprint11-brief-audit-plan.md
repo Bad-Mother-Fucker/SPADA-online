@@ -171,7 +171,7 @@ posizione", da applicare anche qui dove ha senso).
 
 ## Decisioni che servono da te prima di partire
 
-1. Testo esatto per titolo/kicker/sottotitolo della Fase 3 (2.1).
+1. Testo esatto per titolo/kicker/sottotitolo della Fase 3 (2.1) - "Strategia"
 2. Form delle indicazioni strategiche: campi separati come sopra, o un
-   unico campo libero più semplice da costruire ma meno guidato?
-3. Conferma per procedere nell'ordine 1→4, o priorità diversa.
+   unico campo libero più semplice da costruire ma meno guidato? - Campi separati come nel documento originale
+3. Conferma per procedere nell'ordine 1→4, o priorità diversa. - confermo
