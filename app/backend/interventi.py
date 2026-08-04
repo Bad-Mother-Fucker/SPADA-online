@@ -25,12 +25,26 @@ Un solo session_id attivo per gara (interventi_sessioni).
 """
 import json
 import subprocess
+import threading
 from pathlib import Path
 
 from auth import get_claude_env
 from paths import gara_dir
 
 TIMEOUT_SECONDI = 10 * 60
+
+# Lock di processo, non solo di gara: uvicorn gira senza --workers (un
+# solo processo), quindi un threading.Lock qui basta a impedire due
+# `claude -p` di intervento concorrenti sulla stessa VM — a differenza
+# del gate sulla tabella job (che copre solo le fasi accodate), questo
+# copre anche due /interventi quasi simultanei su gare diverse, che non
+# passano mai dalla coda job. Necessario su un e2-micro: due `claude -p`
+# insieme sono già abbastanza per saturarlo (vedi incidente Sprint 10).
+_LOCK_INTERVENTO = threading.Lock()
+
+
+class InterventoGiaInCorso(RuntimeError):
+    pass
 
 
 def _leggi_o_vuoto(path: Path) -> str:
@@ -96,40 +110,50 @@ def _salva_session_id(slug: str, session_id: str, now: str):
 def invoca_intervento(slug: str, messaggio: str) -> dict:
     """Ritorna {"risposta": str, "session_id": str}. Solleva RuntimeError
     se claude -p fallisce o l'output non è il JSON atteso — mai un
-    fallback silenzioso su un intervento che scrive file."""
-    d = gara_dir(slug)
-    prompt = costruisci_prompt(slug, messaggio)
-    env_claude = get_claude_env()
-
-    import os
-    env = {**os.environ, **env_claude}
-
-    session_precedente = _leggi_session_id(slug)
-    argv = [
-        "claude", "-p", prompt,
-        "--setting-sources", "user",
-        "--output-format", "json",
-    ]
-    if session_precedente:
-        argv += ["--resume", session_precedente]
-
-    proc = subprocess.run(
-        argv, cwd=str(d), env=env, capture_output=True, text=True, timeout=TIMEOUT_SECONDI,
-    )
-    if proc.returncode != 0:
-        raise RuntimeError(f"Intervento: claude -p uscito con codice {proc.returncode}: {proc.stderr[-500:]}")
-
+    fallback silenzioso su un intervento che scrive file. Solleva
+    InterventoGiaInCorso (senza nemmeno tentare) se un altro intervento
+    è già in esecuzione su questa VM: non si accoda, si rifiuta subito,
+    così l'operatore lo sa e riprova invece di aspettare in silenzio."""
+    if not _LOCK_INTERVENTO.acquire(blocking=False):
+        raise InterventoGiaInCorso(
+            "Un altro intervento è già in esecuzione su questa VM: attendi che concluda e riprova."
+        )
     try:
-        payload = json.loads(proc.stdout)
-    except json.JSONDecodeError as e:
-        raise RuntimeError(f"Intervento: output non JSON valido: {e}") from e
+        d = gara_dir(slug)
+        prompt = costruisci_prompt(slug, messaggio)
+        env_claude = get_claude_env()
 
-    risposta = payload.get("result")
-    session_id = payload.get("session_id")
-    if not risposta or not session_id:
-        raise RuntimeError(f"Intervento: JSON senza 'result'/'session_id' attesi: {list(payload.keys())}")
+        import os
+        env = {**os.environ, **env_claude}
 
-    from datetime import datetime, timezone
-    _salva_session_id(slug, session_id, datetime.now(timezone.utc).isoformat())
+        session_precedente = _leggi_session_id(slug)
+        argv = [
+            "claude", "-p", prompt,
+            "--setting-sources", "user",
+            "--output-format", "json",
+        ]
+        if session_precedente:
+            argv += ["--resume", session_precedente]
 
-    return {"risposta": risposta, "session_id": session_id}
+        proc = subprocess.run(
+            argv, cwd=str(d), env=env, capture_output=True, text=True, timeout=TIMEOUT_SECONDI,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(f"Intervento: claude -p uscito con codice {proc.returncode}: {proc.stderr[-500:]}")
+
+        try:
+            payload = json.loads(proc.stdout)
+        except json.JSONDecodeError as e:
+            raise RuntimeError(f"Intervento: output non JSON valido: {e}") from e
+
+        risposta = payload.get("result")
+        session_id = payload.get("session_id")
+        if not risposta or not session_id:
+            raise RuntimeError(f"Intervento: JSON senza 'result'/'session_id' attesi: {list(payload.keys())}")
+
+        from datetime import datetime, timezone
+        _salva_session_id(slug, session_id, datetime.now(timezone.utc).isoformat())
+
+        return {"risposta": risposta, "session_id": session_id}
+    finally:
+        _LOCK_INTERVENTO.release()

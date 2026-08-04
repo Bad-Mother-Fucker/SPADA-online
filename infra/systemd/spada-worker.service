@@ -14,6 +14,14 @@ Environment=SPADA_DATA_DIR=/home/spada/spada/_data
 ExecStart=/home/spada/spada-online/app/backend/.venv/bin/python3 worker.py
 Restart=on-failure
 RestartSec=5
+# Stesso ragionamento di spada-api.service: un riavvio non deve poter
+# restare bloccato a tempo indefinito. Qui è anche già il comportamento
+# atteso — un job interrotto a metà viene marcato "errore" al riavvio
+# successivo (worker.py::pulisci_job_orfani, nessuna ripresa parziale),
+# quindi terminare forzatamente entro pochi secondi anche un `claude -p`
+# ancora in corso è sicuro, non solo tollerato.
+TimeoutStopSec=10
+KillMode=mixed
 StandardOutput=journal
 StandardError=journal
 
