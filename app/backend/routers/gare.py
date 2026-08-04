@@ -126,7 +126,14 @@ def grafo_gara(slug: str):
 
 
 @router.post("/{slug}/documenti")
-async def carica_documento(slug: str, categoria: str, file: UploadFile):
+def carica_documento(slug: str, categoria: str, file: UploadFile):
+    # def, non async def: come il resto del router, così FastAPI esegue
+    # l'intero handler in un thread del pool. Con async def, la lettura
+    # del file e la scrittura su disco (entrambe bloccanti sull'unico
+    # processo uvicorn, nessun --workers) stallavano il loop eventi per
+    # tutta la durata dell'upload — compreso lo stream SSE e ogni altra
+    # richiesta concorrente sullo stesso Tunnel — con il rischio che il
+    # client ricevesse una risposta troncata su file grandi.
     if categoria not in ("disciplinare", "elaborati", "p7m"):
         raise HTTPException(400, "categoria deve essere disciplinare, elaborati o p7m")
     _gara_o_404(slug)
@@ -134,7 +141,7 @@ async def carica_documento(slug: str, categoria: str, file: UploadFile):
     dest_dir.mkdir(parents=True, exist_ok=True)
     nome_file = Path(file.filename).name  # scarta ogni componente di percorso dal nome client
     dest = dest_dir / nome_file
-    contenuto = await file.read()
+    contenuto = file.file.read()
     dest.write_bytes(contenuto)
 
     with get_conn() as con:
