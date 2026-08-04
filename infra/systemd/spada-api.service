@@ -17,6 +17,23 @@ Environment=SPADA_FRONTEND_ORIGIN=https://spada.pages.dev
 ExecStart=/home/spada/spada-online/app/backend/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=5
+# TimeoutStopSec limitato + KillMode=mixed: è QUESTA la garanzia che il
+# vecchio processo muoia entro un tempo limitato, non il codice
+# applicativo da solo. Un client SSE rimasto agganciato
+# (/gare/{slug}/stream, connessione lunga apposta) non genera un evento
+# di disconnessione lato server finché il client resta connesso: un
+# SIGTERM da solo può restare inascoltato a tempo indefinito, il
+# vecchio processo continua a tenere la porta 8000, il nuovo fallisce
+# il bind — osservato in produzione, un crash-loop di 47.000+ riavvii
+# durato giorni, perché il timeout di stop di default (90s in questa
+# unit prima di questa modifica) e nessun KillMode esplicito lasciavano
+# il processo libero di restare appeso. Verificato: solo un SIGKILL lo
+# fermava, mai un SIGTERM da solo, anche con il generatore corretto
+# lato codice (routers/gare.py::stream_stato controlla la
+# disconnessione del client, ma non basta per il caso "server in
+# riavvio, client ancora connesso").
+TimeoutStopSec=10
+KillMode=mixed
 StandardOutput=journal
 StandardError=journal
 

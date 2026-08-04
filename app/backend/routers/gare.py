@@ -5,7 +5,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
 import sys
@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from db import get_conn
 from deliverables import elenca_deliverables, trova_deliverable
 from grafo import estrai_grafo, leggi_corpo, leggi_frontmatter
-from interventi import invoca_intervento
+from interventi import InterventoGiaInCorso, invoca_intervento
 from models import (
     ApprovazioneRequest, AssistenteRequest, CreaGaraRequest,
     InterventoRequest, ProposaOperatoreRequest,
@@ -373,16 +373,19 @@ def cronologia_assistente(slug: str):
 @router.post("/{slug}/interventi")
 def intervento(slug: str, body: InterventoRequest):
     _gara_o_404(slug)
-    # Stesso gate di /assistente: non deve girare mentre una fase sta
-    # scrivendo sulla stessa gara, qui a maggior ragione perché anche
-    # l'intervento scrive file — due scritture concorrenti sulla stessa
-    # directory sarebbero un rischio reale, non solo di lettura sporca.
+    # Gate VM-wide, non per-gara: la VM è un e2-micro (2 vCPU burstable,
+    # 1GB RAM) e ogni `claude -p` (fase, deliverable o intervento) è un
+    # processo pesante a sé. Il worker già serializza le fasi (un job
+    # alla volta, qualunque gara), ma /interventi bypassa la coda job
+    # per design (risposta diretta, non accodata) — senza questo
+    # controllo, un intervento su una gara e una fase in corso su
+    # un'altra girerebbero insieme, sufficiente a saturare la VM.
     with get_conn() as con:
         in_corso = con.execute(
-            "SELECT 1 FROM job WHERE gara_slug=? AND stato='in_esecuzione'", (slug,)
+            "SELECT 1 FROM job WHERE stato='in_esecuzione'"
         ).fetchone()
     if in_corso:
-        raise HTTPException(409, "Una fase è in esecuzione su questa gara: riprova a intervento concluso.")
+        raise HTTPException(409, "Una fase è in esecuzione su questa VM (qualunque gara): riprova a conclusione.")
 
     with get_conn() as con:
         con.execute(
@@ -392,6 +395,8 @@ def intervento(slug: str, body: InterventoRequest):
 
     try:
         esito = invoca_intervento(slug, body.messaggio)
+    except InterventoGiaInCorso as e:
+        raise HTTPException(409, str(e))
     except Exception as e:
         raise HTTPException(500, f"Intervento non disponibile: {e}")
 
@@ -415,12 +420,23 @@ def cronologia_interventi(slug: str):
 
 
 @router.get("/{slug}/stream")
-async def stream_stato(slug: str):
+async def stream_stato(slug: str, request: Request):
     d = _gara_o_404(slug)
 
     async def generatore():
+        # Senza questo controllo il ciclo non finisce mai finché il
+        # CLIENT non si disconnette — utile (chiusura di un tab), ma non
+        # basta da solo: un SIGTERM del server (restart del servizio)
+        # non genera un evento "client disconnesso" finché il client
+        # resta connesso, quindi questo ciclo può restare vivo oltre il
+        # riavvio comunque. La garanzia vera che il processo muoia entro
+        # un tempo limitato — e quindi rilasci la porta 8000 — è
+        # TimeoutStopSec+KillMode nel systemd unit (spada-api.service),
+        # non questo controllo da solo. Bug reale osservato in
+        # produzione: VM esaurita da un loop di 47.000+ riavvii perché
+        # nessuno dei due meccanismi esisteva.
         ultimo = None
-        while True:
+        while not await request.is_disconnected():
             fasi = _leggi_json(d / "_state" / "fasi.json", {})
             attivita = _leggi_json(d / "_state" / "attivita.json", {})
             payload = json.dumps({"fasi": fasi, "attivita": attivita}, ensure_ascii=False)
