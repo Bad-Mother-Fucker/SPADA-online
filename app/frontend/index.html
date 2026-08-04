@@ -4,96 +4,67 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SPADA Online — Gare</title>
-<script src="js/config.js"></script>
-<script>
-  // Il design system vive sul backend (fonte unica anche per gli output
-  // HTML delle gare), non nel bundle statico del frontend.
-  document.write('<link rel="stylesheet" href="' + window.SPADA_API_BASE + '/sistema/design-system.css">');
-</script>
+<meta name="description" content="Elenco delle gare in lavorazione: stato della pipeline a 7 fasi, checkpoint da rivedere ed errori.">
+<link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/app.css">
+<script src="js/config.js"></script>
+<!-- ui.js in <head>: decide il tema prima del primo paint, così la pagina
+     non compare mai nel tema sbagliato. -->
+<script src="js/ui.js"></script>
 </head>
-<body>
-<div aria-hidden="true" class="bg-glow"></div>
+<body data-accent="bronzo" data-glass="medio">
 
-<div class="app-top">
-  <div class="app-top-inner">
-    <a href="index.html" class="brand">
-      <span class="brand-mark"></span>
-      <span class="brand-name">SPADA</span>
+<a class="skip" href="#contenuto">Salta all'elenco delle gare</a>
+<div class="bg-glow" aria-hidden="true" data-parallax="true"></div>
+
+<div class="appbar">
+  <div class="appbar__inner appbar__inner--narrow">
+    <a class="brand" href="index.html">
+      <span class="brand__mark" id="brand-mark"></span>
+      <span class="brand__name">SPADA</span>
     </a>
-    <span class="crumb"><span class="current">Gare</span></span>
+    <span style="font-size:var(--fs-xs);color:var(--ink-3)">Gare</span>
     <div class="spacer"></div>
-    <p class="sub" id="stato-pipeline" style="margin:0;font-size:var(--fs-micro);color:var(--ink-3)">Versione pipeline: —</p>
-    <div class="theme-toggle" role="group" aria-label="Tema">
-      <button type="button" id="tema-chiaro" aria-pressed="false">Chiaro</button>
-      <button type="button" id="tema-scuro" aria-pressed="false">Scuro</button>
+    <div class="row row--tight" style="flex-wrap:nowrap">
+      <span class="badge" id="stato-backend" aria-live="polite">
+        <span class="dot" aria-hidden="true"></span>Connessione…
+      </span>
+      <span id="slot-tema"></span>
+      <span class="avatar" title="Operatore">GC</span>
     </div>
   </div>
 </div>
 
-<div class="page">
-  <header class="list-header">
+<main class="shell shell--list" id="contenuto">
+
+  <header class="pagehead">
     <div>
       <h1>Gare in lavorazione</h1>
-      <p id="riepilogo-gare">—</p>
+      <p id="sommario-gare">Caricamento dell'elenco…</p>
     </div>
+    <button type="button" class="btn btn--primary" id="apri-nuova-gara"></button>
   </header>
 
-  <section class="crea-gara glass-surface">
-    <h2 style="margin-top:0">Nuova gara</h2>
-    <form id="form-nuova-gara">
-      <div class="campo">
-        <label for="f-slug">Slug</label>
-        <input id="f-slug" name="slug" required pattern="[a-z0-9\-]{1,64}" placeholder="2026-comune-bari-scuola">
-      </div>
-      <div class="campo">
-        <label for="f-nome">Nome esteso</label>
-        <input id="f-nome" name="nome" required placeholder="Lavori di efficientamento energetico...">
-      </div>
-      <div class="campo">
-        <label for="f-regione">Regione prezzario</label>
-        <input id="f-regione" name="regione" required placeholder="Campania">
-      </div>
-      <div class="campo">
-        <label for="f-anno">Anno prezzario</label>
-        <input id="f-anno" name="anno_prezzario" type="number" required value="2026">
-      </div>
-      <div class="campo">
-        <label for="f-modello">Modello</label>
-        <select id="f-modello" name="modello">
-          <option value="claude-sonnet-5" selected>claude-sonnet-5</option>
-          <option value="claude-opus-5">claude-opus-5</option>
-        </select>
-      </div>
-      <div class="campo">
-        <label for="f-effort">Effort</label>
-        <select id="f-effort" name="effort">
-          <option value="low">low</option>
-          <option value="medium" selected>medium</option>
-          <option value="high">high</option>
-          <option value="xhigh">xhigh</option>
-          <option value="max">max</option>
-        </select>
-      </div>
-      <button type="submit">Crea gara</button>
-    </form>
-    <p id="crea-esito" class="esito" hidden></p>
-  </section>
-
-  <div class="filter-bar">
-    <div class="filter-group" id="filtri-stato" role="group" aria-label="Filtra per stato"></div>
-    <label class="search-field">
-      <span aria-hidden="true">🔍</span>
-      <input type="text" id="cerca-gare" placeholder="Cerca per nome o slug">
+  <div class="filterbar">
+    <div class="filterbar__group" role="group" aria-label="Filtra per stato" id="filtri"></div>
+    <label class="search">
+      <span class="sr-only">Cerca fra le gare</span>
+      <input type="search" class="input input--sm" id="ricerca" placeholder="Cerca per nome o slug" autocomplete="off">
     </label>
   </div>
 
-  <div id="lista-gare" class="tender-grid">
-    <div class="skeleton skeleton-card"></div>
-    <div class="skeleton skeleton-card"></div>
-    <div class="skeleton skeleton-card"></div>
-  </div>
-</div>
+  <div id="elenco" aria-live="polite"></div>
+
+  <p style="margin:var(--s-5) 0 0;font-size:var(--fs-micro);color:var(--ink-4)">
+    Ordinamento predefinito: prima le gare che richiedono un'azione umana, poi per ultimo aggiornamento.
+  </p>
+</main>
+
+<!-- Nuova gara: overlay di vetro sull'elenco, che resta riconoscibile dietro
+     al blur. Costruito da elenco.js all'apertura, non allo start. -->
+<div class="overlay" id="overlay-nuova-gara" hidden></div>
+
+<script src="js/dominio.js"></script>
 <script src="js/api.js"></script>
 <script src="js/elenco.js"></script>
 </body>

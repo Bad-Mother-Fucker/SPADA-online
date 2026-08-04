@@ -1,1021 +1,1303 @@
-// gara.js — guscio persistente della pagina gara + router per le viste
-// (7 fasi, Grafo, Attività, Impostazioni), redesign "Liquid Glass".
+// gara.js — guscio della pagina gara: router, stream, caricamento dei
+// registri e azioni. Le viste stanno in viste.js e non fanno fetch.
 //
-// Architettura (vedi Schema Navigazione.dc.html nell'esportazione di
-// design): un solo guscio (barra applicativa, intestazione gara,
-// stepper, assistente flottante) che non si ricarica mai; un'area
-// centrale che cambia in base all'hash dell'URL. Lo stream SSE si apre
-// una volta sola qui, non per-vista.
-//
-// URL per vista (hash-routing, coerente con lo stack senza build):
-//   #/fase/<n>
-//   #/fase/5/proposta/<id>
-//   #/fase/6/deliverable/<percorso-output-incodificato>
-//   #/attivita
-//   #/impostazioni
-// Il Grafo NON è una vista del guscio: ha una pagina propria
-// (grafo.html?slug=&tipo=, Sprint 10.1, dati reali da GET /grafo). Un
-// vecchio #/grafo viene rimbalzato lì da reindirizzaSeGrafo().
+// Regole di struttura (dallo schema di navigazione del design):
+//   · il guscio non si ricarica mai al cambio vista;
+//   · lo stream SSE è aperto una volta dal guscio, non dalle viste;
+//   · ogni vista ha una URL propria, così è linkabile e sta nella cronologia;
+//   · l'assistente è un pannello flottante: non occupa layout e non cambia
+//     con la fase, perché interroga sempre l'intera gara.
 
-const params = new URLSearchParams(location.search);
-const SLUG = params.get("slug");
+const { h, s, set, I, punto, Toast } = UI;
+
+const SLUG = new URLSearchParams(location.search).get("slug");
 if (!SLUG) {
-  document.body.innerHTML = "<p style='padding:2rem'>Slug gara mancante nell'URL (?slug=...).</p>";
+  document.body.replaceChildren(h("div", { class: "shell" },
+    h("div", { class: "pageerror" }, h("div", null,
+      h("h3", null, "Slug della gara mancante"),
+      h("p", null, "L'indirizzo non indica quale gara aprire. Serve un parametro ", h("code", { class: "mono" }, "?slug="), "."),
+      h("a", { class: "btn btn--primary", href: "index.html" }, "Torna all'elenco gare")))));
   throw new Error("slug mancante");
 }
-const NOMI_FASE = {
-  1: "Acquisizione documenti", 2: "Estrazione requisiti", 3: "Analisi capitolato",
-  4: "Ricerca soluzioni", 5: "Revisione proposte", 6: "Deliverables",
-  7: "Audit e consegna",
-};
-const KICKER_FASE = {
-  1: "Fase 1 · acquisizione", 2: "Fase 2 · requisiti", 3: "Fase 3 · analisi",
-  4: "Fase 4 · gap e prove", 5: "Fase 5 · checkpoint umano", 6: "Fase 6 · deliverables",
-  7: "Fase 7 · audit di consegna",
-};
-const SUB_FASE_FASI = {
-  1: "Categorie separate perché la pipeline le tratta in modo diverso: il disciplinare guida i requisiti, gli elaborati l'analisi tecnica, i P7M richiedono verifica di firma.",
-  2: "Ogni requisito porta con sé la provenienza puntuale. Da qui in avanti l'assistente conversazionale è attivo.",
-  3: "Lettura critica del capitolato: cosa vincola l'offerta, cosa la premia, dove il testo è ambiguo.",
-  4: "Distanza fra ciò che la gara richiede e ciò che l'offerta dimostra oggi, ancorata alle prove documentali.",
-  5: "Decisione proposta per proposta: approvate entrano nei deliverable, rimandate tornano agli agenti con la tua nota, scartate restano nello storico.",
-  6: "Elenco ricavato dal disciplinare di questa gara. Ogni deliverable ha agente e skill propri e può girare in parallelo.",
-  7: "Verifica di completezza e consegnabilità del plico — non una seconda verifica delle prove, già svolta in Fase 4 e 5.",
-};
-// Prefissi di output/ associati a ciascuna fase (best-effort, coerente con
-// DOC_TYPES di scripts/render/md_to_html.js — non tutte le fasi hanno una
-// cartella propria).
-const FASE_OUTPUT_PREFIX = {
-  1: [], 2: ["02_graph/"], 3: ["03_criteria/"], 4: ["04_doc_summaries/"],
-  5: ["05_criteria_outputs/", "06_registers/"], 6: ["10_offer/"], 7: ["07_questions/"],
-};
-const GATE_UMANO = new Set([3, 5, 7]);
 
-const STATO_BADGE = { completata: "good", errore: "crit", da_rivedere: "accent", in_esecuzione: "info", da_eseguire: "na" };
-const STATO_LABEL = { completata: "Completata", errore: "Errore", da_rivedere: "Da rivedere", in_esecuzione: "In esecuzione", da_eseguire: "Da eseguire" };
+const vuoto = () => ({ stato: "caricamento", dati: null, errore: null, percorso: "" });
 
-// ── Stato applicativo in memoria ────────────────────────────────────
-const S = {
-  dato: null,           // ultima risposta di Api.dettaglioGara
-  route: null,           // { view, fase, sub, subId, query }
-  assistantOpen: false,
-  assistantMsgs: [],
-  assistantBusy: false,
-  sseOk: false,
-  outputCache: null,
+const stato = {
+  slug: SLUG,
+  manifest: null,
+  fasi: {},
+  attivita: {},
+  caricamento: true,
+  erroreGara: null,
+  output: [],
+  outputCaricato: false,
+  documenti: vuoto(),
+  runLog: vuoto(),
+  registri: {
+    criteri: vuoto(), analisi: vuoto(), gap: vuoto(),
+    proposte: vuoto(), audit: vuoto(), deliverable: vuoto(), grafo: vuoto(),
+  },
+  contenutoDeliverable: vuoto(),
+  dettaglioProposta: vuoto(),
+  proposteOperatore: vuoto(),
+  formProposta: { criterio: "", gap_id: "", titolo: "", descrizione: "", invio: false },
+  interventi: { messaggi: [], invio: false, bozza: "", errore: null },
+  vista: { tipo: "fase", n: 1, sub: null },
+  gapAperto: null,
+  espansi: { requisiti: false, proposte: false },
+  decisioni: {},
+  storicoDecisioni: [],
+  filtroAttivita: "tutte",
+  sse: "connessione",
+  ultimoEvento: null,
+  sistema: { auth: null, pipeline: null, prezzari: null },
+  assistente: { aperto: false, messaggi: [], pensa: false, bozza: "", errore: null },
+  upload: { inCorso: [], rifiutati: [] },
 };
 
-// ══════════════════════ ROUTER (hash) ═══════════════════════════════
-function parseRoute() {
-  let h = location.hash.replace(/^#\/?/, "");
-  let query = new URLSearchParams();
-  const qIdx = h.indexOf("?");
-  if (qIdx >= 0) { query = new URLSearchParams(h.slice(qIdx + 1)); h = h.slice(0, qIdx); }
-  const parts = h.split("/").filter(Boolean);
-  if (parts[0] === "fase" && parts[1]) {
-    const fase = Number(parts[1]);
-    if (parts[2] === "proposta" && parts[3]) return { view: "fase", fase, sub: "proposta", subId: decodeURIComponent(parts[3]), query };
-    if (parts[2] === "deliverable" && parts[3]) return { view: "fase", fase, sub: "deliverable", subId: decodeURIComponent(parts[3]), query };
-    return { view: "fase", fase, query };
+// ===========================================================================
+// Router — hash come sorgente di verità della vista
+// ===========================================================================
+
+/** #/fase/5 · #/fase/5/proposta/P-07 · #/fase/6/deliverable/D-01
+    #/grafo/gap · #/attivita · #/impostazioni */
+function leggiHash() {
+  const parti = (location.hash || "").replace(/^#\/?/, "").split("/").filter(Boolean);
+  if (!parti.length) return null;
+  if (parti[0] === "fase") {
+    const n = Number(parti[1]);
+    if (!(n >= 1 && n <= 7)) return null;
+    const sub = (parti[2] === "proposta" || parti[2] === "deliverable") ? decodeURIComponent(parti[3] || "") : null;
+    return { tipo: "fase", n, sub: sub || null };
   }
-  if (parts[0] === "attivita") return { view: "attivita", query };
-  if (parts[0] === "impostazioni") return { view: "impostazioni", query };
-  return null; // nessuna rotta esplicita: si va sulla fase corrente al primo load
+  if (parti[0] === "grafo") return { tipo: "grafo", filtro: parti[1] || "tutti", fase: parti[2] || null };
+  if (parti[0] === "attivita") return { tipo: "attivita" };
+  if (parti[0] === "impostazioni") return { tipo: "impostazioni" };
+  return null;
 }
 
-function faseCorrenteNum(fasi) {
-  for (let n = 1; n <= 7; n++) {
-    const k = chiaveFase(fasi, n);
-    if (k && fasi[k].stato !== "completata") return n;
+function scriviHash(v) {
+  if (v.tipo === "fase") {
+    const coda = v.sub ? `/${v.n === 6 ? "deliverable" : "proposta"}/${encodeURIComponent(v.sub)}` : "";
+    return `#/fase/${v.n}${coda}`;
   }
-  return 7;
+  if (v.tipo === "grafo") return `#/grafo/${v.filtro || "tutti"}${v.fase ? "/" + v.fase : ""}`;
+  return `#/${v.tipo}`;
 }
 
-function chiaveFase(fasi, n) {
-  return Object.keys(fasi || {}).find((k) => k.startsWith(`${n}_`));
+/** Cambia vista. Il guscio resta: si ridisegna solo l'area centrale. */
+function vai(v, sostituisci = false) {
+  const nuovo = scriviHash(v);
+  if (location.hash === nuovo) { applicaVista(v); return; }
+  if (sostituisci) history.replaceState(null, "", nuovo);
+  else location.hash = nuovo;
+  applicaVista(v);
 }
 
-function navigate(hash) { location.hash = hash; }
-
-// Compatibilità: un #/grafo (bookmark/link vecchio) rimbalza sulla pagina
-// reale invece di restare bloccato su una vista che non esiste più.
-function reindirizzaSeGrafo() {
-  const h = location.hash.replace(/^#\/?/, "");
-  if (h.split("?")[0] !== "grafo") return false;
-  const query = new URLSearchParams(h.split("?")[1] || "");
-  apriGrafo(query.get("tipo"));
-  return true;
+function applicaVista(v) {
+  stato.vista = v;
+  stato.contenutoDeliverable = vuoto();
+  stato.dettaglioProposta = vuoto();
+  assicuraDati(v);
+  disegnaVista();
+  // Entrare in una sottovista significa cambiare argomento: la lettura
+  // riparte dall'alto, non da dove si era rimasti nell'elenco.
+  if (v.sub) document.getElementById("vista").scrollIntoView({ block: "start", behavior: "smooth" });
 }
 
-window.addEventListener("hashchange", () => { if (reindirizzaSeGrafo()) return; S.route = parseRoute() || S.route; renderAll(); });
+window.addEventListener("hashchange", () => {
+  const v = leggiHash();
+  if (v) applicaVista(v);
+});
 
-// ══════════════════════ CARICAMENTO DATI ════════════════════════════
-async function ricarica(mostraErrorePagina) {
+// ===========================================================================
+// Caricamento dati
+// ===========================================================================
+
+/** Legge un elaborato di output. Un 404 non è un errore: significa che la
+    fase non l'ha ancora prodotto, ed è uno stato previsto dal design.
+    L'elenco degli output è già noto: se il file non c'è non lo si chiede,
+    così una gara appena creata non genera una raffica di 404. */
+async function leggiRegistro(percorso, parser) {
+  if (stato.outputCaricato && !stato.output.includes(percorso)) {
+    return { stato: "vuoto", dati: [], errore: null, percorso };
+  }
   try {
-    const d = await Api.dettaglioGara(SLUG);
-    S.dato = d;
-    S.outputCache = null;
-    if (!S.route) {
-      const fc = faseCorrenteNum(d.fasi.fasi || {});
-      S.route = { view: "fase", fase: fc, query: new URLSearchParams() };
-      location.hash = `#/fase/${fc}`;
-    }
-    renderAll();
+    const testo = await Api.testoOutput(SLUG, percorso);
+    const dati = parser(testo);
+    const vuotoDavvero = Array.isArray(dati) ? dati.length === 0 : !dati;
+    return vuotoDavvero
+      ? { stato: "vuoto", dati: Array.isArray(dati) ? [] : null, errore: null, percorso }
+      : { stato: "ok", dati, errore: null, percorso, grezzo: testo };
   } catch (e) {
-    if (mostraErrorePagina) {
-      document.querySelector(".page").innerHTML = `
-        <div class="error-state">
-          <h3>Non riesco a caricare questa gara</h3>
-          <p>${e.message}</p>
-          <button type="button" class="ghost" onclick="location.reload()">Riprova</button>
-        </div>`;
-    }
+    if (e.stato === 404) return { stato: "vuoto", dati: [], errore: null, percorso };
+    return { stato: "errore", dati: null, errore: e, percorso };
   }
 }
 
-// ══════════════════════ GUSCIO: barra applicativa ═══════════════════
-function renderCrumb() {
-  document.getElementById("g-crumb-slug").textContent = SLUG;
-  const r = S.route;
-  const nomi = { grafo: "Grafo", attivita: "Attività", impostazioni: "Impostazioni" };
-  let testo = "—";
-  if (r) {
-    if (r.view === "fase") {
-      testo = `Fase ${r.fase}${r.sub === "proposta" ? ` / proposta ${r.subId}` : r.sub === "deliverable" ? ` / deliverable` : ""}`;
-    } else testo = nomi[r.view] || r.view;
+/** Prova più percorsi: gli agenti non scrivono sempre lo stesso file. */
+async function leggiPrimoDisponibile(percorsi, parser) {
+  let ultimo = null;
+  for (const p of percorsi) {
+    const r = await leggiRegistro(p, parser);
+    if (r.stato === "ok") return r;
+    ultimo = ultimo && ultimo.stato === "errore" ? ultimo : r;
   }
-  document.getElementById("g-crumb-vista").textContent = testo;
+  return ultimo || { stato: "vuoto", dati: [], errore: null, percorso: percorsi[0] };
 }
 
-function renderTools() {
-  const el = document.getElementById("g-tools");
-  const r = S.route;
-  const tools = [
-    ["grafo", "Grafo", null],
-    ["attivita", "Attività", "#/attivita"],
-    ["impostazioni", "Impostazioni", "#/impostazioni"],
-  ];
-  el.innerHTML = "";
-  tools.forEach(([key, label, hash]) => {
-    const b = document.createElement("button");
-    b.type = "button"; b.className = "tool-btn";
-    b.textContent = label;
-    b.setAttribute("aria-pressed", String(r && r.view === key));
-    // Il Grafo è una pagina propria (grafo.html): esce dal guscio invece
-    // di cambiare vista al suo interno, vedi apriGrafo().
-    b.onclick = key === "grafo" ? () => apriGrafo() : () => navigate(hash);
-    el.appendChild(b);
-  });
+const inCorso = new Set();
+
+/** Carica solo ciò che la vista corrente mostra davvero. */
+function assicuraDati(v) {
+  const serve = [];
+  if (v.tipo === "fase") {
+    if (v.n === 1) serve.push("documenti");
+    if (v.n === 2) serve.push("criteri");
+    if (v.n === 3) serve.push("analisi");
+    if (v.n === 4) serve.push("gap", "proposteOperatore");
+    if (v.n === 5) serve.push("proposte", "gap", "grafo");
+    if (v.n === 6) serve.push("deliverable");
+    if (v.n === 7) serve.push("audit", "deliverable");
+  } else if (v.tipo === "grafo") {
+    serve.push("grafo", "gap", "deliverable");
+  } else if (v.tipo === "attivita") {
+    serve.push("runLog", "interventi");
+  } else if (v.tipo === "impostazioni") {
+    serve.push("sistema");
+  }
+  serve.forEach(carica);
+  if (v.tipo === "fase" && v.n === 6 && v.sub) caricaContenutoDeliverable(v.sub);
+  if (v.tipo === "fase" && v.n === 5 && v.sub) caricaDettaglioProposta(v.sub);
 }
 
-function renderHeader() {
-  const d = S.dato; if (!d) return;
-  document.getElementById("g-nome").textContent = d.manifest.nome || SLUG;
-  const esec = d.manifest.esecuzione || {};
-  const prezz = d.manifest.prezzario || {};
-  document.getElementById("g-meta").textContent = `job più recente pipeline ${d.manifest.pipeline_version || ""}`;
+function carica(chiave, forza = false) {
+  if (inCorso.has(chiave)) return;
+  const corrente = chiave === "documenti" ? stato.documenti
+    : chiave === "runLog" ? stato.runLog
+    : chiave === "proposteOperatore" ? stato.proposteOperatore
+    : chiave === "sistema" || chiave === "interventi" ? null
+    : stato.registri[chiave];
+  if (!forza && corrente && corrente.stato !== "caricamento") return;
 
-  const fc = faseCorrenteNum(d.fasi.fasi || {});
-  const kCorr = chiaveFase(d.fasi.fasi, fc);
-  const corpo = kCorr ? d.fasi.fasi[kCorr] : {};
-  const tags = document.getElementById("g-tags");
-  tags.innerHTML = "";
-  const badgeStato = document.createElement("span");
-  badgeStato.className = `status-badge ${STATO_BADGE[corpo.stato] || "na"}`;
-  badgeStato.textContent = `${STATO_LABEL[corpo.stato] || "Da eseguire"} · Fase ${fc}`;
-  tags.appendChild(badgeStato);
-  [SLUG, `${prezz.regione || ""} · prezzario ${prezz.anno || ""}`, `${esec.modello || ""} · ${esec.effort || ""}`].forEach((t, i) => {
-    const s = document.createElement("span");
-    s.className = "tag" + (i === 2 ? " mono" : "");
-    s.textContent = t;
-    tags.appendChild(s);
-  });
+  inCorso.add(chiave);
+  const fine = (res) => {
+    inCorso.delete(chiave);
+    if (chiave === "documenti") stato.documenti = res;
+    else if (chiave === "runLog") stato.runLog = res;
+    else if (chiave === "proposteOperatore") stato.proposteOperatore = res;
+    else stato.registri[chiave] = res;
+    disegnaVista();
+  };
 
-  document.getElementById("g-sintesi").innerHTML =
-    `<span class="kicker">Sintesi ·</span> ${(corpo.sintesi && corpo.sintesi.trim()) || `Fase corrente: ${fc} — ${NOMI_FASE[fc]}. Nessuna sintesi ancora prodotta per questa fase.`}`;
-}
+  switch (chiave) {
+    case "documenti":
+      Api.elencoDocumenti(SLUG)
+        .then((d) => fine(d.length
+          ? { stato: "ok", dati: d, errore: null, percorso: "/documenti" }
+          : { stato: "vuoto", dati: [], errore: null, percorso: "/documenti" }))
+        .catch((e) => fine(risorsaDaErrore(e, `/gare/${SLUG}/documenti`)));
+      break;
 
-function renderStepper() {
-  const d = S.dato; if (!d) return;
-  const el = document.getElementById("g-stepper");
-  el.innerHTML = "";
-  const r = S.route;
-  for (let n = 1; n <= 7; n++) {
-    const k = chiaveFase(d.fasi.fasi, n);
-    const stato = k ? d.fasi.fasi[k].stato : "da_eseguire";
-    const li = document.createElement("li");
-    const attivo = r && r.view === "fase" && r.fase === n;
-    li.innerHTML = `
-      <button type="button" aria-current="${attivo}">
-        <span class="bar ${stato}"></span>
-        <span class="num">${String(n).padStart(2, "0")}</span>
-        <span class="title">${NOMI_FASE[n]}</span>
-        <span class="status">${STATO_LABEL[stato] || "—"}</span>
-      </button>`;
-    li.querySelector("button").onclick = () => navigate(`#/fase/${n}`);
-    el.appendChild(li);
+    case "runLog":
+      Api.runLog(SLUG)
+        .then((l) => {
+          const runs = normalizzaRuns(l.runs || []);
+          fine(runs.length
+            ? { stato: "ok", dati: runs, errore: null, percorso: "/run-log", grezzo: l }
+            : { stato: "vuoto", dati: [], errore: null, percorso: "/run-log", grezzo: l });
+        })
+        .catch((e) => fine({ stato: "errore", dati: null, errore: e, percorso: `/gare/${SLUG}/run-log` }));
+      break;
+
+    case "criteri":
+      leggiPrimoDisponibile(
+        ["03_criteria/criteria_matrix.md", "03_criteria/criteria_checklist.md"],
+        parseCriteri).then(fine);
+      break;
+
+    case "analisi":
+      leggiPrimoDisponibile(
+        ["03_criteria/gara_brief.md", "03_criteria/strategy_audit.md"],
+        parseAnalisi).then(fine);
+      break;
+
+    case "gap":
+      leggiRegistro("06_registers/gap_register.md", parseGap).then((res) => {
+        // Il primo gap grave si apre da solo: le prove sono il motivo per
+        // cui questa vista esiste, e un elenco tutto chiuso le nasconde.
+        if (stato.gapAperto === null && res.stato === "ok" && res.dati.length) {
+          const grave = res.dati.find((g) => g.severita === "alta") || res.dati[0];
+          stato.gapAperto = grave.id;
+        }
+        fine(res);
+      });
+      break;
+
+    case "proposte":
+      leggiRegistro("06_registers/proposal_register.md", parseProposte).then(fine);
+      break;
+
+    case "audit":
+      leggiRegistro("06_registers/audit_summary.md", parseAudit).then(fine);
+      break;
+
+    case "deliverable":
+      Api.elencoDeliverables(SLUG)
+        .then((d) => fine(d.length
+          ? { stato: "ok", dati: d, errore: null, percorso: "/deliverables" }
+          : { stato: "vuoto", dati: [], errore: null, percorso: "/deliverables" }))
+        .catch((e) => fine(risorsaDaErrore(e, `/gare/${SLUG}/deliverables`)));
+      break;
+
+    case "grafo":
+      Api.grafo(SLUG)
+        .then((g) => fine((g.nodi || []).length
+          ? { stato: "ok", dati: g, errore: null, percorso: "/grafo" }
+          : { stato: "vuoto", dati: g, errore: null, percorso: "/grafo" }))
+        .catch((e) => fine(risorsaDaErrore(e, `/gare/${SLUG}/grafo`)));
+      break;
+
+    case "proposteOperatore":
+      Api.elencoProposteOperatore(SLUG)
+        .then((l) => fine(l.length
+          ? { stato: "ok", dati: l, errore: null, percorso: "/proposte-operatore" }
+          : { stato: "vuoto", dati: [], errore: null, percorso: "/proposte-operatore" }))
+        .catch((e) => fine(risorsaDaErrore(e, `/gare/${SLUG}/proposte-operatore`)));
+      break;
+
+    case "interventi":
+      inCorso.delete("interventi");
+      Api.cronologiaInterventi(SLUG)
+        .then((righe) => {
+          stato.interventi.messaggi = righe.map((r) => ({
+            mio: r.ruolo === "utente", testo: r.testo, quando: r.creato_il,
+          }));
+          disegnaVista();
+        })
+        .catch(() => { /* nessuno storico: il pannello resta vuoto, non in errore */ });
+      break;
+
+    case "sistema":
+      inCorso.delete("sistema");
+      caricaSistema();
+      break;
   }
 }
 
-function renderSse() {
-  const el = document.getElementById("g-sse");
-  el.className = "sse-pill " + (S.sseOk ? "ok" : "off");
-  el.innerHTML = `<span class="dot"></span>${S.sseOk ? "SSE connesso" : "SSE non connesso"}`;
+/** Tre esiti diversi, che l'operatore deve poter distinguere:
+    · 404 → la pipeline non l'ha ancora prodotta (stato vuoto, previsto);
+    · 405/501 → il backend non espone affatto questo endpoint, cioè è più
+      vecchio del frontend: non è un guasto della gara, è un disallineamento
+      di versione, e dirlo evita di far cercare un problema che non c'è;
+    · altro → errore vero. */
+function risorsaDaErrore(e, percorso) {
+  if (e.stato === 404) return { stato: "vuoto", dati: [], errore: null, percorso };
+  if (e.stato === 405 || e.stato === 501) return { stato: "assente", dati: null, errore: e, percorso };
+  return { stato: "errore", dati: null, errore: e, percorso };
 }
 
-// ══════════════════════ ASSISTENTE (Sprint 7, sola lettura, reale) ══
-function assistenteDisponibile() {
-  const d = S.dato; if (!d) return false;
-  const k2 = chiaveFase(d.fasi.fasi, 2);
-  return !!(k2 && d.fasi.fasi[k2].stato === "completata");
+function caricaSistema() {
+  const set1 = (k, v) => { stato.sistema[k] = v; disegnaVista(); };
+  Api.sistemaAuth().then((v) => set1("auth", v)).catch(() => set1("auth", { disponibile: false, motivo: "endpoint non raggiungibile" }));
+  Api.sistemaPipeline().then((v) => set1("pipeline", v)).catch(() => set1("pipeline", { versione: "non disponibile", git_ref: "n.d." }));
+  Api.sistemaPrezzari().then((v) => set1("prezzari", Array.isArray(v) ? v : [])).catch(() => set1("prezzari", []));
 }
 
-function renderAssistantFab() {
-  const btn = document.getElementById("g-assistant-fab");
-  const ok = assistenteDisponibile();
-  btn.disabled = !ok;
-  btn.title = ok ? "" : "Disponibile dopo il completamento della Fase 2 (costruzione del grafo di conoscenza).";
-  btn.onclick = () => { S.assistantOpen = !S.assistantOpen; renderAssistantPanel(); };
-}
+async function caricaContenutoDeliverable(id) {
+  const res = stato.registri.deliverable;
+  if (res.stato !== "ok") return;
+  const d = res.dati.find((x) => x.id === id);
+  if (!d) return;
 
-const CHI_PER_RUOLO = { utente: "Tu", assistente: "Assistente", claude: "Claude" };
-function renderAssistantMsg(m) {
-  const div = document.createElement("div");
-  div.className = `chat-msg ${m.ruolo}`;
-  div.innerHTML = `<div class="who">${CHI_PER_RUOLO[m.ruolo] || m.ruolo}</div><div class="text"></div>`;
-  div.querySelector(".text").textContent = m.testo;
-  return div;
-}
+  const cartella = d.tipo === "relazione_tecnica" ? "10_offer/" : `10_offer/${d.id}/`;
+  const file = (stato.output || []).filter((p) =>
+    p.startsWith(cartella) && !p.slice(cartella.length).includes("/") && p.endsWith(".md"));
 
-async function apriAssistente() {
-  const log = document.getElementById("g-assistant-log");
-  log.innerHTML = `<p style="color:var(--ink-3);font-size:var(--fs-xs)">Caricamento cronologia…</p>`;
+  if (!file.length) {
+    stato.contenutoDeliverable = { stato: "vuoto", dati: null, sezioni: [], errore: null, percorso: cartella };
+    disegnaVista();
+    return;
+  }
   try {
-    const storia = await Api.cronologiaAssistente(SLUG);
-    log.innerHTML = "";
-    if (storia.length === 0) {
-      log.innerHTML = `<p style="color:var(--ink-3);font-size:var(--fs-xs)">Nessuna conversazione ancora. Fai una domanda sulla gara qui sotto.</p>`;
+    const testo = await Api.testoOutput(SLUG, file[0]);
+    const paragrafi = [];
+    const sezioni = [];
+    for (const sez of Md.sezioni(testo)) {
+      paragrafi.push({ titolo: sez.titolo });
+      for (const p of Md.paragrafi(sez.corpo, 3)) paragrafi.push({ testo: p });
+      sezioni.push({ titolo: sez.titolo, parole: sez.corpo.split(/\s+/).filter(Boolean).length });
+    }
+    if (!paragrafi.length) {
+      for (const p of Md.paragrafi(testo, 6)) paragrafi.push({ testo: p });
+    }
+    stato.contenutoDeliverable = paragrafi.length
+      ? { stato: "ok", dati: paragrafi, sezioni, errore: null, percorso: file[0] }
+      : { stato: "vuoto", dati: null, sezioni: [], errore: null, percorso: file[0] };
+  } catch (e) {
+    stato.contenutoDeliverable = risorsaDaErrore(e, file[0]);
+  }
+  disegnaVista();
+}
+
+// ===========================================================================
+// Parser dei registri
+// ===========================================================================
+
+function parseCriteri(testo) {
+  const t = Md.tabellaCon(testo, [["id", "codice", "criterio"]]);
+  if (!t) return [];
+  const righe = Md.righeMappate(t, {
+    id: ["id", "codice", "criterio", "crit", "rif"],
+    testo: ["descrizione", "requisito", "oggetto", "titolo", "contenuto", "criterio"],
+    fonte: ["fonte", "riferimento", "documento", "provenienza", "origine", "sezione"],
+    tipo: ["tipo", "natura", "categoria"],
+    copertura: ["copertura", "stato", "evidenza", "coperto"],
+    punti: ["punti", "punteggio", "peso"],
+  });
+  return righe.map((r) => ({
+    id: r.id,
+    testo: r.testo && r.testo !== r.id ? r.testo : (r._celle[1] || ""),
+    fonte: r.fonte,
+    tipo: /premi|migliorat/i.test(r.tipo) ? "premiante" : /vincol|obblig/i.test(r.tipo) ? "vincolante" : (r.tipo || ""),
+    copertura: coperturaDa(r.copertura),
+    punti: r.punti,
+  })).filter((r) => r.id || r.testo);
+}
+
+function coperturaDa(s) {
+  const n = String(s || "").toLowerCase();
+  if (/critic|conflitt|contrar/.test(n)) return "criticita";
+  if (/scopert|assent|mancant|no\b|nessun/.test(n)) return "scoperto";
+  if (/copert|ok|s[iì]\b|present|verificat/.test(n)) return "coperto";
+  return "";
+}
+
+function parseAnalisi(testo) {
+  const sezioni = Md.sezioni(testo)
+    .filter((s2) => s2.livello >= 2 && s2.corpo.trim())
+    .map((s2) => {
+      const sev = Md.severita(s2.titolo) || Md.severita(s2.corpo);
+      const par = Md.paragrafi(s2.corpo, 1);
+      return {
+        ref: (/^((?:art\.?|sez\.?|cap\.?|§)\s*[\w.]+)/i.exec(s2.titolo) || [])[1] || "",
+        titolo: s2.titolo,
+        severita: sev,
+        badge: sev === "alta" ? "Criticità alta" : sev === "media" ? "Da presidiare" : sev === "bassa" ? "Conforme" : null,
+        nota: par[0] || "",
+        citazione: Md.citazione(s2.corpo),
+      };
+    })
+    .filter((s2) => s2.nota || s2.citazione);
+
+  const sintesi = Md.paragrafi(testo, 2);
+  if (!sintesi.length && !sezioni.length) return null;
+
+  const conteggi = { alta: 0, media: 0, bassa: 0 };
+  for (const s2 of sezioni) if (s2.severita) conteggi[s2.severita]++;
+  return { sintesi, sezioni, conteggi };
+}
+
+function parseGap(testo) {
+  const t = Md.tabellaCon(testo, [["id", "gap", "codice"]]);
+  if (!t) return [];
+  const righe = Md.righeMappate(t, {
+    id: ["id", "gap", "codice"],
+    requisito: ["criterio", "requisito", "crit", "riferimento", "rif"],
+    titolo: ["titolo", "descrizione", "oggetto", "gap"],
+    severita: ["severita", "gravita", "priorita", "impatto", "rischio"],
+    sintesi: ["sintesi", "note", "dettaglio", "motivazione", "analisi"],
+    proposta: ["proposta", "soluzione", "copertura"],
+    prova: ["prova", "prove", "evidenza", "evidenze", "fonte", "riscontro"],
+  });
+  return righe.map((r) => ({
+    id: r.id,
+    requisito: r.requisito && r.requisito !== r.id ? r.requisito : "",
+    titolo: r.titolo && r.titolo !== r.id ? r.titolo : (r._celle[1] || ""),
+    severita: Md.severita(r.severita),
+    sintesi: r.sintesi,
+    proposta: /^P[-.]?\w+/i.test(r.proposta) ? r.proposta : "",
+    nota: "",
+    prove: r.prova
+      ? [{ fonte: "", testo: r.prova, contraria: /contrari|conflitt|supera|viola/i.test(r.prova) }]
+      : [],
+  })).filter((g) => g.id || g.titolo);
+}
+
+function parseProposte(testo) {
+  const t = Md.tabellaCon(testo, [["id", "proposta", "codice"]]);
+  if (!t) return [];
+  const righe = Md.righeMappate(t, {
+    id: ["id", "proposta", "codice"],
+    titolo: ["titolo", "descrizione", "oggetto"],
+    criterio: ["criterio", "sottocriterio", "crit"],
+    riferimento: ["gap", "origine", "riferimento", "rif"],
+    stato: ["stato", "decisione", "esito"],
+    sintesi: ["sintesi", "note", "contenuto", "motivazione"],
+    severita: ["severita", "priorita", "impatto", "rischio"],
+    punteggio: ["punti", "punteggio", "peso"],
+    agente: ["agente", "autore"],
+  });
+  return righe.map((r) => ({
+    id: r.id,
+    titolo: r.titolo && r.titolo !== r.id ? r.titolo : (r._celle[1] || ""),
+    criterio: r.criterio,
+    riferimento: r.riferimento || r.criterio,
+    decisione: Md.decisione(r.stato),
+    sintesi: r.sintesi,
+    severita: Md.severita(r.severita),
+    punteggio: r.punteggio,
+    agente: r.agente,
+    contenuto: null,
+  })).filter((p) => p.id || p.titolo);
+}
+
+function parseAudit(testo) {
+  const t = Md.tabellaCon(testo, [["voce", "controllo", "verifica", "requisito", "check"]]);
+  if (t) {
+    const righe = Md.righeMappate(t, {
+      voce: ["voce", "controllo", "verifica", "requisito", "check", "oggetto"],
+      esito: ["esito", "stato", "risultato", "conforme"],
+      dettaglio: ["dettaglio", "note", "nota", "motivazione", "osservazioni"],
+    });
+    return righe.map((r) => ({
+      voce: r.voce,
+      dettaglio: r.dettaglio,
+      esito: r.esito || "da verificare",
+      tono: tonoAudit(r.esito),
+    })).filter((v) => v.voce);
+  }
+  // Nessuna tabella: le sezioni del documento diventano voci di checklist.
+  return Md.sezioni(testo)
+    .filter((s2) => s2.livello >= 2 && s2.corpo.trim())
+    .map((s2) => ({
+      voce: s2.titolo,
+      dettaglio: Md.paragrafi(s2.corpo, 1)[0] || "",
+      esito: Md.severita(s2.corpo) === "alta" ? "bloccante" : "da verificare",
+      tono: Md.severita(s2.corpo) === "alta" ? "crit" : "neu",
+    }));
+}
+
+function tonoAudit(s2) {
+  const n = String(s2 || "").toLowerCase();
+  if (/conform|ok|s[iì]\b|superat|present/.test(n)) return "ok";
+  if (/blocc|non conform|kop|fallit|assent|mancant/.test(n)) return "crit";
+  if (/incomplet|parziale|attesa|warn/.test(n)) return "warn";
+  if (/fuori|escluso|manuale/.test(n)) return "info";
+  return "neu";
+}
+
+/** Nodo della proposta nel grafo: contenuto integrale e prove. Esiste solo
+    dopo l'elaborazione del feedback — un 404 qui è normale. */
+/** Gli id dei nodi proposta hanno la forma P-C{criterio}-{num} (vedi
+    PROPOSTA_ID_RE nel backend). Un id del solo registro non è un nodo:
+    chiederlo sarebbe un 400 annunciato. */
+const ID_NODO_PROPOSTA = /^P-C\d+-\d+$/;
+
+async function caricaDettaglioProposta(id) {
+  if (!ID_NODO_PROPOSTA.test(id)) {
+    stato.dettaglioProposta = { stato: "vuoto", dati: null, errore: null, percorso: `/proposte/${id}` };
+    disegnaVista();
+    return;
+  }
+  stato.dettaglioProposta = vuoto();
+  disegnaVista();
+  try {
+    const d = await Api.dettaglioProposta(SLUG, id);
+    stato.dettaglioProposta = { stato: "ok", dati: d, errore: null, percorso: `/proposte/${id}` };
+  } catch (e) {
+    stato.dettaglioProposta = risorsaDaErrore(e, `/gare/${SLUG}/proposte/${id}`);
+  }
+  disegnaVista();
+}
+
+/** Non più usata: i deliverable arrivano da GET /deliverables. Resta il
+    percorso dei file, che serve al workspace. */
+function costruisciDeliverableNonUsato() {
+  const CARTELLE = ["10_offer/", "05_criteria_outputs/"];
+  const TABELLARI = new Set(["xlsx", "xls", "csv"]);
+  const file = (stato.output || [])
+    .filter((p) => CARTELLE.some((c) => p.startsWith(c)) && !p.startsWith("11_view/"))
+    .filter((p) => !/\/$/.test(p));
+
+  if (!file.length) return { stato: "vuoto", dati: [], errore: null, percorso: "/output" };
+
+  const dati = file.map((p, i) => {
+    const nomeFile = p.split("/").pop();
+    const ext = (nomeFile.split(".").pop() || "").toLowerCase();
+    const tabellare = TABELLARI.has(ext);
+    return {
+      codice: `D-${String(i + 1).padStart(2, "0")}`,
+      nome: nomeFile.replace(/\.[a-z0-9]+$/i, "").replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+      cartella: p.split("/").slice(0, -1).join("/") || "output",
+      percorso: p,
+      ext: `.${ext}`,
+      formato: tabellare ? "tabellare" : "testuale",
+      tabellare,
+      prodotto: true,
+    };
+  });
+  return { stato: "ok", dati, errore: null, percorso: "/output" };
+}
+
+function normalizzaRuns(runs) {
+  return runs.slice().reverse().map((r) => {
+    const inizio = Date.parse(r.avviato_il);
+    const fine = Date.parse(r.concluso_il);
+    return {
+      fase: r.fase,
+      avviato_il: r.avviato_il,
+      modello: r.modello,
+      effort: r.effort,
+      esito: r.esito || "sconosciuto",
+      errore: r.errore,
+      umana: !r.modello,
+      durata: Number.isFinite(inizio) && Number.isFinite(fine) ? UI.durata((fine - inizio) / 1000) : "—",
+    };
+  });
+}
+
+// ===========================================================================
+// Disegno del guscio
+// ===========================================================================
+
+document.getElementById("brand-mark").appendChild(I.stella(13));
+document.getElementById("slot-tema").appendChild(UI.Tema.controllo());
+
+const VISTE_TRASVERSALI = [
+  { chiave: "grafo", etichetta: "Grafo", icona: () => I.grafo(11) },
+  { chiave: "attivita", etichetta: "Attività", icona: () => null },
+  { chiave: "impostazioni", etichetta: "Impostazioni", icona: () => null },
+];
+
+function disegnaTrasversali() {
+  const attiva = stato.vista.tipo;
+  const errori = stato.runLog.stato === "ok"
+    ? stato.runLog.dati.filter((r) => r.esito !== "completato" && r.esito !== "in_corso").length
+    : 0;
+  set(document.getElementById("viste-trasversali"), VISTE_TRASVERSALI.map((t) =>
+    h("button", {
+      type: "button", class: "seg__btn",
+      "aria-pressed": String(attiva === t.chiave),
+      onClick: () => vai({ tipo: t.chiave, filtro: "tutti" }),
+    },
+      t.icona(),
+      t.etichetta,
+      t.chiave === "attivita" && errori
+        ? h("span", { class: "seg__count" }, `${errori} err`)
+        : null)));
+}
+
+function disegnaCrumb() {
+  document.getElementById("crumb-slug").textContent = SLUG;
+  const v = stato.vista;
+  let testo;
+  if (v.tipo === "fase") {
+    const f = Dominio.fase(v.n);
+    testo = `Fase ${v.n} · ${f.titolo}`;
+    if (v.sub) testo += ` · ${v.sub}`;
+  } else {
+    testo = { grafo: "Grafo", attivita: "Attività", impostazioni: "Impostazioni" }[v.tipo];
+  }
+  document.getElementById("crumb-vista").textContent = testo;
+  document.title = `${stato.manifest?.nome || SLUG} — ${testo} · SPADA Online`;
+}
+
+function disegnaTestata() {
+  const el = document.getElementById("testata-gara");
+  if (stato.erroreGara) { el.hidden = true; return; }
+  el.hidden = false;
+
+  if (stato.caricamento) {
+    set(el,
+      h("div", { class: "stack stack--3" },
+        h("div", { class: "sk sk--pill" }),
+        h("div", { class: "sk", style: { width: "70%", height: "24px" } }),
+        h("div", { class: "sk", style: { width: "90%" } })));
+    return;
+  }
+
+  const m = stato.manifest || {};
+  const st = Dominio.statoGara(stato.fasi);
+  const meta = Dominio.STATO_GARA[st];
+  const faseN = Dominio.faseCorrente(stato.fasi);
+
+  set(el,
+    h("div", { class: "sheen", "aria-hidden": "true" }),
+    h("div", { class: "tenderhead__grid" },
+      h("div", { class: "tenderhead__main" },
+        h("div", { class: "tenderhead__meta" },
+          h("span", { class: `badge badge--lg badge--${meta.tono}` },
+            I.scintilla(11), `${meta.etichetta} · Fase ${faseN}`),
+          h("span", { class: "chip chip--mono" }, SLUG),
+          h("span", { class: "chip" }, `${m.prezzario?.regione || "—"} · prezzario ${m.prezzario?.anno || "—"}`),
+          h("span", { class: "chip chip--mono" }, `${m.esecuzione?.modello || "—"} · ${m.esecuzione?.effort || "—"}`),
+          m.gara?.scadenza_offerta ? h("span", { class: "chip" }, UI.scadenza(m.gara.scadenza_offerta)) : null),
+        h("h1", null, m.nome || SLUG),
+        h("p", { class: "tenderhead__summary" },
+          h("span", { class: "kicker" }, "Sintesi · "),
+          sintesiGara())),
+      h("div", { class: "tenderhead__aside" },
+        h("div", { class: "tenderhead__actions" },
+          h("button", {
+            type: "button", class: "btn",
+            onClick: () => vai({ tipo: "attivita" }),
+          }, I.codice(13), "Claude Code"),
+          h("button", {
+            type: "button", class: "btn",
+            onClick: () => vai({ tipo: "attivita" }),
+          }, "Attività")),
+        h("span", { class: "faint", style: { fontSize: "var(--fs-micro)" } },
+          stato.ultimoEvento ? `ultimo evento ${UI.quandoRelativo(stato.ultimoEvento)}` : "nessun evento ricevuto"))));
+}
+
+/** La sintesi in testata riassume la fase corrente, non l'intera gara: è
+    ciò che la pipeline ha effettivamente scritto in fasi.json. */
+function sintesiGara() {
+  const n = Dominio.faseCorrente(stato.fasi);
+  const corpo = Dominio.corpoFase(stato.fasi, n) || {};
+  if (corpo.sintesi) return corpo.sintesi;
+  const completate = [1, 2, 3, 4, 5, 6, 7].filter((i) => Dominio.statoFase(stato.fasi, i) === "completata").length;
+  return `${completate} fasi su 7 completate. La pipeline non ha ancora scritto una sintesi per la fase corrente.`;
+}
+
+function disegnaStepper() {
+  const ol = document.getElementById("stepper");
+  set(ol, Dominio.FASI.map((f) => {
+    const st = Dominio.statoFase(stato.fasi, f.n);
+    const meta = Dominio.STATO[st];
+    const corrente = stato.vista.tipo === "fase" && stato.vista.n === f.n;
+    const icona = st === "completata" ? "✓ " : st === "da_rivedere" ? "◆ " : st === "errore" ? "✕ " : "";
+    return h("li", null,
+      h("button", {
+        type: "button", class: "step", dataset: { st },
+        "aria-current": corrente ? "step" : null,
+        onClick: () => vai({ tipo: "fase", n: f.n }),
+      },
+        h("span", { class: "step__bar", "aria-hidden": "true" }),
+        h("span", { class: "step__num" }, icona, f.num),
+        h("span", { class: "step__title" }, f.titolo),
+        h("span", { class: "step__st" }, meta.breve)));
+  }));
+}
+
+const TITOLI_TRASVERSALI = {
+  grafo: ["Vista trasversale", "Grafo della gara",
+    "Documenti, requisiti, gap, proposte e deliverable con i legami che li tengono insieme. Consultabile in qualunque momento, indipendente dalla fase corrente."],
+  attivita: ["Vista trasversale", "Attività della gara",
+    "Storico delle esecuzioni, log grezzo e canale operativo — l'unico punto dell'app che scrive sulla gara, messo accanto al registro di ciò che ha scritto. Sede unica per tutte le fasi."],
+  impostazioni: ["Vista trasversale", "Impostazioni",
+    "Due ambiti separati: i parametri di questa gara e le impostazioni di sistema che valgono per l'intera installazione."],
+};
+
+function disegnaTestataVista() {
+  const el = document.getElementById("testata-vista");
+  const v = stato.vista;
+  let kicker, titolo, sottotitolo, chiaveStato = "trasversale";
+  let indietro = null;
+
+  if (v.tipo === "fase") {
+    const f = Dominio.fase(v.n);
+    kicker = f.kicker; titolo = f.testata; sottotitolo = f.sottotitolo;
+    chiaveStato = Dominio.statoFase(stato.fasi, v.n);
+
+    if (v.n === 5 && v.sub) {
+      const p = (stato.registri.proposte.dati || []).find((x) => x.id === v.sub);
+      kicker = `Fase 5 · dettaglio proposta ${v.sub}`;
+      titolo = p ? (p.titolo || v.sub) : v.sub;
+      sottotitolo = "Contenuto integrale, gap di origine con le prove collegate e storico delle decisioni: tutto ciò che serve per decidere senza aprire gli elaborati.";
+      indietro = { etichetta: "Tutte le proposte", vai: { tipo: "fase", n: 5 } };
+    }
+    if (v.n === 6 && v.sub) {
+      const d = (stato.registri.deliverable.dati || []).find((x) => x.codice === v.sub);
+      kicker = `Fase 6 · workspace ${v.sub}`;
+      titolo = d ? d.nome : v.sub;
+      sottotitolo = d ? `${d.cartella} · formato ${d.formato} (${d.ext})` : "Deliverable non trovato fra quelli prodotti.";
+      indietro = { etichetta: "Tutti i deliverable", vai: { tipo: "fase", n: 6 } };
+      // In una sottovista il badge deve parlare dell'oggetto aperto, non
+      // della fase: un deliverable già prodotto non è «non ancora eseguito».
+      if (d) chiaveStato = d.prodotto ? "completata" : "in_coda";
+    }
+  } else {
+    [kicker, titolo, sottotitolo] = TITOLI_TRASVERSALI[v.tipo];
+  }
+
+  const meta = Dominio.STATO[chiaveStato] || Dominio.STATO.trasversale;
+
+  set(el,
+    h("div", { style: { minWidth: 0 } },
+      h("div", { class: "viewhead__top" },
+        indietro
+          ? h("button", { type: "button", class: "back", onClick: () => vai(indietro.vai) },
+              I.indietro(10), indietro.etichetta)
+          : null,
+        h("span", { class: "kicker" }, kicker)),
+      h("h2", null, titolo),
+      h("p", null, sottotitolo)),
+    h("span", { class: `badge badge--lg badge--${meta.tono}` }, meta.etichetta));
+}
+
+function disegnaVista() {
+  disegnaCrumb();
+  disegnaTrasversali();
+  const vp = document.getElementById("viewport");
+  const testataVista = document.getElementById("testata-vista");
+  const v = stato.vista;
+
+  // Gara non caricata: stepper e testata direbbero «fase 1, in coda» per
+  // ogni fase, cioè un dato inventato. Restano solo barra ed errore.
+  if (stato.erroreGara) {
+    testataVista.hidden = true;
+    document.querySelector(".stepper").hidden = true;
+    set(vp, vistaErroreGara(stato.erroreGara));
+    disegnaAssistente();
+    return;
+  }
+  testataVista.hidden = false;
+  // Anche in caricamento lo stepper direbbe sette fasi «in coda»: compare
+  // quando gli stati sono noti.
+  document.querySelector(".stepper").hidden = stato.caricamento;
+  testataVista.hidden = stato.caricamento;
+  if (!stato.caricamento) disegnaTestataVista();
+
+  if (stato.caricamento) {
+    set(vp, h("div", { class: "card", "aria-busy": "true" },
+      h("div", { class: "stack stack--3" },
+        h("div", { class: "sk", style: { width: "60%" } }),
+        h("div", { class: "sk", style: { width: "85%" } }),
+        h("div", { class: "sk", style: { width: "45%" } }))));
+    return;
+  }
+
+  let nodo;
+  if (v.tipo === "fase") {
+    if (v.n === 1) nodo = Viste.fase1(stato);
+    else if (v.n === 2) nodo = Viste.fase2(stato);
+    else if (v.n === 3) nodo = Viste.fase3(stato);
+    else if (v.n === 4) nodo = Viste.fase4(stato);
+    else if (v.n === 5) nodo = v.sub ? Viste.fase5Dettaglio(stato) : Viste.fase5Elenco(stato);
+    else if (v.n === 6) nodo = v.sub ? Viste.fase6Workspace(stato) : Viste.fase6Elenco(stato);
+    else nodo = Viste.fase7(stato);
+  } else if (v.tipo === "grafo") nodo = Viste.grafo(stato);
+  else if (v.tipo === "attivita") nodo = Viste.attivita(stato);
+  else nodo = Viste.impostazioni(stato);
+
+  set(vp, nodo);
+  disegnaAssistente();
+}
+
+function vistaErroreGara(err) {
+  return h("div", { class: "pageerror" },
+    h("div", null,
+      h("div", { class: "empty__icon empty__icon--crit" }, I.triangolo(20)),
+      h("h3", null, "Non riesco a caricare questa gara"),
+      h("p", null,
+        "Il servizio ha risposto ",
+        h("code", { class: "mono" }, err.stato ? String(err.stato) : "nessuna risposta"),
+        " per ", h("code", { class: "mono" }, err.percorso || `/gare/${SLUG}`),
+        ". I dati della gara non sono stati modificati: nessun job è stato avviato o interrotto."),
+      h("div", { class: "empty__actions" },
+        h("button", { type: "button", class: "btn btn--primary", onClick: ricarica }, "Riprova"),
+        h("a", { class: "btn", href: "index.html" }, "Torna all'elenco gare"))));
+}
+
+function disegna() {
+  disegnaTestata();
+  disegnaStepper();
+  disegnaVista();
+}
+
+// ===========================================================================
+// Stream SSE — aperto una volta dal guscio, non dalle viste
+// ===========================================================================
+
+let sorgente = null;
+let tentativi = 0;
+let timerRiconnessione = null;
+
+function apriStream() {
+  if (sorgente) { sorgente.close(); sorgente = null; }
+  clearTimeout(timerRiconnessione);
+  stato.sse = "connessione";
+  segnalaSse();
+
+  sorgente = new EventSource(Api.streamUrl(SLUG));
+
+  sorgente.onopen = () => {
+    tentativi = 0;
+    stato.sse = "connesso";
+    segnalaSse();
+  };
+
+  sorgente.onmessage = (ev) => {
+    let payload;
+    try { payload = JSON.parse(ev.data); } catch { return; }
+    stato.ultimoEvento = new Date().toISOString();
+    stato.sse = "connesso";
+
+    const prima = JSON.stringify(stato.fasi);
+    stato.fasi = payload.fasi?.fasi || payload.fasi || stato.fasi;
+    stato.attivita = payload.attivita || stato.attivita;
+    segnalaSse();
+    disegnaTestata();
+    disegnaStepper();
+
+    // Un cambio di stato delle fasi può aver prodotto nuovi elaborati: si
+    // rilegge l'output e si invalidano i registri della vista corrente.
+    if (JSON.stringify(stato.fasi) !== prima) {
+      aggiornaOutput().then(() => {
+        invalidaRegistri();
+        assicuraDati(stato.vista);
+        disegnaVista();
+      });
     } else {
-      storia.forEach((m) => log.appendChild(renderAssistantMsg(m)));
-      log.scrollTop = log.scrollHeight;
+      disegnaVista();
     }
-  } catch (e) {
-    log.innerHTML = `<p style="color:var(--crit);font-size:var(--fs-xs)">Errore nel caricare la cronologia: ${e.message}</p>`;
+  };
+
+  sorgente.onerror = () => {
+    sorgente.close();
+    sorgente = null;
+    stato.sse = "perso";
+    segnalaSse();
+    disegnaVista();
+    // Backoff: 2s, 4s, 8s… fino a 30s. Riprovare ogni secondo su un
+    // backend caduto non lo fa tornare su prima.
+    const attesa = Math.min(2000 * 2 ** tentativi, 30000);
+    tentativi += 1;
+    timerRiconnessione = setTimeout(apriStream, attesa);
+  };
+}
+
+function riconnetti() { tentativi = 0; apriStream(); }
+
+function segnalaSse() {
+  const el = document.getElementById("stato-sse");
+  const mappa = {
+    connesso: ["badge badge--ok", "SSE connesso", true],
+    connessione: ["badge", "SSE in connessione", false],
+    perso: ["badge badge--warn", "SSE interrotto", false],
+  };
+  const [classe, testo, pulsa] = mappa[stato.sse] || mappa.connessione;
+  el.className = classe;
+  set(el, h("span", { class: pulsa ? "dot dot--slow" : "dot", "aria-hidden": "true" }), testo);
+  el.title = stato.ultimoEvento ? `Ultimo evento ${UI.quandoRelativo(stato.ultimoEvento)}` : "";
+}
+
+function invalidaRegistri() {
+  for (const k of Object.keys(stato.registri)) stato.registri[k] = vuoto();
+  stato.documenti = vuoto();
+  stato.runLog = vuoto();
+  stato.proposteOperatore = vuoto();
+}
+
+async function aggiornaOutput() {
+  try {
+    stato.output = await Api.elencoOutput(SLUG);
+    stato.outputCaricato = true;
+  } catch {
+    // L'elenco resta quello precedente: meglio stantio che vuoto. Se non è
+    // mai arrivato, i registri tornano a chiedersi uno per uno.
+    stato.outputCaricato = stato.output.length > 0;
   }
 }
 
-function renderAssistantPanel() {
-  const panel = document.getElementById("g-assistant-panel");
-  panel.hidden = !S.assistantOpen;
-  if (S.assistantOpen) apriAssistente();
+// ===========================================================================
+// Assistente di gara — sola lettura, contesto l'intera gara
+// ===========================================================================
+
+const SUGGERIMENTI = [
+  "Quali penali sono previste?",
+  "Cosa pesa di più nel punteggio tecnico?",
+  "Quali requisiti restano scoperti?",
+];
+
+/** Si attiva quando la Fase 2 ha costruito il grafo di conoscenza: prima
+    non avrebbe su cosa rispondere. È lo stesso vincolo che applica il
+    backend (409 se la fase 2 non è completata). */
+const assistentePronto = () => Dominio.statoFase(stato.fasi, 2) === "completata";
+
+function disegnaAssistente() {
+  const pronto = assistentePronto();
+  const a = stato.assistente;
+  const fab = document.getElementById("fab-assistente");
+  const pannello = document.getElementById("assistente");
+
+  // Su una gara che non si è caricata l'assistente non ha contesto: sparisce
+  // invece di restare come pulsante inerte sopra un messaggio d'errore.
+  if (stato.erroreGara || stato.caricamento) {
+    fab.hidden = true;
+    pannello.hidden = true;
+    return;
+  }
+  fab.hidden = false;
+
+  fab.dataset.ready = String(pronto);
+  fab.dataset.open = String(a.aperto && pronto);
+  fab.disabled = !pronto;
+  fab.setAttribute("aria-expanded", String(a.aperto && pronto));
+  set(fab, pronto ? I.chat(15) : I.lucchetto(15),
+    pronto ? (a.aperto ? "Chiudi assistente" : "Assistente di gara") : "Assistente · dalla Fase 2");
+
+  if (!pronto || !a.aperto) { pannello.hidden = true; return; }
+  pannello.hidden = false;
+
+  const messaggi = a.messaggi.length
+    ? a.messaggi.map((m) => h("div", { class: `chat__msg${m.mio ? " chat__msg--me" : ""}` },
+        h("div", { class: "chat__who" }, m.mio ? "Tu" : "Assistente"),
+        h("div", { class: "chat__text" }, m.testo),
+        m.fonte ? h("div", { class: "chat__source" }, m.fonte) : null))
+    : [h("p", { style: { margin: 0, fontSize: "var(--fs-xs)", color: "var(--ink-3)" } },
+        "Nessuna domanda ancora. L'assistente legge documenti ed elaborati già prodotti da questa gara.")];
+
+  set(pannello,
+    h("div", { class: "assistant__head" },
+      h("div", { class: "assistant__title" },
+        h("h2", null, "Assistente di gara"),
+        h("span", { class: "badge badge--sm badge--info" }, "sola lettura"),
+        h("span", { class: "spacer" }),
+        h("button", {
+          type: "button", class: "icon-btn", "aria-label": "Chiudi assistente",
+          onClick: () => { stato.assistente.aperto = false; disegnaAssistente(); document.getElementById("fab-assistente").focus(); },
+        }, I.chiudi(11))),
+      h("p", null, "Risponde solo su documenti ed elaborati di questa gara. Non modifica nulla: per intervenire si usano le azioni di fase e la vista ",
+        h("button", { type: "button", class: "linkbtn", onClick: () => vai({ tipo: "attivita" }) }, "Attività"), ".")),
+
+    h("div", { class: "assistant__scope" },
+      "Contesto: ", h("strong", { style: { color: "var(--ink-2)" } }, "intera gara"), " · ", ambitoAssistente()),
+
+    h("div", { class: "assistant__log chat", role: "log", "aria-live": "polite" },
+      messaggi,
+      a.pensa ? h("div", { class: "typing" }, h("span"), h("span"), h("span")) : null,
+      a.errore
+        ? h("div", { class: "note note--crit" }, I.avviso(14), h("p", null, a.errore))
+        : null),
+
+    h("div", { class: "suggestions" }, SUGGERIMENTI.map((q) =>
+      h("button", { type: "button", class: "suggestion", onClick: () => chiediAssistente(q) }, q))),
+
+    h("div", { class: "composer" },
+      h("input", {
+        type: "text", class: "input", id: "assistente-input", value: a.bozza,
+        placeholder: "Chiedi qualcosa sulla gara…",
+        "aria-label": "Domanda per l'assistente",
+        onInput: (e) => { stato.assistente.bozza = e.target.value; },
+        onKeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); chiediAssistente(); } },
+      }),
+      h("button", {
+        type: "button", class: "composer__send", "aria-label": "Invia",
+        onClick: () => chiediAssistente(),
+      }, I.invia(14))));
+
+  const log = pannello.querySelector(".assistant__log");
+  if (log) log.scrollTop = log.scrollHeight;
 }
-document.getElementById("g-assistant-close").onclick = () => { S.assistantOpen = false; renderAssistantPanel(); };
-document.getElementById("g-assistant-form").addEventListener("submit", async (ev) => {
-  ev.preventDefault();
-  const input = document.getElementById("g-assistant-input");
-  const testo = input.value.trim();
-  if (!testo) return;
-  const log = document.getElementById("g-assistant-log");
-  log.appendChild(renderAssistantMsg({ ruolo: "utente", testo }));
-  input.value = ""; input.disabled = true;
-  const thinking = document.createElement("div");
-  thinking.className = "chat-msg assistente";
-  thinking.innerHTML = `<div class="who">Assistente</div><div class="text">Sto leggendo la gara…</div>`;
-  log.appendChild(thinking);
-  log.scrollTop = log.scrollHeight;
+
+function ambitoAssistente() {
+  const pezzi = [];
+  if (stato.documenti.stato === "ok") pezzi.push(UI.plurale(stato.documenti.dati.length, "documento", "documenti"));
+  if (stato.registri.criteri.stato === "ok") pezzi.push(UI.plurale(stato.registri.criteri.dati.length, "requisito", "requisiti"));
+  if (stato.registri.gap.stato === "ok") pezzi.push(UI.plurale(stato.registri.gap.dati.length, "gap", "gap"));
+  if (stato.registri.proposte.stato === "ok") pezzi.push(UI.plurale(stato.registri.proposte.dati.length, "proposta", "proposte"));
+  return pezzi.length ? pezzi.join(" · ") : "elaborati della gara";
+}
+
+async function chiediAssistente(testoForzato) {
+  const q = (testoForzato || stato.assistente.bozza || "").trim();
+  if (!q || stato.assistente.pensa) return;
+  stato.assistente.messaggi.push({ mio: true, testo: q });
+  stato.assistente.bozza = "";
+  stato.assistente.pensa = true;
+  stato.assistente.errore = null;
+  disegnaAssistente();
+
   try {
-    const r = await Api.chiediAssistente(SLUG, testo);
-    thinking.querySelector(".text").textContent = r.risposta;
+    const r = await Api.chiediAssistente(SLUG, q);
+    stato.assistente.messaggi.push({ mio: false, testo: r.risposta });
   } catch (e) {
-    thinking.querySelector(".text").textContent = `Errore: ${e.message}`;
-    thinking.style.borderColor = "var(--crit-edge)";
-  } finally {
-    input.disabled = false; input.focus();
-    log.scrollTop = log.scrollHeight;
+    // 409 = vincolo di dominio (fase 2 incompleta, oppure job in corso):
+    // è un'informazione, non un guasto, e va detta con le sue parole.
+    stato.assistente.errore = e.stato === 409
+      ? e.message
+      : `Assistente non disponibile (${e.stato || "nessuna risposta"}). La gara non è stata modificata.`;
+  }
+  stato.assistente.pensa = false;
+  disegnaAssistente();
+  const input = document.getElementById("assistente-input");
+  if (input) input.focus();
+}
+
+document.getElementById("fab-assistente").addEventListener("click", () => {
+  if (!assistentePronto()) return;
+  stato.assistente.aperto = !stato.assistente.aperto;
+  disegnaAssistente();
+  if (stato.assistente.aperto) {
+    carica("criteri"); carica("documenti");
+    const input = document.getElementById("assistente-input");
+    if (input) input.focus();
   }
 });
-document.getElementById("g-vai-attivita").onclick = () => navigate("#/attivita");
 
-// ══════════════════════ OUTPUT (elaborati prodotti, reale) ══════════
-async function elencoOutputCached() {
-  if (S.outputCache) return S.outputCache;
-  S.outputCache = await Api.elencoOutput(SLUG);
-  return S.outputCache;
-}
+// La cronologia dell'assistente è persistita dal backend: si recupera al
+// primo accesso, così una conversazione non sparisce con il ricaricamento.
+Api.cronologiaAssistente(SLUG)
+  .then((righe) => {
+    stato.assistente.messaggi = righe.map((r) => ({ mio: r.ruolo === "utente", testo: r.testo }));
+    disegnaAssistente();
+  })
+  .catch(() => { /* nessuna cronologia: si parte dal pannello vuoto */ });
 
-function outputListHtml(files) {
-  const soloMd = files.filter((f) => f.endsWith(".md") && !f.startsWith("11_view/"));
-  if (soloMd.length === 0) return `<p style="font-size:var(--fs-xs);color:var(--ink-3);margin:0">Nessun elaborato prodotto ancora per questa fase.</p>`;
-  return `<div class="file-list">${soloMd.map((f) => {
-    const gemello = `11_view/${f.replace(/\.md$/, ".html")}`;
-    const href = Api.percorsoOutput(SLUG, files.includes(gemello) ? gemello : f);
-    return `<a class="file-row" href="${href}" target="_blank" rel="noreferrer"><span class="name">${f}</span><span style="font-family:var(--font-mono);font-size:var(--fs-micro);color:var(--ink-4)">apri ↗</span></a>`;
-  }).join("")}</div>`;
-}
+// ===========================================================================
+// Azioni
+// ===========================================================================
 
-// ══════════════════════ VISTA: FASE (generica + fase 5 reale) ═══════
-function pannelloAzione(n, corpo) {
-  const div = document.createElement("div");
-  div.className = "card glass-surface";
-  div.innerHTML = `<h3 class="eyebrow">Azione</h3><p style="margin:0 0 var(--s-3);font-size:var(--fs-sm);color:var(--ink-2)">Stato attuale: <span class="status-badge ${STATO_BADGE[corpo.stato] || 'na'}">${STATO_LABEL[corpo.stato] || 'Da eseguire'}</span></p>`;
-  const azioni = document.createElement("div");
-  azioni.className = "azioni";
-  if (GATE_UMANO.has(n) && corpo.richiede_approvazione) {
-    const b = document.createElement("button");
-    b.textContent = "Approva";
-    b.onclick = async () => { b.disabled = true; try { await Api.approva(SLUG, n); await ricarica(); } catch (e) { alert(`Errore: ${e.message}`); b.disabled = false; } };
-    azioni.appendChild(b);
-  } else if (corpo.stato === "da_eseguire" || corpo.stato === "da_rivedere") {
-    const b = document.createElement("button");
-    b.textContent = corpo.stato === "da_rivedere" ? "Riesegui" : "Esegui";
-    b.onclick = async () => {
-      b.disabled = true;
-      try { if (corpo.stato === "da_rivedere") await Api.riesegui(SLUG, n); else await Api.esegui(SLUG, n); await ricarica(); }
-      catch (e) { alert(`Errore: ${e.message}`); b.disabled = false; }
-    };
-    azioni.appendChild(b);
-  } else if (corpo.stato === "completata") {
-    const b = document.createElement("button");
-    b.className = "ghost"; b.textContent = "Riesegui";
-    b.onclick = async () => {
-      if (!confirm(`Rieseguire la fase ${n}? Le fasi successive completate verranno marcate "da rivedere".`)) return;
-      try { await Api.riesegui(SLUG, n); await ricarica(); } catch (e) { alert(`Errore: ${e.message}`); }
-    };
-    azioni.appendChild(b);
-  } else {
-    azioni.innerHTML = `<p style="margin:0;font-size:var(--fs-xs);color:var(--ink-4)">In coda: attende che la fase precedente sia completata.</p>`;
-  }
-  div.appendChild(azioni);
-  return div;
-}
-
-function pannelloElaborati(n) {
-  const div = document.createElement("div");
-  div.className = "card glass-surface";
-  div.innerHTML = `<h3 class="eyebrow">Elaborati di questa fase</h3><div id="g-out-fase-${n}">Caricamento…</div>`;
-  elencoOutputCached().then((files) => {
-    const prefissi = FASE_OUTPUT_PREFIX[n] || [];
-    const filtrati = prefissi.length ? files.filter((f) => prefissi.some((p) => f.startsWith(p))) : [];
-    document.getElementById(`g-out-fase-${n}`).innerHTML = outputListHtml(filtrati);
-  }).catch((e) => { document.getElementById(`g-out-fase-${n}`).innerHTML = `<p style="color:var(--crit);font-size:var(--fs-xs)">Errore: ${e.message}</p>`; });
-  return div;
-}
-
-function notaNonDisponibile(testo) {
-  const div = document.createElement("div");
-  div.className = "card";
-  div.style.border = "1px dashed var(--hairline-2)";
-  div.style.background = "var(--glass-2)";
-  div.innerHTML = `<span class="badge-pending">non ancora disponibile lato backend</span><p style="margin:var(--s-2) 0 0;font-size:var(--fs-xs);color:var(--ink-3)">${testo}</p>`;
-  return div;
-}
-
-// Fase 5 — revisione proposte, parsing minimale del registro (reale,
-// stesso approccio della Sprint 6: nessun endpoint strutturato dedicato).
-function parseTabellaProposte(md) {
-  const righe = md.split("\n").filter((r) => r.trim().startsWith("|"));
-  if (righe.length < 2) return [];
-  return righe.slice(2).map((r) => {
-    const celle = r.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => c.trim());
-    return { id: celle[0] || "", titolo: celle[1] || "", criterio: celle[2] || "", stato: celle[3] || "" };
-  }).filter((p) => p.id);
-}
-
-async function caricaProposte() {
-  const testo = await fetch(Api.percorsoOutput(SLUG, "06_registers/proposal_register.md")).then((r) => {
-    if (!r.ok) throw new Error(`${r.status}`);
-    return r.text();
-  });
-  return parseTabellaProposte(testo);
-}
-
-function renderElencoProposte(container, proposte) {
-  const decise = proposte.filter((p) => /approvat|scartat|modific/i.test(p.stato)).length;
-  const pct = proposte.length ? Math.round((decise / proposte.length) * 100) : 0;
-  const wrap = document.createElement("section");
-  wrap.className = "card glass-surface";
-  wrap.innerHTML = `
-    <div class="proposal-progress" style="margin-bottom:var(--s-4)">
-      <div style="display:flex;justify-content:space-between;font-size:var(--fs-micro);color:var(--ink-3);margin-bottom:6px"><span>Proposte decise</span><span style="color:var(--ink-1);font-weight:var(--fw-semibold)">${decise} / ${proposte.length}</span></div>
-      <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
-    </div>
-    <p style="margin:0 0 var(--s-4);font-size:var(--fs-xs);color:var(--ink-4)">Le azioni per riga servono ai casi ovvi; per il dettaglio (gap di origine, prove, storico) apri la proposta.</p>
-    <div class="file-list" id="g-proposte-list"></div>`;
-  container.appendChild(wrap);
-  const list = wrap.querySelector("#g-proposte-list");
-  if (proposte.length === 0) {
-    list.innerHTML = `<p style="font-size:var(--fs-xs);color:var(--ink-3)">Nessuna proposta trovata in proposal_register.md (o formato inatteso).</p>`;
-    return;
-  }
-  proposte.forEach((p) => {
-    const riga = document.createElement("article");
-    riga.className = "proposal-item";
-    riga.innerHTML = `<div class="row">
-      <button type="button" class="proposal-open">
-        <span style="font-family:var(--font-mono);font-size:var(--fs-micro);color:var(--ink-3)">${p.id}</span>
-        <span class="title">${p.titolo}</span>
-        <span style="font-size:var(--fs-xs);color:var(--ink-2)">${p.criterio} · <span class="status-badge na">${p.stato || "non decisa"}</span></span>
-      </button>
-      <div class="decision-group"></div>
-    </div>`;
-    riga.querySelector(".proposal-open").onclick = () => navigate(`#/fase/5/proposta/${encodeURIComponent(p.id)}`);
-    const gruppo = riga.querySelector(".decision-group");
-    const nota = document.createElement("input");
-    nota.placeholder = "Nota (opzionale)"; nota.style.width = "10rem";
-    const bottone = (label, decisione, classe) => {
-      const b = document.createElement("button");
-      b.type = "button"; b.textContent = label; if (classe) b.className = classe;
-      b.onclick = async () => {
-        b.disabled = true;
-        try { await Api.registraApprovazione(SLUG, { fase: 5, tipo: "proposta", riferimento: p.id, decisione, nota: nota.value || null }); b.textContent = "Registrato ✓"; }
-        catch (e) { alert(`Errore: ${e.message}`); b.disabled = false; }
-      };
-      return b;
-    };
-    gruppo.appendChild(nota);
-    gruppo.appendChild(bottone("Approva", "approvata"));
-    gruppo.appendChild(bottone("Da modificare", "da_modificare", "ghost"));
-    gruppo.appendChild(bottone("Scarta", "scartata", "scarta"));
-    list.appendChild(riga);
-  });
-}
-
-async function renderDettaglioProposta(container, id) {
-  const wrap = document.createElement("div");
-  wrap.className = "two-col";
-  container.appendChild(wrap);
-  const main = document.createElement("section"); main.className = "col-main";
-  const side = document.createElement("aside"); side.className = "col-side";
-  wrap.appendChild(main); wrap.appendChild(side);
-  main.innerHTML = `<div class="card glass-surface">Caricamento proposta…</div>`;
-
-  let proposte = [];
-  try { proposte = await caricaProposte(); } catch { /* gestito sotto */ }
-  const p = proposte.find((x) => x.id === id);
-
-  main.innerHTML = "";
-  const contenuto = document.createElement("div");
-  contenuto.className = "card glass-surface";
-  if (!p) {
-    contenuto.innerHTML = `<h3 class="eyebrow">Proposta ${id}</h3><p style="font-size:var(--fs-sm);color:var(--ink-3)">Proposta non trovata nel registro (06_registers/proposal_register.md), o registro non ancora disponibile.</p>`;
-  } else {
-    contenuto.innerHTML = `<h3 class="eyebrow">Contenuto della proposta</h3>
-      <div style="display:flex;flex-wrap:wrap;gap:var(--s-2);margin-bottom:var(--s-3)">
-        <span class="status-badge na">${p.stato || "non decisa"}</span>
-        <span class="tag" style="padding:3px 9px;border-radius:var(--r-pill);background:var(--wash);border:1px solid var(--hairline);font-size:var(--fs-micro);color:var(--ink-3)">${p.criterio}</span>
-      </div>
-      <p style="margin:0;font-family:var(--font-serif);font-size:var(--fs-md);line-height:var(--lh-md);color:var(--ink-1)">${p.titolo}</p>`;
-  }
-  main.appendChild(contenuto);
-
-  // Prove documentali ed evidenze (Sprint 10.1, reale): il nodo esiste
-  // solo dopo che feedback-processor ha elaborato il feedback — prima
-  // di allora la proposta vive solo in Cx_output.md, non nel grafo.
-  const evidenzeCard = document.createElement("div");
-  evidenzeCard.className = "card glass-surface";
-  evidenzeCard.innerHTML = `<h3 class="eyebrow">Prove documentali</h3><div id="g-evidenze">Caricamento…</div>`;
-  main.appendChild(evidenzeCard);
+async function eseguiFase(n) {
   try {
-    const dp = await Api.dettaglioProposta(SLUG, id);
-    const fm = dp.frontmatter || {};
-    const evEl = evidenzeCard.querySelector("#g-evidenze");
-    evEl.innerHTML = `
-      <div style="display:flex;flex-wrap:wrap;gap:var(--s-2);margin-bottom:var(--s-3);font-size:var(--fs-xs);color:var(--ink-3)">
-        ${fm.sottocriterio ? `<span>Sottocriterio ${fm.sottocriterio}</span>` : ""}
-        <span>Confidenza ${fm.confidence || "—"}</span>
-        <span>Punteggio stimato ${fm.punteggio_stimato ?? "—"}</span>
-      </div>
-      ${(fm.evidence_documents || []).map((e) => `
-        <div class="proposal-item"><div class="row" style="cursor:default">
-          <span style="font-size:var(--fs-xs);color:var(--ink-2)">${e.doc || ""}</span>
-          <span style="font-size:var(--fs-micro);color:var(--ink-3)">${e.sezione || ""} — "${e.estratto || ""}"</span>
-        </div></div>`).join("") || `<p style="font-size:var(--fs-xs);color:var(--ink-3)">Nessuna evidenza collegata nel nodo.</p>`}
-      ${fm.feedback_professionista ? `<p style="margin-top:var(--s-3);font-size:var(--fs-xs);color:var(--ink-2)"><strong>Nota del professionista:</strong> ${fm.feedback_professionista}</p>` : ""}
-      <details style="margin-top:var(--s-3)"><summary style="font-size:var(--fs-xs);color:var(--ink-3);cursor:pointer">Testo completo della proposta</summary>
-        <pre style="white-space:pre-wrap;font-size:var(--fs-xs);color:var(--ink-2)">${(dp.corpo || "").replace(/</g, "&lt;")}</pre></details>
-    `;
-  } catch (e) {
-    evidenzeCard.querySelector("#g-evidenze").innerHTML =
-      `<p style="font-size:var(--fs-xs);color:var(--ink-3)">Non ancora consultabile (${e.message}) — diventa disponibile dopo l'elaborazione del feedback (/process_feedback), quando la proposta entra nel grafo.</p>`;
-  }
-
-  side.innerHTML = `<div class="card glass-surface">
-    <h3 class="eyebrow">Decisione</h3>
-    <div style="display:flex;flex-direction:column;gap:var(--s-2);margin-bottom:var(--s-3)" id="g-detail-azioni"></div>
-    <textarea rows="3" placeholder="Nota (passata all'agente in caso di rimando, sempre nello storico)" id="g-detail-nota" style="width:100%"></textarea>
-  </div>`;
-  const azioni = side.querySelector("#g-detail-azioni");
-  const nota = side.querySelector("#g-detail-nota");
-  [["Approva così com'è", "approvata"], ["Rimanda con richiesta di modifica", "da_modificare"], ["Scarta la proposta", "scartata"]].forEach(([label, decisione]) => {
-    const b = document.createElement("button");
-    b.type = "button"; b.textContent = label;
-    b.className = decisione === "approvata" ? "" : decisione === "scartata" ? "scarta" : "ghost";
-    b.onclick = async () => {
-      b.disabled = true;
-      try {
-        await Api.registraApprovazione(SLUG, { fase: 5, tipo: "proposta", riferimento: id, decisione, nota: nota.value || null });
-        b.textContent = "Registrato ✓";
-      } catch (e) { alert(`Errore: ${e.message}`); b.disabled = false; }
-    };
-    azioni.appendChild(b);
-  });
-
-  const back = document.createElement("button");
-  back.type = "button"; back.className = "view-back"; back.hidden = false;
-  back.textContent = "← Torna a tutte le proposte";
-  back.onclick = () => navigate("#/fase/5");
-  document.getElementById("g-back").replaceWith(back);
-  back.id = "g-back";
+    await Api.esegui(SLUG, n);
+    Toast.ok(`Fase ${n} accodata.`);
+    await ricarica();
+  } catch (e) { Toast.errore(`Avvio non riuscito: ${e.message}`); }
 }
 
-async function renderFase5(container) {
-  const box = document.createElement("div");
-  box.className = "card glass-surface";
-  box.innerHTML = "Caricamento proposte…";
-  container.appendChild(box);
+async function rieseguiFase(n) {
+  const st = Dominio.statoFase(stato.fasi, n);
+  if (st === "completata" &&
+      !confirm(`Rieseguire la Fase ${n}? Le fasi successive già completate verranno marcate "da rivedere".`)) return;
   try {
-    const proposte = await caricaProposte();
-    box.remove();
-    renderElencoProposte(container, proposte);
-  } catch (e) {
-    box.innerHTML = `<h3 class="eyebrow">Revisione proposte</h3><p style="font-size:var(--fs-sm);color:var(--ink-3)">Registro proposte non ancora disponibile (${e.message}). Compare qui non appena la Fase 5 produce <code>06_registers/proposal_register.md</code>.</p>`;
-  }
+    await Api.riesegui(SLUG, n);
+    Toast.ok(`Riesecuzione della Fase ${n} accodata.`);
+    await ricarica();
+  } catch (e) { Toast.errore(`Riesecuzione non riuscita: ${e.message}`); }
 }
 
-async function renderFase(container, n, sub, subId) {
-  const d = S.dato;
-  const k = chiaveFase(d.fasi.fasi, n);
-  const corpo = k ? d.fasi.fasi[k] : { stato: "da_eseguire", sintesi: "" };
-
-  document.getElementById("g-view-kicker").textContent = KICKER_FASE[n];
-  document.getElementById("g-view-title").textContent = sub === "proposta" ? `Proposta ${subId}` : NOMI_FASE[n];
-  document.getElementById("g-view-sub").textContent = sub === "proposta" ? "Dettaglio: gap di origine, prove, decisione e storico." : SUB_FASE_FASI[n] || "";
-  const statusEl = document.getElementById("g-view-status");
-  statusEl.hidden = false;
-  statusEl.className = `status-badge ${STATO_BADGE[corpo.stato] || "na"}`;
-  statusEl.textContent = STATO_LABEL[corpo.stato] || "Da eseguire";
-  document.getElementById("g-back").hidden = sub !== "proposta";
-  if (sub !== "proposta") document.getElementById("g-back").onclick = null;
-
-  if (n === 5 && sub === "proposta") {
-    await renderDettaglioProposta(container, subId);
-    return;
-  }
-
-  const wrap = document.createElement("div");
-  wrap.className = "two-col";
-  const main = document.createElement("section"); main.className = "col-main";
-  const side = document.createElement("aside"); side.className = "col-side";
-  wrap.appendChild(main); wrap.appendChild(side);
-  container.appendChild(wrap);
-
-  if (n === 5) {
-    await renderFase5(main);
-  } else if (n === 1) {
-    main.appendChild(pannelloUpload());
-    main.appendChild(pannelloElaborati(n));
-  } else if (n === 4) {
-    await renderFase4(main);
-  } else if (n === 6) {
-    await renderFase6(main);
-  } else {
-    main.appendChild(notaNonDisponibile(
-      n === 2 ? "L'elenco strutturato dei requisiti (id, testo, tipo vincolante/premiante, copertura, provenienza puntuale) e il collegamento al Grafo non sono ancora esposti da un endpoint dedicato: qui sotto trovi comunque gli elaborati reali prodotti dalla fase."
-      : n === 3 ? "La sintesi e le sezioni annotate del capitolato non sono ancora esposte come dati strutturati: qui sotto trovi comunque gli elaborati reali prodotti dalla fase."
-      : "La checklist di audit strutturata non è ancora esposta da un endpoint dedicato: qui sotto trovi comunque gli elaborati reali prodotti dalla fase."
-    ));
-    main.appendChild(pannelloElaborati(n));
-  }
-
-  side.appendChild(pannelloAzione(n, corpo));
-}
-
-// ── Fase 4 — Ricerca soluzioni: gap (06_registers/gap_register.md) +
-// proposte suggerite dal professionista (Sprint 10.2, reale) ────────
-function parseTabellaGap(md) {
-  const righe = md.split("\n").filter((r) => r.trim().startsWith("|"));
-  if (righe.length < 2) return [];
-  return righe.slice(2).map((r) => {
-    const celle = r.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => c.trim());
-    return { id: celle[0] || "", titolo: celle[1] || "", criterio: celle[2] || "",
-      fonte: celle[3] || "", confidenza: celle[4] || "", proposta: celle[5] || "" };
-  }).filter((g) => g.id);
-}
-
-async function renderFase4(main) {
-  const gapCard = document.createElement("section");
-  gapCard.className = "card glass-surface";
-  gapCard.innerHTML = `<h3 class="eyebrow">Gap individuati</h3><div id="g-gap-lista">Caricamento…</div>`;
-  main.appendChild(gapCard);
+async function approvaFase(n) {
   try {
-    const testo = await fetch(Api.percorsoOutput(SLUG, "06_registers/gap_register.md")).then((r) => {
-      if (!r.ok) throw new Error(`${r.status}`);
-      return r.text();
+    await Api.approva(SLUG, n);
+    Toast.ok(`Checkpoint della Fase ${n} approvato.`);
+    await ricarica();
+  } catch (e) { Toast.errore(`Approvazione non riuscita: ${e.message}`); }
+}
+
+/** Decisione su una proposta: ottimistica in interfaccia, poi registrata.
+    Se la registrazione fallisce si torna indietro — una spunta che resta
+    dopo un errore è peggio di nessuna spunta. */
+async function decidi(id, decisione, nota) {
+  const precedente = stato.decisioni[id];
+  stato.decisioni[id] = decisione;
+  disegnaVista();
+  try {
+    await Api.registraApprovazione(SLUG, {
+      fase: 5, tipo: "proposta", riferimento: id, decisione, nota: nota || null,
     });
-    const gap = parseTabellaGap(testo);
-    const el = gapCard.querySelector("#g-gap-lista");
-    if (gap.length === 0) {
-      el.innerHTML = `<p style="font-size:var(--fs-xs);color:var(--ink-3)">Nessun gap trovato in gap_register.md.</p>`;
-    } else {
-      el.innerHTML = `<div class="file-list">${gap.map((g) => `
-        <div class="proposal-item"><div class="row" style="cursor:default">
-          <span style="font-family:var(--font-mono);font-size:var(--fs-micro);color:var(--ink-3)">${g.id}</span>
-          <span class="title">${g.titolo}</span>
-          <span style="font-size:var(--fs-xs);color:var(--ink-3)">${g.criterio} · ${g.fonte} · confidenza ${g.confidenza} ·
-            ${g.proposta && g.proposta !== "—" ? `proposta <strong style="color:var(--ink-1)">${g.proposta}</strong>` : "nessuna proposta collegata"}</span>
-        </div></div>`).join("")}</div>`;
-    }
+    stato.storicoDecisioni.push({ riferimento: id, decisione, nota: nota || null, quando: new Date().toISOString() });
+    Toast.ok(`${id}: decisione registrata.`);
+    disegnaVista();
   } catch (e) {
-    gapCard.querySelector("#g-gap-lista").innerHTML = `<p style="font-size:var(--fs-xs);color:var(--ink-3)">Registro gap non ancora disponibile (${e.message}).</p>`;
+    if (precedente) stato.decisioni[id] = precedente; else delete stato.decisioni[id];
+    disegnaVista();
+    Toast.errore(`Decisione non registrata: ${e.message}`);
   }
-
-  const formCard = document.createElement("section");
-  formCard.className = "card glass-surface";
-  formCard.innerHTML = `
-    <h3 class="eyebrow">Suggerisci una proposta</h3>
-    <p style="margin:0 0 var(--s-3);font-size:var(--fs-xs);color:var(--ink-3)">Valutata dal sistema insieme a quelle generate dagli agenti alla prossima analisi del criterio.</p>
-    <form id="form-proposta-operatore">
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:var(--s-3);margin-bottom:var(--s-3)">
-        <div class="campo"><label for="po-criterio">Criterio</label><input id="po-criterio" name="criterio" placeholder="es. C1" required></div>
-        <div class="campo"><label for="po-gap">Gap collegato (opzionale)</label><input id="po-gap" name="gap_id" placeholder="es. G-C1-002"></div>
-      </div>
-      <div class="campo" style="margin-bottom:var(--s-3)"><label for="po-titolo">Titolo</label><input id="po-titolo" name="titolo" required></div>
-      <div class="campo" style="margin-bottom:var(--s-3)"><label for="po-descrizione">Descrizione</label><textarea id="po-descrizione" name="descrizione" rows="3" required></textarea></div>
-      <button type="submit">Invia proposta</button>
-    </form>
-    <div id="po-esito-wrap"></div>
-    <h3 class="eyebrow" style="margin-top:var(--s-5)">Proposte suggerite</h3>
-    <div id="g-proposte-operatore">Caricamento…</div>`;
-  main.appendChild(formCard);
-
-  async function ricaricaProposteOperatore() {
-    const el = formCard.querySelector("#g-proposte-operatore");
-    try {
-      const proposte = await Api.elencoProposteOperatore(SLUG);
-      if (proposte.length === 0) { el.innerHTML = `<p style="font-size:var(--fs-xs);color:var(--ink-3)">Nessuna proposta suggerita ancora.</p>`; return; }
-      el.innerHTML = `<div class="file-list">${proposte.map((p) => {
-        const badge = p.stato === "valutata"
-          ? `<span class="status-badge ${p.esito_audit === "scartata" ? "crit" : "good"}">${p.esito_audit || p.stato}</span>`
-          : `<span class="status-badge info">in attesa di analisi</span>`;
-        return `<div class="proposal-item"><div class="row" style="cursor:default">
-          <span style="font-size:var(--fs-xs);color:var(--ink-3)">${p.criterio}${p.gap_id ? ` · ${p.gap_id}` : ""}</span>
-          <span class="title">${p.titolo}</span>${badge}
-        </div></div>`;
-      }).join("")}</div>`;
-    } catch (e) {
-      el.innerHTML = `<p style="font-size:var(--fs-xs);color:var(--crit)">Errore: ${e.message}</p>`;
-    }
-  }
-  ricaricaProposteOperatore();
-
-  formCard.querySelector("#form-proposta-operatore").addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    const form = new FormData(ev.target);
-    const wrap = formCard.querySelector("#po-esito-wrap");
-    wrap.innerHTML = `<p class="esito">Invio…</p>`;
-    try {
-      await Api.creaPropostaOperatore(SLUG, {
-        criterio: form.get("criterio"), gap_id: form.get("gap_id") || null,
-        titolo: form.get("titolo"), descrizione: form.get("descrizione"),
-      });
-      wrap.innerHTML = `<p class="esito good">Proposta inviata.</p>`;
-      ev.target.reset();
-      ricaricaProposteOperatore();
-    } catch (e) {
-      wrap.innerHTML = `<p class="esito crit">Errore: ${e.message}</p>`;
-    }
-  });
 }
 
-// ── Fase 6 — Deliverables come workspace separati (Sprint 10.3, reale) ──
-function badgeStatoDeliverable(stato) {
-  return { completata: "good", errore: "crit", da_rivedere: "accent", in_esecuzione: "info" }[stato] || "na";
+/** Avvio di uno o più deliverable. Ognuno è un job proprio: se uno fallisce
+    gli altri restano accodati, e lo si dice invece di riassumere in "errore". */
+async function avviaDeliverable(ids) {
+  const falliti = [];
+  for (const id of ids) {
+    try { await Api.eseguiDeliverable(SLUG, id); }
+    catch (e) { falliti.push(`${id}: ${e.message}`); }
+  }
+  const ok = ids.length - falliti.length;
+  if (ok) Toast.ok(`${UI.plurale(ok, "deliverable accodato", "deliverable accodati")}.`);
+  falliti.forEach((f) => Toast.errore(f));
+  carica("deliverable", true);
+  await ricarica();
 }
 
-async function renderFase6(main) {
-  const card = document.createElement("section");
-  card.className = "card glass-surface";
-  card.innerHTML = `<h3 class="eyebrow">Deliverables</h3><div class="deliverable-grid" id="g-deliverables">Caricamento…</div>`;
-  main.appendChild(card);
-  main.appendChild(pannelloElaborati(6));
-
-  const el = card.querySelector("#g-deliverables");
+async function rieseguiDeliverable(id) {
+  if (!confirm(`Rieseguire il deliverable ${id}? Il contenuto già prodotto viene rigenerato.`)) return;
   try {
-    const deliverables = await Api.elencoDeliverables(SLUG);
-    if (deliverables.length === 0) {
-      el.innerHTML = `<p style="font-size:var(--fs-xs);color:var(--ink-3)">Nessun deliverable ancora — disponibile dopo l'analisi del disciplinare (Fase 1).</p>`;
-      return;
-    }
-    el.innerHTML = "";
-    deliverables.forEach((d) => {
-      const dCard = document.createElement("div");
-      dCard.className = "deliverable-card";
-      dCard.innerHTML = `
-        <div class="titolo" style="font-weight:var(--fw-semibold);color:var(--ink-1)">${d.nome} <span class="status-badge ${badgeStatoDeliverable(d.stato)}">${d.stato}</span></div>
-        <div style="font-size:var(--fs-xs);color:var(--ink-3)">Tipo: ${d.tipo} · Criterio: ${d.criterio} · Agente: ${d.agente}</div>
-        <div style="font-size:var(--fs-xs);color:var(--ink-4)">Vincolo formato: ${d.vincolo_formato || "—"} · Fonte: ${d.fonte || "—"}</div>
-        <div class="azioni" style="margin-top:var(--s-2)"></div>`;
-      const azioni = dCard.querySelector(".azioni");
-      if (d.stato === "da_eseguire" || d.stato === "da_rivedere") {
-        const b = document.createElement("button");
-        b.type = "button"; b.textContent = d.stato === "da_rivedere" ? "Riesegui" : "Esegui";
-        b.onclick = async () => { b.disabled = true; try { await Api.eseguiDeliverable(SLUG, d.id); await ricarica(); } catch (e) { alert(`Errore: ${e.message}`); b.disabled = false; } };
-        azioni.appendChild(b);
-      } else if (d.stato === "completata" || d.stato === "errore") {
-        const b = document.createElement("button");
-        b.type = "button"; b.className = "ghost"; b.textContent = "Riesegui";
-        b.onclick = async () => { try { await Api.rieseguiDeliverable(SLUG, d.id); await ricarica(); } catch (e) { alert(`Errore: ${e.message}`); } };
-        azioni.appendChild(b);
-      }
-      el.appendChild(dCard);
+    await Api.rieseguiDeliverable(SLUG, id);
+    Toast.ok(`Riesecuzione di ${id} accodata.`);
+    carica("deliverable", true);
+    await ricarica();
+  } catch (e) { Toast.errore(`Riesecuzione non riuscita: ${e.message}`); }
+}
+
+/** Intervento diretto: scrive sulla gara. Il backend rifiuta con 409 se una
+    fase è in esecuzione — due scritture concorrenti sarebbero un rischio
+    reale, e l'interfaccia riporta il motivo invece di un errore generico. */
+async function intervieni() {
+  const q = (stato.interventi.bozza || "").trim();
+  if (!q || stato.interventi.invio) return;
+  stato.interventi.messaggi.push({ mio: true, testo: q, quando: new Date().toISOString() });
+  stato.interventi.bozza = "";
+  stato.interventi.invio = true;
+  stato.interventi.errore = null;
+  disegnaVista();
+
+  try {
+    const r = await Api.intervieni(SLUG, q);
+    stato.interventi.messaggi.push({ mio: false, testo: r.risposta, quando: new Date().toISOString() });
+    // Un intervento può aver toccato file e riaccodato job: si rilegge tutto.
+    await ricarica();
+  } catch (e) {
+    stato.interventi.errore = e.stato === 409
+      ? e.message
+      : `Intervento non riuscito (${e.stato || "nessuna risposta"}). Controlla lo storico qui sopra prima di riprovare: potrebbe essere stato applicato in parte.`;
+  }
+  stato.interventi.invio = false;
+  disegnaVista();
+  const input = document.getElementById("intervento-input");
+  if (input) input.focus();
+}
+
+async function creaPropostaOperatore() {
+  const f = stato.formProposta;
+  f.invio = true;
+  disegnaVista();
+  try {
+    await Api.creaPropostaOperatore(SLUG, {
+      criterio: f.criterio.trim(),
+      gap_id: f.gap_id.trim() || null,
+      titolo: f.titolo.trim(),
+      descrizione: f.descrizione.trim(),
     });
+    Toast.ok("Proposta inviata: verrà valutata alla prossima analisi del criterio.");
+    stato.formProposta = { criterio: "", gap_id: "", titolo: "", descrizione: "", invio: false };
+    carica("proposteOperatore", true);
   } catch (e) {
-    el.innerHTML = `<p style="font-size:var(--fs-xs);color:var(--crit)">Errore: ${e.message}</p>`;
+    f.invio = false;
+    Toast.errore(`Proposta non inviata: ${e.message}`);
   }
+  disegnaVista();
 }
 
-function pannelloUpload() {
-  const div = document.createElement("div");
-  div.className = "card glass-surface";
-  div.innerHTML = `<h3 class="eyebrow">Documenti</h3>
-    <form id="form-upload">
-      <div class="campo" style="margin-bottom:var(--s-3)">
-        <label for="u-categoria">Categoria</label>
-        <select id="u-categoria" name="categoria">
-          <option value="disciplinare">Disciplinare</option>
-          <option value="elaborati">Elaborati</option>
-          <option value="p7m">P7M</option>
-        </select>
-      </div>
-      <div class="campo" style="margin-bottom:var(--s-3)">
-        <label for="u-file">File</label>
-        <input id="u-file" name="file" type="file" required>
-      </div>
-      <button type="submit">Carica</button>
-    </form>
-    <div id="upload-esito-wrap"></div>`;
-  div.querySelector("#form-upload").addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    const form = new FormData(ev.target);
-    const wrap = div.querySelector("#upload-esito-wrap");
-    wrap.innerHTML = `<p class="esito">Caricamento…</p>`;
-    try {
-      const r = await Api.caricaDocumento(SLUG, form.get("categoria"), form.get("file"));
-      wrap.innerHTML = `<p class="esito good">${r.messaggio || "Caricato."}</p>`;
-      ev.target.reset();
-      if (r.fasi_completate_da_valutare && r.fasi_completate_da_valutare.length) {
-        const box = document.createElement("div");
-        box.className = "approval-panel";
-        box.style.marginTop = "var(--s-3)";
-        box.innerHTML = `<strong>Rieseguire una fase già completata per tenere conto del nuovo documento?</strong>
-          <p class="sub">Le fasi successive già completate verranno marcate "da rivedere", non cancellate.</p>`;
-        r.fasi_completate_da_valutare.forEach((n) => {
-          const b = document.createElement("button");
-          b.textContent = `Riesegui Fase ${n} (${NOMI_FASE[n]})`; b.className = "ghost";
-          b.onclick = async () => { b.disabled = true; try { await Api.riesegui(SLUG, n); await ricarica(); b.textContent = "Riesecuzione accodata ✓"; } catch (e) { alert(`Errore: ${e.message}`); b.disabled = false; } };
-          box.appendChild(b);
-        });
-        wrap.appendChild(box);
-      }
-      S.outputCache = null;
-    } catch (e) {
-      wrap.innerHTML = `<p class="esito crit">Errore: ${e.message}</p>`;
-    }
+/** Il form si ridisegna solo nel bottone: riscriverlo a ogni tasto
+    sposterebbe il cursore nel campo attivo. */
+function aggiornaFormProposta() {
+  const b = document.getElementById("btn-proposta-operatore");
+  if (b) b.disabled = !(/^C[0-9]+$/.test(stato.formProposta.criterio.trim())
+    && (!stato.formProposta.gap_id.trim() || /^G-C[0-9]+-[0-9]+$/.test(stato.formProposta.gap_id.trim()))
+    && stato.formProposta.titolo.trim() && stato.formProposta.descrizione.trim());
+}
+
+const apriGap = (id) => { stato.gapAperto = id; disegnaVista(); };
+const espandi = (chiave) => { stato.espansi[chiave] = !stato.espansi[chiave]; disegnaVista(); };
+const filtraAttivita = (chiave) => { stato.filtroAttivita = chiave; disegnaVista(); };
+
+/** Selettore file nativo per una categoria: la dropzone resta la via
+    principale, questa è quella accessibile da tastiera. */
+function scegliFile(categoria) {
+  const input = h("input", {
+    type: "file", multiple: true, style: { display: "none" },
+    accept: Dominio.ESTENSIONI_AMMESSE.join(","),
+    onChange: (e) => { caricaFile([...e.target.files], categoria); input.remove(); },
   });
-  return div;
+  document.body.appendChild(input);
+  input.click();
 }
 
-// ══════════════════════ VISTA: GRAFO ═════════════════════════════════
-// Il grafo è servito da una pagina propria (grafo.html, Sprint 10.1):
-// layout force-directed D3 su dati reali da GET /gare/{slug}/grafo. Non
-// è annidata nel router hash del guscio perché è nata come pagina a sé
-// con URL/query string proprie (?slug=&tipo=) — qui ci si limita a
-// portarcisi, preservando il filtro eventualmente richiesto dal link di
-// provenienza (es. Fase 2 → «Apri nel Grafo» → tipo=requisito).
-function apriGrafo(tipo) {
-  const q = new URLSearchParams({ slug: SLUG });
-  if (tipo) q.set("tipo", tipo);
-  location.href = `grafo.html?${q.toString()}`;
-}
-
-// ══════════════════════ VISTA: ATTIVITÀ (reale + chat onesta) ═══════
-function badgeEsito(esito) {
-  const map = { completato: "good", errore: "crit", in_esecuzione: "info", in_coda: "na" };
-  return map[esito] || "na";
-}
-
-async function renderAttivita(container) {
-  document.getElementById("g-view-kicker").textContent = "Vista trasversale";
-  document.getElementById("g-view-title").textContent = "Attività";
-  document.getElementById("g-view-sub").textContent = "Storico esecuzioni, log grezzo e intervento diretto — un solo posto, non ripetuto nelle viste di fase.";
-  document.getElementById("g-view-status").hidden = true;
-  document.getElementById("g-back").hidden = true;
-
-  const storico = document.createElement("section");
-  storico.className = "card glass-surface";
-  storico.innerHTML = `<h3 class="eyebrow">Storico esecuzioni</h3><table><thead><tr><th>Fase</th><th>Avviato</th><th>Esito</th><th>Pipeline</th><th>Prezzario</th></tr></thead><tbody id="g-runlog-body"><tr><td colspan="5">Caricamento…</td></tr></tbody></table>`;
-  container.appendChild(storico);
-
-  let runsGrezzo = { runs: [] };
-  try {
-    runsGrezzo = await Api.runLog(SLUG);
-    const runs = (runsGrezzo.runs || []).slice().reverse();
-    const tbody = document.getElementById("g-runlog-body");
-    if (runs.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5"><span style="color:var(--ink-3)">Nessuna esecuzione ancora.</span></td></tr>`;
-    } else {
-      tbody.innerHTML = runs.map((r) => `<tr>
-        <td>${r.fase}</td><td style="font-family:var(--font-mono);font-size:var(--fs-xs)">${r.avviato_il || ""}</td>
-        <td><span class="status-badge ${badgeEsito(r.esito)}">${r.esito}</span></td>
-        <td style="font-family:var(--font-mono);font-size:var(--fs-xs)">${r.pipeline_version || ""}</td><td>${r.prezzario_version || "—"}</td>
-      </tr>`).join("");
-    }
-  } catch (e) {
-    document.getElementById("g-runlog-body").innerHTML = `<tr><td colspan="5"><span style="color:var(--crit)">Errore: ${e.message}</span></td></tr>`;
+async function caricaFile(files, categoriaForzata) {
+  if (!files.length) return;
+  const buoni = [];
+  for (const f of files) {
+    const motivo = Dominio.motivoRifiuto(f);
+    if (motivo) stato.upload.rifiutati.push({ nome: f.name, dimensione: f.size, motivo });
+    else buoni.push(f);
   }
+  stato.upload.inCorso.push(...buoni.map((f) => f.name));
+  disegnaVista();
 
-  const dettagli = document.createElement("details");
-  dettagli.className = "card glass-surface";
-  dettagli.innerHTML = `<summary style="font-size:var(--fs-xs);font-weight:var(--fw-semibold);color:var(--ink-2)">Log grezzo (JSON) · sede unica</summary>
-    <pre style="margin:var(--s-3) 0 0;font-family:var(--font-mono);font-size:var(--fs-micro);color:var(--ink-3);overflow-x:auto;white-space:pre-wrap">${JSON.stringify(runsGrezzo, null, 2)}</pre>`;
-  container.appendChild(dettagli);
-
-  const code = document.createElement("section");
-  code.className = "card glass-surface";
-  code.style.borderColor = "var(--info-edge)";
-  code.innerHTML = `
-    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:var(--s-2);margin-bottom:var(--s-2)">
-      <h3 style="margin:0;font-size:var(--fs-md);font-weight:var(--fw-semibold);color:var(--ink-1)">Claude Code · intervento diretto</h3>
-      <span class="badge info">lettura e scrittura</span>
-    </div>
-    <p style="margin:0 0 var(--s-3);font-size:var(--fs-xs);color:var(--ink-3)">Sta qui, e non nell'assistente, perché scrive sulla gara: corregge elaborati, riaccoda job, cambia parametri. Limitato alla directory di questa gara — nessun'altra restrizione (Sprint 10.4).</p>
-    <div class="ap-log" id="g-code-log" role="log" aria-live="polite" style="min-height:6rem;max-height:20rem"></div>
-    <form class="code-form" id="g-code-form" style="margin-top:var(--s-3)">
-      <input type="text" id="g-code-input" placeholder="Descrivi l'intervento…" autocomplete="off">
-      <button type="submit" aria-label="Invia">➤</button>
-    </form>`;
-  container.appendChild(code);
-
-  const log = code.querySelector("#g-code-log");
-  try {
-    const storia = await Api.cronologiaInterventi(SLUG);
-    if (storia.length === 0) {
-      log.innerHTML = `<p style="color:var(--ink-3);font-size:var(--fs-xs)">Nessun intervento ancora. Descrivi cosa fare qui sotto.</p>`;
-    } else {
-      storia.forEach((m) => log.appendChild(renderAssistantMsg({ ruolo: m.ruolo, testo: m.testo })));
-      log.scrollTop = log.scrollHeight;
-    }
-  } catch (e) {
-    log.innerHTML = `<p style="color:var(--crit);font-size:var(--fs-xs)">Errore nel caricare la cronologia: ${e.message}</p>`;
-  }
-
-  code.querySelector("#g-code-form").addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    const input = code.querySelector("#g-code-input");
-    const testo = input.value.trim();
-    if (!testo) return;
-    log.querySelector("p")?.remove();
-    log.appendChild(renderAssistantMsg({ ruolo: "utente", testo }));
-    input.value = ""; input.disabled = true;
-    const attesa = document.createElement("div");
-    attesa.className = "chat-msg claude";
-    attesa.innerHTML = `<div class="who">Claude</div><div class="text">Sto lavorando…</div>`;
-    log.appendChild(attesa);
-    log.scrollTop = log.scrollHeight;
+  let caricati = 0;
+  let fasiDaValutare = [];
+  for (const f of buoni) {
+    const categoria = categoriaForzata || Dominio.categoriaProbabile(f.name);
     try {
-      const r = await Api.intervento(SLUG, testo);
-      attesa.querySelector(".text").textContent = r.risposta;
+      const r = await Api.caricaDocumento(SLUG, categoria, f);
+      caricati += 1;
+      if (r.fasi_completate_da_valutare?.length) fasiDaValutare = r.fasi_completate_da_valutare;
     } catch (e) {
-      attesa.querySelector(".text").textContent = `Errore: ${e.message}`;
-      attesa.style.borderColor = "var(--crit-edge)";
+      stato.upload.rifiutati.push({ nome: f.name, dimensione: f.size, motivo: e.message });
     } finally {
-      input.disabled = false; input.focus();
-      log.scrollTop = log.scrollHeight;
+      stato.upload.inCorso = stato.upload.inCorso.filter((n) => n !== f.name);
+      disegnaVista();
     }
-  });
+  }
+
+  if (caricati) {
+    Toast.ok(UI.plurale(caricati, "documento caricato", "documenti caricati") + ".");
+    carica("documenti", true);
+    // Ingestione incrementale: un upload a gara avviata non rilancia nulla
+    // da solo. Si chiede quale fase rieseguire, senza deciderlo al posto
+    // dell'operatore e senza farlo in silenzio.
+    if (fasiDaValutare.length) chiediRiesecuzione(fasiDaValutare);
+  }
 }
 
-// ══════════════════════ VISTA: IMPOSTAZIONI (mista) ══════════════════
-async function renderImpostazioni(container) {
-  document.getElementById("g-view-kicker").textContent = "Vista trasversale";
-  document.getElementById("g-view-title").textContent = "Impostazioni";
-  document.getElementById("g-view-sub").textContent = "Impostazioni di questa gara, separate da quelle di sistema e account.";
-  document.getElementById("g-view-status").hidden = true;
-  document.getElementById("g-back").hidden = true;
+function chiediRiesecuzione(fasiCompletate) {
+  const t = Toast.mostra("", "warn", 30000);
+  set(t,
+    I.avviso(13),
+    h("div", null,
+      h("strong", { style: { display: "block", marginBottom: "4px" } },
+        "Rieseguire una fase già completata per tenere conto del nuovo documento?"),
+      h("span", { style: { display: "block", color: "var(--ink-3)", marginBottom: "var(--s-2)" } },
+        "Le fasi successive già completate verranno marcate «da rivedere», non cancellate."),
+      h("div", { class: "row row--tight" },
+        fasiCompletate.map((n) => h("button", {
+          type: "button", class: "btn btn--xs",
+          onClick: () => { t.remove(); rieseguiFase(n); },
+        }, `Fase ${n}`)),
+        h("button", { type: "button", class: "btn btn--xs btn--quiet", onClick: () => t.remove() }, "Non ora"))));
+}
 
-  const wrap = document.createElement("div");
-  wrap.className = "settings-grid";
-  container.appendChild(wrap);
+const scartaRifiuto = (nome) => {
+  stato.upload.rifiutati = stato.upload.rifiutati.filter((r) => r.nome !== nome);
+  disegnaVista();
+};
 
-  const m = S.dato.manifest || {};
-  const esec = m.esecuzione || {};
-  const prezz = m.prezzario || {};
-  const garaCard = document.createElement("section");
-  garaCard.className = "settings-card card glass-surface";
-  garaCard.innerHTML = `
-    <span class="badge accent" style="margin-bottom:var(--s-2)">Questa gara</span>
-    <h3 style="margin:0 0 var(--s-4);font-size:var(--fs-md);font-weight:var(--fw-semibold);color:var(--ink-1)">${SLUG}</h3>
-    <div class="campo" style="margin-bottom:var(--s-3)"><label>Nome esteso</label><input type="text" value="${(m.nome || "").replace(/"/g, "&quot;")}" disabled></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:var(--s-3);margin-bottom:var(--s-3)">
-      <div class="campo"><label>Modello</label><input type="text" value="${esec.modello || "—"}" disabled></div>
-      <div class="campo"><label>Effort</label><input type="text" value="${esec.effort || "—"}" disabled></div>
-      <div class="campo"><label>Prezzario</label><input type="text" value="${prezz.regione || "—"} ${prezz.anno || ""}" disabled></div>
-    </div>
-    <div id="g-impostazioni-nota"></div>`;
-  garaCard.querySelector("#g-impostazioni-nota").appendChild(notaNonDisponibile("La modifica di nome/modello/effort/prezzario e l'archiviazione della gara richiedono endpoint di scrittura (PATCH/DELETE) non ancora esposti dal backend: qui sotto i valori reali, in sola lettura."));
-  wrap.appendChild(garaCard);
+// ===========================================================================
+// Avvio
+// ===========================================================================
 
-  const sysCard = document.createElement("section");
-  sysCard.className = "settings-card system card";
-  sysCard.style.background = "var(--glass-2)";
-  sysCard.innerHTML = `<span class="badge na" style="margin-bottom:var(--s-2)">Sistema e account</span>
-    <h3 style="margin:0 0 var(--s-2);font-size:var(--fs-md);font-weight:var(--fw-semibold);color:var(--ink-1)">Vale per tutte le gare</h3>
-    <p style="margin:0 0 var(--s-4);font-size:var(--fs-xs);color:var(--ink-3)">Sezione separata di proposito: qui una modifica ha effetto sull'intera installazione, non su questa gara.</p>
-    <div id="g-sys-rows">Caricamento…</div>`;
-  wrap.appendChild(sysCard);
-
-  const rows = sysCard.querySelector("#g-sys-rows");
+async function ricarica() {
   try {
-    const [auth, pipeline, prezzari] = await Promise.all([
-      Api.sistemaAuth().catch((e) => ({ errore: e.message })),
-      Api.sistemaPipeline().catch((e) => ({ errore: e.message })),
-      Api.sistemaPrezzari().catch((e) => ({ errore: e.message })),
-    ]);
-    rows.innerHTML = "";
-    const riga = (titolo, dettaglio, badge) => `<div class="settings-row"><span><strong style="display:block;font-size:var(--fs-xs);color:var(--ink-1)">${titolo}</strong><span style="font-size:var(--fs-micro);color:var(--ink-2)">${dettaglio}</span></span>${badge || ""}</div>`;
-    rows.innerHTML += auth.errore
-      ? riga("Autenticazione Claude", `Non raggiungibile: ${auth.errore}`)
-      : riga("Autenticazione Claude", auth.disponibile ? "Attiva" + (auth.stima_scadenza ? ` · ${auth.stima_scadenza.nota || ""}` : "") : `Non disponibile: ${auth.motivo}`,
-        `<span class="status-badge ${auth.disponibile ? "good" : "crit"}">${auth.disponibile ? "attiva" : "non disponibile"}</span>`);
-    rows.innerHTML += pipeline.errore
-      ? riga("Versione pipeline", `Non raggiungibile: ${pipeline.errore}`)
-      : riga("Versione pipeline", `${pipeline.versione || "—"} · ${pipeline.git_ref || ""}`);
-    rows.innerHTML += prezzari.errore
-      ? riga("Prezzari installati", `Non raggiungibile: ${prezzari.errore}`)
-      : riga("Prezzari installati", Array.isArray(prezzari) ? `${prezzari.length} regione/i` : JSON.stringify(prezzari));
+    const d = await Api.dettaglioGara(SLUG);
+    stato.manifest = d.manifest || {};
+    stato.fasi = d.fasi?.fasi || {};
+    stato.attivita = d.attivita || {};
+    stato.erroreGara = null;
+    stato.caricamento = false;
+    await aggiornaOutput();
+    invalidaRegistri();
+    assicuraDati(stato.vista);
+    disegna();
+    disegnaAssistente();
   } catch (e) {
-    rows.innerHTML = `<p style="color:var(--crit);font-size:var(--fs-xs)">Errore: ${e.message}</p>`;
+    stato.caricamento = false;
+    stato.erroreGara = e;
+    disegna();
   }
 }
 
-// ══════════════════════ DISPATCH VISTA CENTRALE ═════════════════════
-async function renderView() {
-  const container = document.getElementById("g-viewport");
-  container.innerHTML = "";
-  container.style.animation = "none"; void container.offsetWidth; container.style.animation = "";
-  const r = S.route;
-  if (!r) { container.innerHTML = `<div class="card glass-surface">Caricamento…</div>`; return; }
+// Espone al modulo delle viste solo ciò che serve: navigazione e azioni.
+const Gara = {
+  vai, ricarica, disegna, disegnaVista,
+  eseguiFase, rieseguiFase, approvaFase, decidi,
+  avviaDeliverable, rieseguiDeliverable,
+  intervieni, creaPropostaOperatore, aggiornaFormProposta,
+  apriGap, espandi, filtraAttivita,
+  scegliFile, caricaFile, scartaRifiuto, riconnetti,
+};
 
-  if (r.view === "attivita") { await renderAttivita(container); return; }
-  if (r.view === "impostazioni") { await renderImpostazioni(container); return; }
-  if (r.view === "fase") {
-    if (r.fase < 1 || r.fase > 7 || Number.isNaN(r.fase)) {
-      container.innerHTML = `<div class="error-state"><h3>Fase non valida</h3><p>Le fasi vanno da 1 a 7.</p></div>`;
-      return;
-    }
-    await renderFase(container, r.fase, r.sub, r.subId);
-  }
-}
-
-function renderAll() {
-  if (!S.dato) return;
-  renderCrumb();
-  renderTools();
-  renderHeader();
-  renderStepper();
-  renderAssistantFab();
-  renderView();
-}
-
-// ══════════════════════ SSE: aggiornamento live (aperto una sola volta) ══
-function avviaStream() {
-  const es = new EventSource(Api.streamUrl(SLUG));
-  es.onopen = () => { S.sseOk = true; renderSse(); };
-  es.onmessage = (ev) => {
-    S.sseOk = true; renderSse();
-    try {
-      const payload = JSON.parse(ev.data);
-      S.dato = S.dato ? { ...S.dato, fasi: payload.fasi, attivita: payload.attivita } : S.dato;
-      if (S.dato) { renderHeader(); renderStepper(); renderAssistantFab(); }
-    } catch { /* payload malformato: ignora questo evento, il prossimo arriverà */ }
-  };
-  es.onerror = () => { S.sseOk = false; renderSse(); };
-}
-
-// ── Tema chiaro/scuro (persistito) ──────────────────────────────────
-function applicaTema(t) {
-  if (t) document.documentElement.setAttribute("data-theme", t);
-  else document.documentElement.removeAttribute("data-theme");
-  document.getElementById("tema-chiaro").setAttribute("aria-pressed", String(t === "light"));
-  document.getElementById("tema-scuro").setAttribute("aria-pressed", String(t === "dark"));
-}
-document.getElementById("tema-chiaro").onclick = () => { localStorage.setItem("spada:tema", "light"); applicaTema("light"); };
-document.getElementById("tema-scuro").onclick = () => { localStorage.setItem("spada:tema", "dark"); applicaTema("dark"); };
-applicaTema(localStorage.getItem("spada:tema") || "");
-
-if (!reindirizzaSeGrafo()) {
-  S.route = parseRoute();
-  renderSse();
-  ricarica(true);
-  avviaStream();
-}
+(async function avvio() {
+  // La vista iniziale è quella nell'URL; senza indicazione si apre la fase
+  // corrente della gara — se richiede una decisione, si atterra sul
+  // checkpoint invece che su una panoramica da cui ripartire.
+  await ricarica();
+  const daUrl = leggiHash();
+  applicaVista(daUrl || { tipo: "fase", n: Dominio.faseCorrente(stato.fasi), sub: null });
+  if (!daUrl) history.replaceState(null, "", scriviHash(stato.vista));
+  apriStream();
+})();

@@ -4,101 +4,76 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SPADA Online — Gara</title>
-<script src="js/config.js"></script>
-<script>
-  document.write('<link rel="stylesheet" href="' + window.SPADA_API_BASE + '/sistema/design-system.css">');
-</script>
+<meta name="description" content="Pagina gara: stepper delle 7 fasi, viste di fase, grafo di tracciabilità, attività e assistente in sola lettura.">
+<link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/app.css">
+<script src="js/config.js"></script>
+<script src="js/ui.js"></script>
 </head>
-<body>
-<div aria-hidden="true" class="bg-glow"></div>
+<body data-accent="bronzo" data-glass="medio">
 
-<!-- ── Guscio: barra applicativa (persistente, non si ricarica al cambio vista) ── -->
-<div class="app-top">
-  <div class="app-top-inner">
-    <a href="index.html" class="brand">
-      <span class="brand-mark"></span>
-      <span class="brand-name">SPADA</span>
+<a class="skip" href="#vista">Salta al contenuto della fase</a>
+<div class="bg-glow" aria-hidden="true" data-parallax="true"></div>
+
+<!-- ===================== GUSCIO · barra applicativa ======================
+     Persistente: non si ricarica al cambio di fase o di vista trasversale. -->
+<div class="appbar">
+  <div class="appbar__inner">
+    <a class="brand" href="index.html">
+      <span class="brand__mark" id="brand-mark"></span>
+      <span class="brand__name">SPADA</span>
     </a>
-    <nav class="crumb" aria-label="Percorso">
+    <nav class="crumbs" aria-label="Percorso">
       <a href="index.html">Gare</a>
-      <span class="sep">/</span>
-      <span class="slug" id="g-crumb-slug">—</span>
-      <span class="sep">/</span>
-      <span class="current" id="g-crumb-vista">Fase 1</span>
+      <span class="crumbs__sep" aria-hidden="true">/</span>
+      <span class="crumbs__slug" id="crumb-slug"></span>
+      <span class="crumbs__sep" aria-hidden="true">/</span>
+      <span class="crumbs__leaf" id="crumb-vista"></span>
     </nav>
     <div class="spacer"></div>
-    <div class="tool-group" role="group" aria-label="Viste trasversali" id="g-tools"></div>
-    <div style="display:flex;align-items:center;gap:var(--s-2)">
-      <span class="sse-pill" id="g-sse">SSE</span>
-      <div class="theme-toggle" role="group" aria-label="Tema">
-        <button type="button" id="tema-chiaro" aria-pressed="false">Chiaro</button>
-        <button type="button" id="tema-scuro" aria-pressed="false">Scuro</button>
-      </div>
+
+    <!-- Viste trasversali: sostituiscono l'area centrale, non sono overlay. -->
+    <div class="seg seg--boxed" role="group" aria-label="Viste trasversali" id="viste-trasversali"></div>
+
+    <div class="row row--tight" style="flex-wrap:nowrap">
+      <span class="badge" id="stato-sse" aria-live="polite">
+        <span class="dot" aria-hidden="true"></span>SSE
+      </span>
+      <span id="slot-tema"></span>
+      <span class="avatar" title="Operatore">GC</span>
     </div>
   </div>
 </div>
 
-<div class="page">
+<div class="shell">
 
-  <!-- ── Assistente: pannello flottante, sola lettura, sempre disponibile dopo la Fase 2 ── -->
-  <aside class="assistant-panel" id="g-assistant-panel" hidden aria-label="Assistente di gara">
-    <div class="ap-head">
-      <div class="ap-head-row">
-        <h2>Assistente di gara</h2>
-        <span class="badge info">sola lettura</span>
-        <span class="spacer"></span>
-        <button type="button" class="ap-close" id="g-assistant-close" aria-label="Chiudi assistente">✕</button>
-      </div>
-      <p>Risponde solo su documenti ed elaborati di questa gara. Non modifica nulla: per intervenire serve la chat operativa in Attività.</p>
-    </div>
-    <div class="ap-scope">Contesto: <strong style="color:var(--ink-2)">intera gara</strong></div>
-    <div class="ap-log" id="g-assistant-log" role="log" aria-live="polite"></div>
-    <form class="ap-form" id="g-assistant-form">
-      <input type="text" id="g-assistant-input" placeholder="Chiedi qualcosa sulla gara…" autocomplete="off">
-      <button type="submit" aria-label="Invia">➤</button>
-    </form>
-  </aside>
-  <button type="button" class="assistant-fab" id="g-assistant-fab">💬 Assistente</button>
+  <!-- Assistente: pannello flottante, colonna del guscio e non overlay.
+       Contesto sempre l'intera gara, attivo dalla Fase 2. -->
+  <aside class="assistant" id="assistente" aria-label="Assistente di gara" hidden></aside>
+  <button type="button" class="fab" id="fab-assistente" aria-expanded="false" aria-controls="assistente"></button>
 
   <main>
-    <!-- ── Guscio: intestazione gara ── -->
-    <header class="gara-header">
-      <div class="gara-header-inner">
-        <div style="min-width:0;flex:1 1 560px">
-          <div class="gara-tags" id="g-tags"></div>
-          <h1 id="g-nome">—</h1>
-          <p class="gara-sintesi" id="g-sintesi"><span class="kicker">Sintesi ·</span> —</p>
-        </div>
-        <div class="gara-actions">
-          <div class="gara-actions-row">
-            <button type="button" id="g-vai-attivita">Attività</button>
-          </div>
-          <span style="font-size:var(--fs-micro);color:var(--ink-4)" id="g-meta">—</span>
-        </div>
-      </div>
-    </header>
+    <!-- ==================== GUSCIO · intestazione gara ==================== -->
+    <header class="card card--xl tenderhead" id="testata-gara"></header>
 
-    <!-- ── Guscio: stepper 7 fasi ── -->
+    <!-- ====================== GUSCIO · stepper 7 fasi ===================== -->
     <nav class="stepper" aria-label="Fasi della pipeline">
-      <ol id="g-stepper"></ol>
+      <ol id="stepper"></ol>
     </nav>
 
-    <!-- ── Contenuto centrale: swap per vista, guscio invariato ── -->
-    <div class="view-context">
-      <div style="min-width:0">
-        <button type="button" class="view-back" id="g-back" hidden></button>
-        <div class="kicker" id="g-view-kicker">—</div>
-        <h2 id="g-view-title">—</h2>
-        <p class="sub" id="g-view-sub"></p>
-      </div>
-      <span class="status-badge" id="g-view-status" hidden></span>
+    <!-- ======================== CONTENUTO CENTRALE ======================== -->
+    <div id="vista">
+      <div class="viewhead" id="testata-vista"></div>
+      <div class="viewport" id="viewport" aria-live="polite"></div>
     </div>
-
-    <div class="viewport" id="g-viewport">Caricamento…</div>
   </main>
 </div>
+
+<script src="js/dominio.js"></script>
+<script src="js/md.js"></script>
 <script src="js/api.js"></script>
+<!-- viste.js prima di gara.js: definisce i renderer che il guscio invoca. -->
+<script src="js/viste.js"></script>
 <script src="js/gara.js"></script>
 </body>
 </html>
