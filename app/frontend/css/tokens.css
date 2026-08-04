@@ -1,46 +1,10 @@
-/*
- * design-system.css — token e componenti ricorrenti unici per la UI
- * dell'app e per gli output HTML delle gare (scripts/render/md_to_html.js).
- *
- * Sprint "Liquid Glass" (redesign): sostituisce integralmente il set di
- * token della Sprint 5 (palette piatta chiaro/scuro) con il sistema
- * "Liquid Glass" — palette oklch, superfici vetro con backdrop-filter,
- * scala di elevazione/blur/motion, preset di accento e intensità del
- * vetro. La fonte dei token è `spada-tokens.css`, esportato dallo
- * strumento di design ("Claude Design") insieme alle schermate che
- * documentano ogni componente — vedi `Design System.dc.html` e
- * `Schema Navigazione.dc.html` nell'esportazione, che restano la
- * documentazione di riferimento (non versionati in questo repo, solo
- * la fonte del import).
- *
- * Struttura del file:
- *  1. Token "Liquid Glass" (invariati rispetto all'esportazione).
- *  2. Componenti ricorrenti dell'app, ridisegnati sopra i nuovi nomi di
- *     token: .badge/.status-badge, .phase-card, .agent-row,
- *     .approval-panel, .output-block — più le primitive di base
- *     (bottoni, campi, tabelle) che l'app e gli output condividono.
- *  3. Alias di compatibilità verso i vecchi nomi di token (--bg, --card,
- *     --ink, --mut, --line, --acc, --crit/--critbg, ecc.): servono SOLO
- *     a `scripts/render/md_to_html.js`, che referenzia questi nomi
- *     direttamente nel proprio <style> incorporato per ogni artifact di
- *     gara — non riscritto in questo sprint per restare nello scope
- *     (rifare quello script con i nomi nuovi è un lavoro indipendente,
- *     a basso rischio essendo solo output di sola lettura). Senza
- *     questi alias gli artifact già generati e i futuri smetterebbero
- *     silenziosamente di avere colore. Non usare questi alias in codice
- *     nuovo: sono un ponte, non un'API.
- *
- * Consumo (invariato dalla Sprint 5):
- *  - md_to_html.js inlinea questo file dentro <style> ad ogni
- *    generazione di artifact (l'HTML deve restare autoconsistente e
- *    funzionare offline — un <link> esterno romperebbe quella regola).
- *  - Il frontend app lo richiede in runtime da
- *    {SPADA_API_BASE}/sistema/design-system.css (vedi
- *    app/backend/routers/sistema.py) — stessa fonte, niente copie che
- *    possono divergere.
- */
-
-/* ═══════════════════════ 1. TOKEN "LIQUID GLASS" ══════════════════════ */
+/* ==========================================================================
+   SPADA Online — Design tokens "Liquid Glass"
+   Unico file di token, nessuna dipendenza esterna (system font stack + SVG inline).
+   Contesti d'uso:  (a) app web con toggle chiaro/scuro   (b) documenti HTML
+   autoconsistenti generati dalla pipeline (leggibili offline, stampabili).
+   Tema: prefers-color-scheme + override esplicito data-theme="light|dark".
+   ========================================================================== */
 
 :root {
   /* --- Accento (default: BRONZO). Override con data-accent="ambra|rame" --- */
@@ -48,8 +12,12 @@
   --acc-c: 0.105;
 
   /* --- Tipografia ---------------------------------------------------- */
+  /* App: sans geometrico. Poppins è usato SOLO se già presente sul sistema o
+     self-hosted dal repo (vedi @font-face opzionale in fondo al file): nessuna
+     richiesta a Google Fonts, così i documenti generati restano offline.      */
   --font-ui: Poppins, "Century Gothic", "Avenir Next", Avenir, "Segoe UI Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "Helvetica Neue", Helvetica, sans-serif;
   --font-doc: var(--font-ui);
+  /* Riservato ai documenti HTML prodotti dalla pipeline (prosa lunga, stampa) */
   --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
@@ -119,7 +87,7 @@
   --glass-1: rgba(255, 253, 249, 0.72);
   --glass-2: rgba(255, 253, 249, 0.52);
   --glass-3: rgba(255, 253, 249, 0.32);
-  --glass-solid: #fbf8f3;
+  --glass-solid: #fbf8f3;          /* fallback pieno dietro al blur */
   --glass-solid-2: #f6f2eb;
 
   --hairline: rgba(25, 23, 19, 0.11);
@@ -231,11 +199,15 @@
   }
 }
 
+/* --- Adattamento responsive: si riducono i token, non le regole --------
+   Desktop è il target primario. A tablet/mobile scendono spaziature grandi
+   e scala tipografica dei titoli: ogni layout costruito sui token segue.   */
 @media (max-width: 1024px) {
   :root { --s-6: 24px; --s-7: 32px; --s-8: 48px; --fs-2xl: 27px; --fs-3xl: 33px; }
 }
 @media (max-width: 640px) {
   :root { --s-5: 16px; --s-6: 20px; --s-7: 24px; --s-8: 32px; --fs-xl: 21px; --fs-2xl: 23px; --fs-3xl: 27px; }
+  /* Il drift del gradiente di sfondo pesa sulle GPU mobili: fermo, non rimosso. */
   [data-parallax] { animation: none !important; }
 }
 
@@ -261,6 +233,14 @@
   from { background-position: -180% 0; }
   to   { background-position: 280% 0; }
 }
+@keyframes spada-view-a {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes spada-view-b {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
 @keyframes spada-slide-in {
   from { opacity: 0; transform: translateX(-14px); }
   to   { opacity: 1; transform: none; }
@@ -276,6 +256,7 @@
   100% { transform: translateX(320%); }
 }
 
+/* --- Reduced motion: stop a movimento, parallasse e drift del vetro ---- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 1ms !important;
@@ -295,157 +276,18 @@ body { margin: 0; }
 ::selection { background: var(--accent-soft); }
 :where(:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-xs); }
 
-/* ═══════════════ 2. COMPONENTI RICORRENTI (app + output gara) ═════════ */
+/* --- Poppins self-hosted (opzionale) -----------------------------------
+   Il repo è deployato così com'è: se i due .woff2 sono presenti in /fonts
+   Poppins viene usato, altrimenti si ricade sullo stack di sistema senza
+   alcuna richiesta di rete bloccante.
+@font-face {
+  font-family: Poppins; font-style: normal; font-weight: 400 700;
+  font-display: swap; src: url("/fonts/poppins-variable.woff2") format("woff2");
+}
+   ---------------------------------------------------------------------- */
 
-/* Badge di stato — classificazioni (BASSO/MEDIO/ALTO, stati fase, esiti). */
-.badge, .status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font: var(--fw-semibold) var(--fs-micro)/1.4 var(--font-ui);
-  letter-spacing: .02em;
-  padding: 3px 9px;
-  border-radius: var(--r-pill);
-  white-space: nowrap;
-  border: 1px solid transparent;
-}
-.badge.crit, .status-badge.crit, .status-badge[data-stato="errore"] { color: var(--crit); background: var(--crit-soft); border-color: var(--crit-edge); }
-.badge.warn, .status-badge.warn, .status-badge[data-stato="da_rivedere"] { color: var(--warn); background: var(--warn-soft); border-color: var(--warn-edge); }
-.badge.good, .status-badge.good, .status-badge[data-stato="completata"] { color: var(--ok); background: var(--ok-soft); border-color: var(--ok-edge); }
-.badge.na,   .status-badge.na   { color: var(--neu); background: var(--neu-soft); border-color: var(--neu-edge); }
-.badge.info, .status-badge.info, .status-badge[data-stato="in_esecuzione"] { color: var(--info); background: var(--info-soft); border-color: var(--info-edge); }
-.badge.accent, .status-badge[data-stato="in_coda"] { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-edge); }
-
-/* Superficie di vetro generica — base per card, pannelli, sezioni. */
-.glass-surface, .phase-card, .approval-panel, .output-block, .agent-panel {
-  border-radius: var(--r-lg);
-  border: 1px solid var(--hairline);
-  background: var(--glass-1);
-  backdrop-filter: blur(var(--blur-2)) saturate(var(--sat));
-  -webkit-backdrop-filter: blur(var(--blur-2)) saturate(var(--sat));
-  box-shadow: var(--el-2);
-}
-
-/* Card di fase — le 7 fasi nella pagina gara. */
-.phase-card {
-  padding: var(--s-4) var(--s-5);
-  display: flex;
-  align-items: center;
-  gap: var(--s-4);
-  transition: border-color var(--d-2) var(--e-std), transform var(--d-2) var(--e-out), box-shadow var(--d-3) var(--e-out);
-}
-.phase-card[data-stato="completata"] { border-color: var(--ok-edge); }
-.phase-card[data-stato="errore"] { border-color: var(--crit-edge); }
-.phase-card[data-stato="in_esecuzione"] { border-color: var(--info-edge); }
-.phase-card[data-stato="da_rivedere"] { border-color: var(--accent-edge); }
-.phase-card .titolo { font: var(--fw-semibold) var(--fs-base)/1.4 var(--font-ui); flex: 1; color: var(--ink-1); display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
-.phase-card .numero {
-  font: var(--fw-bold) var(--fs-lg)/1 var(--font-mono); color: var(--ink-3);
-  min-width: 2rem; text-align: center;
-}
-.phase-card .sintesi { color: var(--ink-3); font: var(--fs-sm)/1.5 var(--font-ui); }
-.phase-card .azioni { display: flex; gap: var(--s-2); flex-wrap: wrap; }
-
-/* Riga di attività agente — vista agenti adattiva. */
-.agent-row {
-  display: flex; align-items: center; gap: var(--s-3);
-  padding: var(--s-2) var(--s-3);
-  border-bottom: 1px solid var(--hairline);
-  font: var(--fs-sm)/1.5 var(--font-ui);
-  animation: spada-rise var(--d-3) var(--e-out) both;
-  color: var(--ink-2);
-}
-.agent-row:last-child { border-bottom: none; }
-.agent-row .agente { font-weight: var(--fw-semibold); min-width: 9rem; color: var(--ink-1); font-family: var(--font-mono); font-size: var(--fs-xs); }
-.agent-row .unita { color: var(--ink-3); flex: 1; }
-.agent-row .stato-dot {
-  width: .5rem; height: .5rem; border-radius: 50%; flex-shrink: 0;
-  background: var(--ink-4);
-}
-.agent-row[data-stato="in_corso"] .stato-dot { background: var(--accent); animation: spada-pulse 1.6s var(--e-std) infinite; }
-.agent-row[data-stato="completato"] .stato-dot { background: var(--ok); }
-.agent-row[data-stato="errore"] .stato-dot { background: var(--crit); }
-
-/* Pannello di approvazione — checkpoint umani (fasi 3/5/7). */
-.approval-panel {
-  padding: var(--s-5);
-  border-color: var(--accent-edge);
-}
-.approval-panel .sub { color: var(--ink-3); font-size: var(--fs-xs); margin: 4px 0 var(--s-3); }
-.approval-panel .esito {
-  display: flex; align-items: center; gap: var(--s-2);
-  margin-top: var(--s-3);
-  padding: var(--s-2) var(--s-3);
-  border-radius: var(--r-sm);
-  font: var(--fs-sm)/1.4 var(--font-ui);
-  transition: opacity var(--d-2) var(--e-std);
-}
-.approval-panel .esito.good { background: var(--ok-soft); color: var(--ok); }
-.approval-panel .esito.crit { background: var(--crit-soft); color: var(--crit); }
-.approval-panel .esito.warn { background: var(--warn-soft); color: var(--warn); }
-
-/* Blocco di output — elaborati prodotti, stesso token set degli
-   artifact HTML delle gare. */
-.output-block {
-  padding: var(--s-4);
-  margin: var(--s-4) 0;
-}
-.output-block .kind {
-  font: var(--fw-semibold) var(--fs-micro)/1 var(--font-ui);
-  letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
-}
-
-/* --- Primitive condivise: bottoni, campi, tabelle ----------------------- */
-button {
-  font: var(--fw-semibold) var(--fs-sm)/1 var(--font-ui); cursor: pointer;
-  border: 1px solid var(--accent-edge);
-  background: linear-gradient(180deg, var(--accent), var(--accent-2));
-  color: var(--accent-ink);
-  padding: .6rem 1rem; border-radius: var(--r-sm);
-  box-shadow: var(--el-1);
-  transition: transform var(--d-1) var(--e-out), box-shadow var(--d-2) var(--e-out), opacity var(--d-1) var(--e-std);
-}
-button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--el-2); }
-button:active:not(:disabled) { transform: scale(.97); }
-button.ghost { background: var(--glass-2); color: var(--ink-1); border-color: var(--hairline-2); box-shadow: none; }
-button.ghost:hover:not(:disabled) { background: var(--glass-1); }
-button.scarta { background: transparent; color: var(--crit); border-color: var(--crit-edge); box-shadow: none; }
-button.scarta:hover:not(:disabled) { background: var(--crit-soft); }
-button:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
-
-input, select, textarea {
-  font: var(--fs-sm)/1.4 var(--font-ui); color: var(--ink-1); background: var(--field);
-  border: 1px solid var(--hairline-2); border-radius: var(--r-sm); padding: .55rem .75rem;
-  transition: border-color var(--d-2) var(--e-std), box-shadow var(--d-2) var(--e-std);
-}
-input:focus, select:focus, textarea:focus {
-  outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
-table th, table td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--hairline); }
-table th { font: var(--fw-semibold) var(--fs-micro)/1.4 var(--font-ui); letter-spacing: var(--track-caps); text-transform: uppercase; color: var(--ink-3); }
-
-@media (prefers-reduced-motion: reduce) {
-  .agent-row, .phase-card, button { animation: none !important; transition: none !important; }
-  .agent-row[data-stato="in_corso"] .stato-dot { animation: none; }
-}
-
-/* ═════ 3. ALIAS DI COMPATIBILITÀ — solo per scripts/render/md_to_html.js ═════
-   Ponte verso i vecchi nomi di token (Sprint 5), usati direttamente nello
-   <style> incorporato di ogni artifact di gara. Non usare in codice nuovo. */
-/* --crit/--warn/--info sono già i nomi giusti nel sistema nuovo: nessun
-   alias necessario. Solo i nomi effettivamente rinominati vanno ripresi. */
-:root, [data-theme] {
-  --bg: var(--bg-base);
-  --card: var(--glass-1);
-  --ink: var(--ink-1);
-  --mut: var(--ink-3);
-  --line: var(--hairline);
-  --acc: var(--accent);
-  --critbg: var(--crit-soft);
-  --warnbg: var(--warn-soft);
-  --good: var(--ok);         --goodbg: var(--ok-soft);
-  --na: var(--neu);          --nabg: var(--neu-soft);
-  --infobg: var(--info-soft);
+/* --- Stampa (documenti generati dalla pipeline) ------------------------ */
+@media print {
+  :root { --glass-1: #fff; --glass-2: #fff; --glass-3: #fff; --bg-base: #fff; }
+  * { backdrop-filter: none !important; box-shadow: none !important; }
 }

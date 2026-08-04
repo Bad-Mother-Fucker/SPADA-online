@@ -57,12 +57,17 @@
         "type": "array",
         "items": {
           "type": "object",
-          "required": ["nome", "vincolo_formato", "fonte"],
+          "required": ["nome", "vincolo_formato", "fonte", "tipo"],
           "additionalProperties": false,
           "properties": {
             "nome": { "type": "string" },
             "vincolo_formato": { "type": "string" },
-            "fonte": { "type": "string" }
+            "fonte": { "type": "string" },
+            "tipo": {
+              "type": "string",
+              "enum": ["relazione_tecnica", "computo_metrico", "legge_10", "cronoprogramma", "tavole_tecniche", "altro"],
+              "description": "Sprint 10.3: assegnato da disciplinare-analyst in base a cosa il documento richiesto rappresenta — determina quale agente dedicato lo produce (deliverables.py → AGENTE_PER_TIPO). 'altro' quando non rientra nei cinque tipi con agente specifico."
+            }
           }
         }
       }

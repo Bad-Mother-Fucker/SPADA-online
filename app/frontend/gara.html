@@ -4,73 +4,76 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SPADA Online — Gara</title>
+<meta name="description" content="Pagina gara: stepper delle 7 fasi, viste di fase, grafo di tracciabilità, attività e assistente in sola lettura.">
+<link rel="stylesheet" href="css/tokens.css">
 <link rel="stylesheet" href="css/app.css">
 <script src="js/config.js"></script>
-<script>
-  document.write('<link rel="stylesheet" href="' + window.SPADA_API_BASE + '/sistema/design-system.css">');
-</script>
+<script src="js/ui.js"></script>
 </head>
-<body>
-<div class="wrap">
-  <a href="index.html" class="sub">← Tutte le gare</a>
+<body data-accent="bronzo" data-glass="medio">
 
-  <header class="gara-top">
-    <div>
-      <h1 id="g-nome">—</h1>
-      <div class="gara-meta" id="g-meta">—</div>
+<a class="skip" href="#vista">Salta al contenuto della fase</a>
+<div class="bg-glow" aria-hidden="true" data-parallax="true"></div>
+
+<!-- ===================== GUSCIO · barra applicativa ======================
+     Persistente: non si ricarica al cambio di fase o di vista trasversale. -->
+<div class="appbar">
+  <div class="appbar__inner">
+    <a class="brand" href="index.html">
+      <span class="brand__mark" id="brand-mark"></span>
+      <span class="brand__name">SPADA</span>
+    </a>
+    <nav class="crumbs" aria-label="Percorso">
+      <a href="index.html">Gare</a>
+      <span class="crumbs__sep" aria-hidden="true">/</span>
+      <span class="crumbs__slug" id="crumb-slug"></span>
+      <span class="crumbs__sep" aria-hidden="true">/</span>
+      <span class="crumbs__leaf" id="crumb-vista"></span>
+    </nav>
+    <div class="spacer"></div>
+
+    <!-- Viste trasversali: sostituiscono l'area centrale, non sono overlay. -->
+    <div class="seg seg--boxed" role="group" aria-label="Viste trasversali" id="viste-trasversali"></div>
+
+    <div class="row row--tight" style="flex-wrap:nowrap">
+      <span class="badge" id="stato-sse" aria-live="polite">
+        <span class="dot" aria-hidden="true"></span>SSE
+      </span>
+      <span id="slot-tema"></span>
+      <span class="avatar" title="Operatore">GC</span>
     </div>
-  </header>
-
-  <p class="sintesi-corrente" id="g-sintesi">—</p>
-
-  <div class="barra-fasi" id="g-barra"></div>
-
-  <section id="g-upload" class="doc-upload">
-    <h2>Documenti</h2>
-    <form id="form-upload">
-      <div class="campo">
-        <label for="u-categoria">Categoria</label>
-        <select id="u-categoria" name="categoria">
-          <option value="disciplinare">Disciplinare</option>
-          <option value="elaborati">Elaborati</option>
-          <option value="p7m">P7M</option>
-        </select>
-      </div>
-      <div class="campo">
-        <label for="u-file">File</label>
-        <input id="u-file" name="file" type="file" required>
-      </div>
-      <button type="submit">Carica</button>
-    </form>
-    <p id="upload-esito" class="esito" hidden></p>
-  </section>
-
-  <h2>Fasi</h2>
-  <div class="fasi-lista" id="g-fasi"></div>
-
-  <section id="g-revisione" class="approval-panel" hidden>
-    <h2>Revisione proposte (Fase 5)</h2>
-    <p class="sub">Una proposta per riga, non un blocco unico: approva, chiedi modifiche o scarta con nota.</p>
-    <div id="g-proposte"></div>
-  </section>
-
-  <div class="vista-agenti">
-    <h3 id="g-agenti-titolo">Agenti al lavoro</h3>
-    <div id="g-agenti"></div>
   </div>
-
-  <h2>Elaborati prodotti</h2>
-  <div class="output-lista" id="g-output">Caricamento…</div>
-
-  <h2>Storico esecuzioni</h2>
-  <table class="storico" id="g-runlog"><tbody></tbody></table>
-
-  <details class="log-grezzo">
-    <summary>Log grezzo (JSON)</summary>
-    <pre id="g-json-grezzo"></pre>
-  </details>
 </div>
+
+<div class="shell">
+
+  <!-- Assistente: pannello flottante, colonna del guscio e non overlay.
+       Contesto sempre l'intera gara, attivo dalla Fase 2. -->
+  <aside class="assistant" id="assistente" aria-label="Assistente di gara" hidden></aside>
+  <button type="button" class="fab" id="fab-assistente" aria-expanded="false" aria-controls="assistente"></button>
+
+  <main>
+    <!-- ==================== GUSCIO · intestazione gara ==================== -->
+    <header class="card card--xl tenderhead" id="testata-gara"></header>
+
+    <!-- ====================== GUSCIO · stepper 7 fasi ===================== -->
+    <nav class="stepper" aria-label="Fasi della pipeline">
+      <ol id="stepper"></ol>
+    </nav>
+
+    <!-- ======================== CONTENUTO CENTRALE ======================== -->
+    <div id="vista">
+      <div class="viewhead" id="testata-vista"></div>
+      <div class="viewport" id="viewport" aria-live="polite"></div>
+    </div>
+  </main>
+</div>
+
+<script src="js/dominio.js"></script>
+<script src="js/md.js"></script>
 <script src="js/api.js"></script>
+<!-- viste.js prima di gara.js: definisce i renderer che il guscio invoca. -->
+<script src="js/viste.js"></script>
 <script src="js/gara.js"></script>
 </body>
 </html>

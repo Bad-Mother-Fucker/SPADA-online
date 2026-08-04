@@ -62,6 +62,7 @@ def c_e_un_job_in_esecuzione() -> bool:
 def esegui_job(job):
     job_id = job["id"]
     slug, fase, tipo = job["gara_slug"], job["fase"], job["tipo"]
+    deliverable_id = job["deliverable_id"]
 
     with get_conn() as con:
         con.execute(
@@ -80,12 +81,20 @@ def esegui_job(job):
         log.error("Job %s: autenticazione Claude non disponibile: %s", job_id, e)
         return
 
-    spada_fase = PIPELINE_DIR / "scripts" / "setup" / "spada_fase.sh"
-    argv = ["bash", str(spada_fase), slug, str(fase)]
-    if tipo == "riesegui":
-        argv.append("--riesegui")
-    elif tipo == "approva":
-        argv.append("--approva")
+    if deliverable_id:
+        # Sprint 10.3: un deliverable si esegue da solo, indipendente
+        # dagli altri deliverable della stessa gara e dalle altre fasi.
+        spada_deliverable = PIPELINE_DIR / "scripts" / "setup" / "spada_deliverable.sh"
+        argv = ["bash", str(spada_deliverable), slug, deliverable_id]
+        if tipo == "riesegui":
+            argv.append("--riesegui")
+    else:
+        spada_fase = PIPELINE_DIR / "scripts" / "setup" / "spada_fase.sh"
+        argv = ["bash", str(spada_fase), slug, str(fase)]
+        if tipo == "riesegui":
+            argv.append("--riesegui")
+        elif tipo == "approva":
+            argv.append("--approva")
 
     log.info("Job %s: eseguo %s", job_id, " ".join(argv))
     import os

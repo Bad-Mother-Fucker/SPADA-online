@@ -55,8 +55,25 @@ nessun file `.db` scritto).
 
 ## Importare un'edizione
 
+Un comando solo, dal download all'interrogabilità:
+
 ```bash
-./setup.sh   # una tantum, crea .venv
+bash ../../scripts/setup/import_prezzario.sh Campania 2026
+```
+
+Scarica i due asset da `prometeus-prezzari` (serve `gh` autenticato: il
+repo è privato), decomprime in una cartella temporanea, importa nello
+**stesso** `spada.db` che usano backend e server MCP — risolto con
+`SPADA_DB_PATH`, poi `SPADA_DATA_DIR`, poi `~/spada/_data` — e verifica
+che le tabelle e l'indice full-text siano davvero popolati. I JSON
+estratti (~50 MB) non restano sul disco.
+
+Reimportare la stessa edizione la sostituisce: nessun duplicato.
+
+Se serve il controllo manuale dei singoli passi:
+
+```bash
+bash setup.sh   # una tantum, crea .venv
 
 .venv/bin/python3 import_prezzario.py \
   --db ../../../_data/spada.db \
@@ -65,24 +82,29 @@ nessun file `.db` scritto).
   --analisi prezzario_campania_analisi_2026.json
 ```
 
-I due JSON sorgente si ottengono da `prometeus-prezzari`
-(`gh release download <regione>-<anno> --repo Bad-Mother-Fucker/prometeus-prezzari`,
-poi `gunzip`) — stesso contratto già usato da `fetch_prezzario.sh`,
-solo che ora l'output va importato invece che messo in cache.
+### Verifica su dato reale
 
-**Nota**: l'edizione `campania-2026` esiste come release in
-`prometeus-prezzari` ma non è stata scaricata e importata in questo
-sprint — l'ambiente di sviluppo in cui è stato costruito questo server
-non ha accesso diretto agli asset di release di un repo privato (il
-download autenticato via `curl`/token è bloccato dal sandbox; serve
-`gh` CLI o l'accesso diretto sulla VM). L'importatore e il server sono
-stati validati con un fixture sintetico ma fedele allo schema
-(`/tmp/fixture_*.json` nella sessione di sviluppo, non incluso nel
-repo): validazione positiva, validazione negativa (subtotale
-corrotto → blocco), e non interferenza tra due annualità diverse nello
-stesso `spada.db`. **Il primo import reale di Campania 2026 va fatto
-sulla VM con `gh` disponibile**, prima di considerare Sprint 2 chiuso
-end-to-end.
+L'edizione **Campania 2026** è stata scaricata e importata davvero, non
+solo su fixture:
+
+| | |
+|---|---|
+| Articoli | 31.755 |
+| Voci con analisi | 16.178 |
+| Sotto-gruppi validati | 37.830 — nessun mismatch |
+| Voci elementari | 71.544 |
+| Import | ~2,7 s |
+
+La validazione bloccante dei subtotali **passa sul prezzario vero**: è
+la conferma che mancava, perché fino a qui era stata provata solo su un
+fixture sintetico. I quattro tool sono stati interrogati sul database
+risultante: `versione_prezzario` restituisce fonte e riferimento
+normativo (DGR n. 14 del 29/01/2026), `cerca_voce` trova 821 riscontri
+per "calcestruzzo", `dettaglio_analisi` restituisce i sotto-gruppi come
+lista ordinata (la stessa categoria compare più volte come fasi
+distinte, che è il motivo per cui non vanno aggregati), e
+`confronta_prezzo` classifica correttamente BASSO/MEDIO/ALTO a +3%,
++10% e +40%, mentre un codice assente torna `comparabile: false`.
 
 ## Registrazione
 

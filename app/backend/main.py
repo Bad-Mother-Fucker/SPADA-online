@@ -14,7 +14,9 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fastapi import FastAPI
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from db import init_db
 from routers import gare, sistema
@@ -44,6 +46,19 @@ def _startup():
 
 app.include_router(gare.router)
 app.include_router(sistema.router)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def _http_exception_con_causa_originale(request, exc):
+    # FastAPI converte errori interni (es. parsing multipart fallito) in
+    # HTTPException con "raise ... from e", ma la causa originale non
+    # arriva mai nei log — solo il messaggio generico al client. La si
+    # logga qui per poterla leggere in produzione senza dover riprodurre
+    # il bug con uno script a parte. Nessun cambio di comportamento verso
+    # il client: la risposta resta quella di default di FastAPI.
+    if exc.__cause__ is not None:
+        log.exception("HTTPException con causa originale", exc_info=exc.__cause__)
+    return await http_exception_handler(request, exc)
 
 
 @app.get("/")

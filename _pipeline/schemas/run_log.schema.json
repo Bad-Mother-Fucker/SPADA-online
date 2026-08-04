@@ -35,7 +35,11 @@
         "modello": { "type": "string" },
         "effort": { "type": "string", "enum": ["low", "medium", "high", "xhigh", "max"] },
         "esito": { "type": "string", "enum": ["completato", "errore", "annullato"] },
-        "errore": { "type": ["string", "null"] }
+        "errore": { "type": ["string", "null"] },
+        "deliverable_id": {
+          "type": ["string", "null"],
+          "description": "Sprint 10.3: valorizzato quando il run è l'esecuzione di UN deliverable (spada_deliverable.sh) invece della fase 6 atomica intera. null per tutte le altre fasi/run."
+        }
       }
     }
   }
