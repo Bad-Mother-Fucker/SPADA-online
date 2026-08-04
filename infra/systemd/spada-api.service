@@ -13,7 +13,7 @@ Environment=SPADA_PIPELINE_DIR=/home/spada/spada/_pipeline
 Environment=SPADA_DATA_DIR=/home/spada/spada/_data
 # Origine esplicita in produzione, non "*": impostare all'hostname
 # reale del frontend su Cloudflare Pages.
-Environment=SPADA_FRONTEND_ORIGIN=https://spada.pages.dev
+Environment=SPADA_FRONTEND_ORIGIN=https://gare.prometheus-spada.it
 ExecStart=/home/spada/spada-online/app/backend/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=5

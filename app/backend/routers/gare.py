@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -95,6 +96,24 @@ def dettaglio_gara(slug: str):
     fasi = _leggi_json(d / "_state" / "fasi.json", {})
     attivita = _leggi_json(d / "_state" / "attivita.json", {})
     return {"manifest": manifest, "fasi": fasi, "attivita": attivita}
+
+
+@router.delete("/{slug}", status_code=204)
+def elimina_gara(slug: str):
+    """Elimina definitivamente una gara: riga in DB (con cascata sulle
+    tabelle collegate — job, documenti, approvazioni, conversazioni,
+    interventi, proposte_operatore, tutte ON DELETE CASCADE su
+    gare.slug) e l'intera directory su filesystem. Non reversibile:
+    non esiste un cestino né un ripristino."""
+    d = _gara_o_404(slug)
+    with get_conn() as con:
+        in_corso = con.execute(
+            "SELECT 1 FROM job WHERE gara_slug=? AND stato='in_esecuzione'", (slug,)
+        ).fetchone()
+        if in_corso:
+            raise HTTPException(409, "Una fase è in esecuzione su questa gara: attendi la conclusione prima di eliminarla.")
+        con.execute("DELETE FROM gare WHERE slug=?", (slug,))
+    shutil.rmtree(d, ignore_errors=True)
 
 
 @router.get("/{slug}/grafo")
