@@ -43,6 +43,15 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/home/spada/spada/gare /home/spada/spada/_data
 ProtectHome=read-only
+# Il parser multipart di Starlette spilla su un file temporaneo reale
+# (tempfile.TemporaryFile) ogni upload che supera la soglia di buffer
+# in-memory — ProtectSystem=strict rende /tmp read-only e senza questa
+# riga la scrittura falliva con FileNotFoundError ("No usable
+# temporary directory"), che FastAPI traduce nel generico 400 "There
+# was an error parsing the body". PrivateTmp dà al servizio un /tmp
+# isolato e scrivibile, senza allargare l'accesso al resto del
+# filesystem reale.
+PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
