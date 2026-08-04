@@ -462,13 +462,26 @@ async def stream_stato(slug: str, request: Request):
         # produzione: VM esaurita da un loop di 47.000+ riavvii perché
         # nessuno dei due meccanismi esisteva.
         ultimo = None
+        ultimo_invio = asyncio.get_event_loop().time()
         while not await request.is_disconnected():
             fasi = _leggi_json(d / "_state" / "fasi.json", {})
             attivita = _leggi_json(d / "_state" / "attivita.json", {})
             payload = json.dumps({"fasi": fasi, "attivita": attivita}, ensure_ascii=False)
+            ora = asyncio.get_event_loop().time()
             if payload != ultimo:
                 yield f"data: {payload}\n\n"
                 ultimo = payload
+                ultimo_invio = ora
+            elif ora - ultimo_invio > 20:
+                # Nessun cambio di stato da 20s: senza mandare nulla la
+                # connessione risulta "idle" a Cloudflare Tunnel, che la
+                # chiude — il client lo vede come riconnessione SSE visibile
+                # ogni 1-2 minuti (badge che sfarfalla, redraw). Un commento
+                # SSE (riga che inizia per ":") è ignorato da EventSource,
+                # non tocca payload/onmessage: serve solo a tenere viva la
+                # connessione.
+                yield ": keep-alive\n\n"
+                ultimo_invio = ora
             await asyncio.sleep(1.0)
 
     return StreamingResponse(generatore(), media_type="text/event-stream")

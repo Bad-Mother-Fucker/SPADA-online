@@ -189,31 +189,15 @@ const Viste = (() => {
   // FASE 1 · Acquisizione documenti
   // ===================================================================
 
-  function fase1(stato) {
-    const docs = stato.documenti;
-    const perCategoria = (id) =>
-      (docs.stato === "ok" ? docs.dati : []).filter((d) => d.categoria === id);
-
-    const dropcats = Dominio.CATEGORIE.map((c) => {
-      const n = perCategoria(c.id).length;
-      return h("button", {
-        type: "button", class: "dropcat", "data-categoria": c.id,
-        onClick: () => Gara.scegliFile(c.id),
-        onDragover: (e) => { e.preventDefault(); e.currentTarget.dataset.over = "true"; },
-        onDragleave: (e) => { e.currentTarget.dataset.over = "false"; },
-        onDrop: (e) => {
-          e.preventDefault();
-          e.currentTarget.dataset.over = "false";
-          Gara.caricaFile([...e.dataTransfer.files], c.id);
-        },
-      },
-        h("div", { class: "dropcat__tag" }, c.tag),
-        h("div", { class: "dropcat__label" }, c.label),
-        h("div", { class: "dropcat__hint" }, c.hint),
-        h("div", { class: "dropcat__count", dataset: { has: String(n > 0) } },
-          n ? UI.plurale(n, "file caricato", "file caricati") : "nessun file"));
-    });
-
+  /** Dropzone + righe di upload in corso/rifiutate: isolato in una
+      funzione propria perché durante un caricamento in batch va
+      ridisegnato ad ogni file, e ricostruire l'intera Fase 1 (dropcats,
+      elenco documenti confermati, checklist di prontezza) per ogni
+      singolo file è il motivo dello sfarfallio segnalato in produzione.
+      Restituisce un elenco di nodi, non un contenitore: chi lo chiama
+      decide se è il primo render (fase1) o un aggiornamento mirato
+      (Gara.aggiornaPannelloCaricamento). */
+  function pannelloCaricamento(stato) {
     const rifiutati = stato.upload.rifiutati;
     const dropzone = h("div", {
       class: `dropzone${rifiutati.length ? " dropzone--rejected" : ""}`,
@@ -257,6 +241,39 @@ const Viste = (() => {
         h("span", { class: "filerow__name" }, nome),
         h("span", { class: "filerow__size" }, ""),
         h("span", { class: "badge badge--sm badge--info" }, punto(true), "caricamento")));
+
+    return [
+      dropzone,
+      h("h3", { class: "sec-title", style: { margin: "var(--s-5) 0 var(--s-3)" } }, "File caricati"),
+      h("div", { class: "stack" }, righeCaricamento, righeRifiuto),
+      (righeCaricamento.length || righeRifiuto.length) ? h("div", { style: { height: "var(--s-2)" } }) : null,
+    ];
+  }
+
+  function fase1(stato) {
+    const docs = stato.documenti;
+    const perCategoria = (id) =>
+      (docs.stato === "ok" ? docs.dati : []).filter((d) => d.categoria === id);
+
+    const dropcats = Dominio.CATEGORIE.map((c) => {
+      const n = perCategoria(c.id).length;
+      return h("button", {
+        type: "button", class: "dropcat", "data-categoria": c.id,
+        onClick: () => Gara.scegliFile(c.id),
+        onDragover: (e) => { e.preventDefault(); e.currentTarget.dataset.over = "true"; },
+        onDragleave: (e) => { e.currentTarget.dataset.over = "false"; },
+        onDrop: (e) => {
+          e.preventDefault();
+          e.currentTarget.dataset.over = "false";
+          Gara.caricaFile([...e.dataTransfer.files], c.id);
+        },
+      },
+        h("div", { class: "dropcat__tag" }, c.tag),
+        h("div", { class: "dropcat__label" }, c.label),
+        h("div", { class: "dropcat__hint" }, c.hint),
+        h("div", { class: "dropcat__count", dataset: { has: String(n > 0) } },
+          n ? UI.plurale(n, "file caricato", "file caricati") : "nessun file"));
+    });
 
     const elencoFile = risorsa(docs, {
       vuoto: () => vuotoInline("Nessun documento caricato",
@@ -307,10 +324,7 @@ const Viste = (() => {
     return h("div", { class: "split" },
       h("section", { class: "card split__main split__main--wide" },
         h("div", { class: "dropcats" }, dropcats),
-        dropzone,
-        h("h3", { class: "sec-title", style: { margin: "var(--s-5) 0 var(--s-3)" } }, "File caricati"),
-        h("div", { class: "stack" }, righeCaricamento, righeRifiuto),
-        (righeCaricamento.length || righeRifiuto.length) ? h("div", { style: { height: "var(--s-2)" } }) : null,
+        h("div", { id: "pannello-upload" }, ...pannelloCaricamento(stato)),
         elencoFile),
 
       h("aside", { class: "split__aside" },
@@ -1679,5 +1693,6 @@ const Viste = (() => {
     fase6Elenco, fase6Workspace,
     fase7, grafo, attivita, impostazioni, brief,
     azioniFase, risorsa, vuotoInline, TIPI_GRAFO,
+    pannelloCaricamento,
   };
 })();

@@ -1226,6 +1226,19 @@ function scegliFile(categoria) {
   input.click();
 }
 
+/** Aggiorna solo il pannello dropzone/upload della Fase 1, non l'intera
+    vista: durante un caricamento in batch questa funzione viene chiamata
+    per ogni file, e ricostruire da capo dropcats/elenco documenti/
+    checklist di prontezza a ogni file (via disegnaVista()) è quello che
+    prima si vedeva come sfarfallio. No-op se non si è sulla Fase 1 (il
+    nodo non esiste nella vista corrente) — es. l'operatore ha già
+    navigato altrove mentre l'upload finiva in background. */
+function aggiornaPannelloCaricamento() {
+  const el = document.getElementById("pannello-upload");
+  if (!el) return;
+  set(el, ...Viste.pannelloCaricamento(stato));
+}
+
 async function caricaFile(files, categoriaForzata) {
   if (!files.length) return;
   const buoni = [];
@@ -1235,7 +1248,7 @@ async function caricaFile(files, categoriaForzata) {
     else buoni.push(f);
   }
   stato.upload.inCorso.push(...buoni.map((f) => f.name));
-  disegnaVista();
+  aggiornaPannelloCaricamento();
 
   let caricati = 0;
   let fasiDaValutare = [];
@@ -1249,7 +1262,7 @@ async function caricaFile(files, categoriaForzata) {
       stato.upload.rifiutati.push({ nome: f.name, dimensione: f.size, motivo: e.message });
     } finally {
       stato.upload.inCorso = stato.upload.inCorso.filter((n) => n !== f.name);
-      disegnaVista();
+      aggiornaPannelloCaricamento();
     }
   }
 
@@ -1282,7 +1295,7 @@ function chiediRiesecuzione(fasiCompletate) {
 
 const scartaRifiuto = (nome) => {
   stato.upload.rifiutati = stato.upload.rifiutati.filter((r) => r.nome !== nome);
-  disegnaVista();
+  aggiornaPannelloCaricamento();
 };
 
 // ===========================================================================
