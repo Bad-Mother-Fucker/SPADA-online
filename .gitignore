@@ -6,3 +6,5 @@ __pycache__/
 _data/
 .venv/
 *.db
+_state/
+_pipeline/_state/
