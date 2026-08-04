@@ -14,10 +14,10 @@
 #   sudo cloudflared service install
 #   sudo systemctl enable --now cloudflared
 
-tunnel: <UUID-DEL-TUNNEL>
-credentials-file: /etc/cloudflared/<UUID-DEL-TUNNEL>.json
+tunnel: 04f1d512-3689-46a4-9d36-dc7f32aa3172
+credentials-file: /home/micheledes1296/.cloudflared/04f1d512-3689-46a4-9d36-dc7f32aa3172.json
 
 ingress:
-  - hostname: api.<tuo-dominio>
+  - hostname: api.prometheus-spada.it
     service: http://127.0.0.1:8000
   - service: http_status:404

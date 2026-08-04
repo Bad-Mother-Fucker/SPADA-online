@@ -123,6 +123,9 @@ const UI = (() => {
     tabella: (n = 18) => s("svg", { width: n, height: n, viewBox: "0 0 18 18", "aria-hidden": "true" },
       s("rect", { x: "2", y: "3", width: "14", height: "12", rx: "1.6", fill: "none", stroke: "currentColor", "stroke-width": "1.3" }),
       s("path", { d: "M2 7h14M7 7v8M11.5 7v8", stroke: "currentColor", "stroke-width": "1.3" })),
+    cestino: (n = 12) => s("svg", { width: n, height: n, viewBox: "0 0 12 12", "aria-hidden": "true" },
+      s("path", { d: "M2 3.4h8M4.4 3.4V2.3a1 1 0 011-1h1.2a1 1 0 011 1v1.1", fill: "none", stroke: "currentColor", "stroke-width": "1.1" }),
+      s("path", { d: "M3.1 3.4l.5 6.1a1 1 0 001 .9h2.8a1 1 0 001-1l.5-6", fill: "none", stroke: "currentColor", "stroke-width": "1.1" })),
   };
 
   /** Pallino di stato. Non compare mai da solo: sta accanto a un'etichetta. */

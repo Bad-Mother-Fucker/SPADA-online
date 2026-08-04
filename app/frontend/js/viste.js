@@ -478,6 +478,58 @@ const Viste = (() => {
   }
 
   // ===================================================================
+  // GARA BRIEF · vista trasversale
+  //
+  // Il documento di sintesi prodotto da disciplinare-analyst in Fase 1
+  // (output/03_criteria/gara_brief.md): risponde a "cosa dobbiamo
+  // produrre per vincere questa gara". Prima di questa vista era solo
+  // una fonte di fallback per il parsing della Fase 3 — qui è invece
+  // l'intero documento, in prosa, consultabile per intero e in
+  // qualunque momento come Grafo e Attività.
+  // ===================================================================
+
+  function brief(stato) {
+    const res = stato.garaBrief;
+    const haMd = (stato.output || []).includes("03_criteria/gara_brief.md");
+    const haHtml = (stato.output || []).includes("11_view/03_criteria/gara_brief.html");
+
+    const azioni = (haMd || haHtml)
+      ? h("div", { class: "row row--tight", style: { justifyContent: "flex-end" } },
+          haHtml ? h("a", {
+            class: "btn btn--sm btn--accent",
+            href: Api.percorsoOutput(stato.slug, "11_view/03_criteria/gara_brief.html"),
+            target: "_blank", rel: "noopener",
+          }, I.scarica(11), "Versione da condividere") : null,
+          haMd ? h("a", {
+            class: "btn btn--sm",
+            href: Api.percorsoOutput(stato.slug, "03_criteria/gara_brief.md"),
+            target: "_blank", rel: "noopener",
+          }, I.scarica(11), "Markdown") : null)
+      : null;
+
+    const contenuto = risorsa(res, {
+      vuoto: () => vuotoInline("Gara brief non ancora prodotto",
+        "Il documento di sintesi si scrive in Fase 1, subito dopo l'estrazione dei criteri dal disciplinare: nome gara, stazione appaltante, cosa serve per vincere.",
+        h("button", { type: "button", class: "btn btn--primary", onClick: () => Gara.vai({ tipo: "fase", n: 1 }) }, "Vai alla Fase 1")),
+      render: (dati) => h("div", { class: "stack stack--4" },
+        dati.sintesi.length
+          ? h("div", { class: "card" },
+              secTitle("Sintesi"),
+              dati.sintesi.map((p) => h("p", { class: "lead" }, p)))
+          : null,
+        dati.sezioni.map((sez) => h("div", { class: "card" },
+          h("h3", { class: "sec-title" }, sez.titolo),
+          h("div", { class: "prose prose--boxed" },
+            sez.paragrafi.length
+              ? sez.paragrafi.map((p) => h("p", null, p))
+              : h("p", { class: "muted" }, "Sezione senza prosa (tabella o elenco non anteprimato)."))))),
+    });
+
+    return h("div", { class: "split" },
+      h("section", { class: "split__main" }, azioni, contenuto));
+  }
+
+  // ===================================================================
   // FASE 4 · Ricerca soluzioni (gap e prove)
   // ===================================================================
 
@@ -1625,7 +1677,7 @@ const Viste = (() => {
     fase1, fase2, fase3, fase4,
     fase5Elenco, fase5Dettaglio,
     fase6Elenco, fase6Workspace,
-    fase7, grafo, attivita, impostazioni,
+    fase7, grafo, attivita, impostazioni, brief,
     azioniFase, risorsa, vuotoInline, TIPI_GRAFO,
   };
 })();

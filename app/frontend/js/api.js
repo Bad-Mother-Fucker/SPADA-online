@@ -49,6 +49,7 @@ const Api = (() => {
     elencoGare: () => richiesta("/gare"),
     creaGara: (dati) => richiesta("/gare", { method: "POST", body: JSON.stringify(dati) }),
     dettaglioGara: (slug) => richiesta(`/gare/${encodeURIComponent(slug)}`),
+    eliminaGara: (slug) => richiesta(`/gare/${encodeURIComponent(slug)}`, { method: "DELETE" }),
     runLog: (slug) => richiesta(`/gare/${encodeURIComponent(slug)}/run-log`),
     elencoOutput: (slug) => richiesta(`/gare/${encodeURIComponent(slug)}/output`),
     percorsoOutput: (slug, p) => `${base()}/gare/${encodeURIComponent(slug)}/output/${p}`,

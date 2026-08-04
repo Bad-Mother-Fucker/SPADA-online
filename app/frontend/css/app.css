@@ -631,7 +631,20 @@ legend { padding: 0; margin-bottom: var(--s-3); font-size: var(--fs-xs); font-we
   animation: spada-rise var(--d-3) var(--e-out) both;
 }
 .tender:hover { transform: translateY(-2px); box-shadow: var(--el-3); color: inherit; }
-.tender > *:not(.sheen):not(.rail) { position: relative; }
+.tender > *:not(.sheen):not(.rail):not(.tender__elimina) { position: relative; }
+.tender__elimina {
+  position: absolute;
+  top: var(--s-4);
+  right: var(--s-4);
+  z-index: 1;
+  opacity: 0;
+  transition: opacity var(--d-2) var(--e-out), color var(--d-2) var(--e-out), background var(--d-2) var(--e-out);
+}
+.tender:hover .tender__elimina,
+.tender:focus-within .tender__elimina,
+.tender__elimina:focus-visible {
+  opacity: 1;
+}
 .tender--ok { border-color: var(--ok-edge); }
 .tender--warn { border-color: var(--warn-edge); }
 .tender--crit { border-color: var(--crit-edge); }

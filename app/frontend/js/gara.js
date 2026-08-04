@@ -37,6 +37,7 @@ const stato = {
     criteri: vuoto(), analisi: vuoto(), gap: vuoto(),
     proposte: vuoto(), audit: vuoto(), deliverable: vuoto(), grafo: vuoto(),
   },
+  garaBrief: vuoto(),
   contenutoDeliverable: vuoto(),
   dettaglioProposta: vuoto(),
   proposteOperatore: vuoto(),
@@ -73,6 +74,7 @@ function leggiHash() {
   if (parti[0] === "grafo") return { tipo: "grafo", filtro: parti[1] || "tutti", fase: parti[2] || null };
   if (parti[0] === "attivita") return { tipo: "attivita" };
   if (parti[0] === "impostazioni") return { tipo: "impostazioni" };
+  if (parti[0] === "brief") return { tipo: "brief" };
   return null;
 }
 
@@ -165,6 +167,8 @@ function assicuraDati(v) {
     serve.push("runLog", "interventi");
   } else if (v.tipo === "impostazioni") {
     serve.push("sistema");
+  } else if (v.tipo === "brief") {
+    serve.push("garaBrief");
   }
   serve.forEach(carica);
   if (v.tipo === "fase" && v.n === 6 && v.sub) caricaContenutoDeliverable(v.sub);
@@ -176,6 +180,7 @@ function carica(chiave, forza = false) {
   const corrente = chiave === "documenti" ? stato.documenti
     : chiave === "runLog" ? stato.runLog
     : chiave === "proposteOperatore" ? stato.proposteOperatore
+    : chiave === "garaBrief" ? stato.garaBrief
     : chiave === "sistema" || chiave === "interventi" ? null
     : stato.registri[chiave];
   if (!forza && corrente && corrente.stato !== "caricamento") return;
@@ -186,6 +191,7 @@ function carica(chiave, forza = false) {
     if (chiave === "documenti") stato.documenti = res;
     else if (chiave === "runLog") stato.runLog = res;
     else if (chiave === "proposteOperatore") stato.proposteOperatore = res;
+    else if (chiave === "garaBrief") stato.garaBrief = res;
     else stato.registri[chiave] = res;
     disegnaVista();
   };
@@ -220,6 +226,10 @@ function carica(chiave, forza = false) {
       leggiPrimoDisponibile(
         ["03_criteria/gara_brief.md", "03_criteria/strategy_audit.md"],
         parseAnalisi).then(fine);
+      break;
+
+    case "garaBrief":
+      leggiRegistro("03_criteria/gara_brief.md", parseGaraBrief).then(fine);
       break;
 
     case "gap":
@@ -398,6 +408,19 @@ function parseAnalisi(testo) {
   return { sintesi, sezioni, conteggi };
 }
 
+/** A differenza di parseAnalisi (che estrae solo le sezioni "annotate" con
+    una severità, per il pannello della Fase 3), qui il documento serve per
+    intero: ogni sezione di secondo livello con la sua prosa completa, non
+    solo il primo paragrafo. */
+function parseGaraBrief(testo) {
+  const sezioni = Md.sezioni(testo)
+    .filter((s2) => s2.livello >= 2 && s2.corpo.trim())
+    .map((s2) => ({ titolo: s2.titolo, paragrafi: Md.paragrafi(s2.corpo, 40) }));
+  const sintesi = Md.paragrafi(testo, 3);
+  if (!sintesi.length && !sezioni.length) return null;
+  return { sintesi, sezioni };
+}
+
 function parseGap(testo) {
   const t = Md.tabellaCon(testo, [["id", "gap", "codice"]]);
   if (!t) return [];
@@ -565,6 +588,7 @@ document.getElementById("brand-mark").appendChild(I.stella(13));
 document.getElementById("slot-tema").appendChild(UI.Tema.controllo());
 
 const VISTE_TRASVERSALI = [
+  { chiave: "brief", etichetta: "Gara Brief", icona: () => I.documento(11) },
   { chiave: "grafo", etichetta: "Grafo", icona: () => I.grafo(11) },
   { chiave: "attivita", etichetta: "Attività", icona: () => null },
   { chiave: "impostazioni", etichetta: "Impostazioni", icona: () => null },
@@ -597,7 +621,7 @@ function disegnaCrumb() {
     testo = `Fase ${v.n} · ${f.titolo}`;
     if (v.sub) testo += ` · ${v.sub}`;
   } else {
-    testo = { grafo: "Grafo", attivita: "Attività", impostazioni: "Impostazioni" }[v.tipo];
+    testo = { brief: "Gara Brief", grafo: "Grafo", attivita: "Attività", impostazioni: "Impostazioni" }[v.tipo];
   }
   document.getElementById("crumb-vista").textContent = testo;
   document.title = `${stato.manifest?.nome || SLUG} — ${testo} · SPADA Online`;
@@ -682,6 +706,8 @@ function disegnaStepper() {
 }
 
 const TITOLI_TRASVERSALI = {
+  brief: ["Vista trasversale", "Gara Brief",
+    "Il documento di sintesi scritto in Fase 1, subito dopo l'estrazione dei criteri: cosa chiede questa gara e cosa serve per vincerla. Consultabile in qualunque momento, indipendente dalla fase corrente."],
   grafo: ["Vista trasversale", "Grafo della gara",
     "Documenti, requisiti, gap, proposte e deliverable con i legami che li tengono insieme. Consultabile in qualunque momento, indipendente dalla fase corrente."],
   attivita: ["Vista trasversale", "Attività della gara",
@@ -780,6 +806,7 @@ function disegnaVista() {
     else nodo = Viste.fase7(stato);
   } else if (v.tipo === "grafo") nodo = Viste.grafo(stato);
   else if (v.tipo === "attivita") nodo = Viste.attivita(stato);
+  else if (v.tipo === "brief") nodo = Viste.brief(stato);
   else nodo = Viste.impostazioni(stato);
 
   set(vp, nodo);
@@ -889,6 +916,7 @@ function invalidaRegistri() {
   stato.documenti = vuoto();
   stato.runLog = vuoto();
   stato.proposteOperatore = vuoto();
+  stato.garaBrief = vuoto();
 }
 
 async function aggiornaOutput() {

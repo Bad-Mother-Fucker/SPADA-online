@@ -69,6 +69,23 @@ function avvisoGara(g) {
   return null;
 }
 
+/** Cancellazione non reversibile: nessun cestino, nessun ripristino — la
+    conferma nomina esplicitamente la gara per evitare il click sbagliato
+    su una card vicina in un elenco lungo. */
+async function eliminaGara(g) {
+  const nome = g.nome || g.slug;
+  if (!confirm(`Eliminare definitivamente "${nome}"?\n\nDocumenti, elaborati, proposte e cronologia di questa gara andranno persi. L'operazione non si può annullare.`)) return;
+  try {
+    await Api.eliminaGara(g.slug);
+    stato.gare = stato.gare.filter((x) => x.slug !== g.slug);
+    cacheArricchimento.delete(g.slug);
+    Toast.ok(`Gara "${nome}" eliminata.`);
+    disegna();
+  } catch (e) {
+    Toast.errore(`Eliminazione non riuscita: ${e.message}`);
+  }
+}
+
 function cardGara(g, indice) {
   const fasi = g.fasi || {};
   const st = Dominio.statoGara(fasi);
@@ -87,6 +104,15 @@ function cardGara(g, indice) {
   },
     h("span", { class: "sheen sheen--short", "aria-hidden": "true" }),
     h("span", { class: `rail rail--${meta.tono}`, "aria-hidden": "true" }),
+
+    h("button", {
+      type: "button", class: "icon-btn icon-btn--danger tender__elimina",
+      "aria-label": `Elimina gara ${g.nome || g.slug}`, title: "Elimina gara",
+      // Il click deve fermarsi qui: senza preventDefault/stopPropagation
+      // aprirebbe comunque gara.html, perché il bottone vive dentro l'<a>
+      // dell'intera card.
+      onClick: (e) => { e.preventDefault(); e.stopPropagation(); eliminaGara(g); },
+    }, I.cestino(12)),
 
     h("span", { class: "tender__row" },
       h("span", { class: `badge badge--${meta.tono}` },
