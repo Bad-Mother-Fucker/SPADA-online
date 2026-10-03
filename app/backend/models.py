@@ -8,7 +8,7 @@ class CreaGaraRequest(BaseModel):
     nome: str
     regione: str
     anno_prezzario: int = Field(ge=2000, le=2100)
-    modello: str = "claude-sonnet-5"
+    modello: str = "sonnet"
     effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
 
 
@@ -18,6 +18,34 @@ class ApprovazioneRequest(BaseModel):
     riferimento: Optional[str] = None
     decisione: Optional[Literal["approvata", "da_modificare", "scartata"]] = None
     nota: Optional[str] = None
+
+
+class ImportaPrezzarioRequest(BaseModel):
+    regione: str = Field(min_length=2, max_length=40)
+    anno: int = Field(ge=2000, le=2100)
+
+
+class PrioritaCriterio(BaseModel):
+    id: str = Field(pattern=r"^C[0-9]+$")
+    livello: Literal["", "ALTA", "MEDIA", "BASSA"] = ""
+    indicazione: str = ""
+
+
+class IndicazioniStrategicheRequest(BaseModel):
+    """Checkpoint della Fase 3: i campi della sezione «Indicazioni
+    strategiche del professionista» di strategy_audit.md."""
+    risposte: list[str] = []
+    tono: Literal["", "conservativo", "bilanciato", "audace"] = ""
+    priorita: list[PrioritaCriterio] = []
+    vincoli: list[str] = []
+    opportunita: list[str] = []
+    note: str = ""
+
+
+class RisposteBriefRequest(BaseModel):
+    """Risposte alle «Domande aperte per il professionista» del gara
+    brief, nell'ordine delle domande ("" = senza risposta)."""
+    risposte: list[str] = []
 
 
 class AssistenteRequest(BaseModel):

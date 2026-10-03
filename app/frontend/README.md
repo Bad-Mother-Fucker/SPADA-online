@@ -1,6 +1,7 @@
 # `app/frontend/` — SPADA Online
 
-Statico, senza build step (deployabile su Cloudflare Pages così com'è):
+Statico, senza build step. In locale lo serve lo stesso FastAPI del backend
+(`app.mount("/", ...)` in `backend/main.py`) su http://localhost:8000:
 
 ```
 frontend/
@@ -18,8 +19,16 @@ frontend/
     ├── api.js        client fetch del backend FastAPI (errori con stato e percorso)
     ├── elenco.js     logica di index.html
     ├── viste.js      renderer delle viste di gara (non fanno fetch)
+    ├── grafo-vis.js  grafo interattivo a forze (vis-network): nodi, archi, pannello del nodo
     └── gara.js       guscio di gara.html: router, SSE, dati, azioni, assistente
+vendor/
+└── vis-network.min.js  vis-network 9.1.9 (MIT/Apache-2.0), locale: nessuna CDN
 ```
+
+Gara brief e audit strategico si mostrano per intero: `Md.documento()` /
+`Md.rendiBlocchi()` (md.js) li trasformano in sezioni con tabelle, elenchi
+e avvisi, sempre con `UI.h()`. Le fasi si sbloccano in sequenza
+(`Dominio.sbloccata`), con lo stesso vincolo applicato dal backend.
 
 Il DOM si costruisce con `UI.h()`, mai con `innerHTML`: nomi di gara,
 messaggi e contenuti dei registri arrivano da file caricati dall'operatore

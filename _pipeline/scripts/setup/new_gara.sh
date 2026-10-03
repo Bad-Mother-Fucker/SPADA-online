@@ -11,7 +11,7 @@
 #   ./new_gara.sh --slug 2026-comune-bari-scuola \
 #                  --nome "Lavori di efficientamento energetico scuola X" \
 #                  --regione Puglia --anno-prezzario 2026 \
-#                  --modello claude-sonnet-5 --effort medium
+#                  --modello sonnet --effort medium
 #
 # Variabili di ambiente (opzionali):
 #   SPADA_GARE_DIR — cartella dove risiedono le gare (default: ~/spada/gare)
@@ -40,7 +40,7 @@ done
 [ -n "$NOME" ]    || error "--nome obbligatorio (nome esteso della gara)"
 [ -n "$REGIONE" ] || error "--regione obbligatoria (per il prezzario)"
 [ -n "$ANNO" ]    || error "--anno-prezzario obbligatorio"
-MODELLO="${MODELLO:-claude-sonnet-5}"
+MODELLO="${MODELLO:-sonnet}"
 EFFORT="${EFFORT:-medium}"
 
 case "$SLUG" in
@@ -104,6 +104,12 @@ cat > "$GARA_PATH/_state/fasi.json" <<JSON
 }
 JSON
 
+# Vincoli di formato e strategia: file per-gara (Sezione A da
+# disciplinare-analyst, Sezione B dal professionista), parte dal template.
+_SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+TEMPLATE_VINCOLI="$(cd "$(dirname "$_SELF")/../.." && pwd)/templates/vincoli_offerta_tecnica.md"
+[ -f "$TEMPLATE_VINCOLI" ] && cp "$TEMPLATE_VINCOLI" "$GARA_PATH/vincoli_offerta_tecnica.md"
+
 cat > "$GARA_PATH/_state/attivita.json" <<JSON
 { "agenti_attivi": [], "aggiornato_il": "$NOW_ISO" }
 JSON
@@ -134,4 +140,4 @@ echo ""
 echo "  Prossimi passi:"
 echo "  1. Carica il disciplinare in: $GARA_PATH/input/disciplinare/"
 echo "  2. Carica gli elaborati in:   $GARA_PATH/input/elaborati/"
-echo "  3. Esegui la Fase 1:          spada-fase $SLUG 1"
+echo "  3. Avvia la Fase 1 dall'app (http://localhost:8000)"

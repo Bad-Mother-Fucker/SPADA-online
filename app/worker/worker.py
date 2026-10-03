@@ -3,15 +3,22 @@
 coda `job` in ordine FIFO, un job alla volta (principio 7 del piano),
 lanciando `spada-fase`.
 
-Avvio:
-  python3 worker.py
+Avvio: `./spada avvia` dalla radice del progetto (lo lancia insieme
+all'API), oppure a mano `python3 worker.py`.
 
-Ripartenza pulita dopo riavvio della VM: ad ogni ciclo, prima di
-prelevare un nuovo job, un job rimasto "in_esecuzione" da un processo
-precedente terminato senza aggiornare lo stato (crash, kill -9, riavvio
-VM) viene rilevato e marcato "errore" — non viene mai ripreso a metà.
+Ripartenza pulita: all'avvio del worker, un job rimasto "in_esecuzione"
+da un processo precedente terminato senza aggiornare lo stato (crash,
+kill -9, Mac spento o riavviato) viene rilevato e marcato "errore" — non
+viene mai ripreso a metà.
+
+Sul Mac ogni job gira sotto `caffeinate -i`: il sistema non va in stop
+per inattività mentre una fase è in corso (chiudere il coperchio di un
+portatile lo sospende comunque).
 """
 import logging
+import os
+import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -27,6 +34,36 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s worker
 log = logging.getLogger("spada.worker")
 
 POLL_SECONDS = 3
+TIMEOUT_JOB_SECONDI = 2 * 60 * 60
+# Su macOS impedisce lo stop per inattività finché il job è vivo; altrove
+# (o se manca) il job parte uguale, senza.
+CAFFEINATE = ["caffeinate", "-i"] if sys.platform == "darwin" and shutil.which("caffeinate") else []
+
+# Il job gira in un proprio gruppo di processi (caffeinate → bash →
+# claude → subagenti): al timeout o all'arresto del worker si termina
+# l'intero gruppo, non solo il primo processo — l'equivalente locale di
+# KillMode=mixed nell'unit systemd della VM.
+_job_corrente: subprocess.Popen | None = None
+
+
+def _termina_gruppo(proc: subprocess.Popen):
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+        proc.wait(timeout=10)
+    except ProcessLookupError:
+        return
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
+def _arresto(signum, _frame):
+    if _job_corrente is not None and _job_corrente.poll() is None:
+        log.warning("Arresto del worker: termino il job in corso (resterà marcato errore al prossimo avvio).")
+        _termina_gruppo(_job_corrente)
+    sys.exit(0)
 
 
 def now():
@@ -97,12 +134,23 @@ def esegui_job(job):
             argv.append("--approva")
 
     log.info("Job %s: eseguo %s", job_id, " ".join(argv))
-    import os
     env = {**os.environ, **env_claude}
-    proc = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=60 * 60)
-
-    stato_finale = "completato" if proc.returncode == 0 else "errore"
-    errore = None if proc.returncode == 0 else (proc.stderr[-2000:] or proc.stdout[-2000:])
+    global _job_corrente
+    proc = subprocess.Popen(CAFFEINATE + argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, start_new_session=True)
+    _job_corrente = proc
+    try:
+        stdout, stderr = proc.communicate(timeout=TIMEOUT_JOB_SECONDI)
+        stato_finale = "completato" if proc.returncode == 0 else "errore"
+        errore = None if proc.returncode == 0 else (stderr[-2000:] or stdout[-2000:])
+    except subprocess.TimeoutExpired:
+        # Senza questo il worker morirebbe con il job ancora
+        # "in_esecuzione": in locale nessun systemd lo riavvia.
+        _termina_gruppo(proc)
+        stato_finale = "errore"
+        errore = f"Job interrotto: superato il limite di {TIMEOUT_JOB_SECONDI // 60} minuti."
+    finally:
+        _job_corrente = None
 
     with get_conn() as con:
         con.execute(
@@ -113,6 +161,8 @@ def esegui_job(job):
 
 
 def loop():
+    signal.signal(signal.SIGTERM, _arresto)
+    signal.signal(signal.SIGINT, _arresto)
     init_db()
     pulisci_job_orfani()
     log.info("Worker avviato. Polling ogni %ss.", POLL_SECONDS)

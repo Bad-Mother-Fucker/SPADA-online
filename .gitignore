@@ -8,3 +8,5 @@ _data/
 *.db
 _state/
 _pipeline/_state/
+# Cache delle skill claude.ai: vive nella config Claude dedicata, mai qui.
+_pipeline/skills/synced/

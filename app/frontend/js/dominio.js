@@ -108,6 +108,26 @@ const Dominio = (() => {
     return normalizzaStato(c.stato);
   }
 
+  /** Ogni fase sblocca la successiva: la n si apre quando la n-1 è
+      completata (per le fasi con checkpoint, anche approvata). Una fase
+      già toccata — eseguita, in errore, da rivedere — resta consultabile
+      anche se nel frattempo una precedente è stata rimessa in discussione.
+      Lo stesso vincolo lo applica il backend (routers/gare.py). */
+  function sbloccata(fasi, n) {
+    if (n <= 1) return true;
+    if (statoFase(fasi, n) !== "in_coda") return true;
+    return statoFase(fasi, n - 1) === "completata";
+  }
+
+  /** Perché la fase n è chiusa, in una frase: null se è aperta. */
+  function motivoBlocco(fasi, n) {
+    if (sbloccata(fasi, n)) return null;
+    const prec = fase(n - 1);
+    return statoFase(fasi, n - 1) === "da_rivedere"
+      ? `Si sblocca quando approvi il checkpoint della Fase ${n - 1} (${prec.titolo}).`
+      : `Si sblocca al completamento della Fase ${n - 1} (${prec.titolo}).`;
+  }
+
   /** Prima fase non completata: è quella su cui si apre la pagina gara. */
   function faseCorrente(fasi) {
     for (let n = 1; n <= 7; n++) {
@@ -147,8 +167,10 @@ const Dominio = (() => {
     { id: "p7m",          tag: "P7M",  label: "PDF firmati",  hint: "Verifica automatica della firma" },
   ];
 
+  // Nessun limite di dimensione: i 40 MB del design non avevano un motivo
+  // tecnico (il backend non ne ha mai imposto uno) e in locale non c'è un
+  // proxy davanti. Il backend scrive l'upload su disco a blocchi.
   const ESTENSIONI_AMMESSE = [".pdf", ".p7m", ".xlsx", ".docx", ".xls", ".doc"];
-  const LIMITE_BYTE = 40 * 1024 * 1024;
 
   /** Categoria indovinata dal nome del file: correggibile, mai imposta. */
   function categoriaProbabile(nome) {
@@ -163,7 +185,6 @@ const Dominio = (() => {
     const nome = String(file.name || "").toLowerCase();
     const ok = ESTENSIONI_AMMESSE.some((e) => nome.endsWith(e));
     if (!ok) return "formato non supportato";
-    if (file.size > LIMITE_BYTE) return `${UI.byte(file.size)} · limite 40 MB`;
     return null;
   }
 
@@ -176,14 +197,17 @@ const Dominio = (() => {
     max: "Massima profondità, da riservare a gare strategiche o contenziose.",
   };
   const MODELLI = [
-    { id: "claude-sonnet-5", hint: "Predefinito. Buon compromesso su gare fino a ~200 pagine di documentazione." },
-    { id: "claude-opus-5", hint: "Per capitolati stratificati o quadri economici con molte varianti." },
+    // Alias della CLI Claude Code: puntano sempre all'ultima versione del
+    // modello disponibile con la subscription.
+    { id: "sonnet", hint: "Predefinito. Buon compromesso su gare fino a ~200 pagine di documentazione." },
+    { id: "opus", hint: "Per capitolati stratificati o quadri economici con molte varianti." },
   ];
 
   return {
     FASI, GATE_UMANO, STATO, STATO_GARA, CATEGORIE, EFFORT, EFFORT_HINT, MODELLI,
-    ESTENSIONI_AMMESSE, LIMITE_BYTE,
+    ESTENSIONI_AMMESSE,
     fase, corpoFase, statoFase, faseCorrente, statoGara, segmenti, normalizzaStato,
+    sbloccata, motivoBlocco,
     categoriaProbabile, motivoRifiuto,
   };
 })();

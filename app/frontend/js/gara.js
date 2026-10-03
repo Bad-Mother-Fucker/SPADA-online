@@ -52,6 +52,14 @@ const stato = {
   sse: "connessione",
   ultimoEvento: null,
   sistema: { auth: null, pipeline: null, prezzari: null },
+  // GET /gare/{slug} → prezzario: { regione, anno, disponibile, da_rielaborare }
+  prezzario: null,
+  importPrezzario: { inCorso: false, errore: null },
+  // Checkpoint Fase 3: dati dal server (domande, criteri, valori salvati),
+  // bozza in modifica nel modulo, stato del salvataggio.
+  indicazioni: { dati: null, bozza: null, modificata: false, caricando: false, salvataggio: false, errore: null },
+  // Gara brief: risposte alle domande aperte (stesse meccaniche).
+  risposteBrief: { dati: null, bozza: null, modificata: false, caricando: false, salvataggio: false, errore: null },
   assistente: { aperto: false, messaggi: [], pensa: false, bozza: "", errore: null },
   upload: { inCorso: [], rifiutati: [] },
 };
@@ -97,10 +105,17 @@ function vai(v, sostituisci = false) {
 }
 
 function applicaVista(v) {
+  // Una fase ancora chiusa non si apre nemmeno da URL: si torna a quella
+  // su cui si sta lavorando.
+  if (v.tipo === "fase" && !stato.caricamento && !Dominio.sbloccata(stato.fasi, v.n)) {
+    v = { tipo: "fase", n: Dominio.faseCorrente(stato.fasi), sub: null };
+    history.replaceState(null, "", scriviHash(v));
+  }
   stato.vista = v;
   stato.contenutoDeliverable = vuoto();
   stato.dettaglioProposta = vuoto();
   assicuraDati(v);
+  disegnaStepper();
   disegnaVista();
   // Entrare in una sottovista significa cambiare argomento: la lettura
   // riparte dall'alto, non da dove si era rimasti nell'elenco.
@@ -156,7 +171,7 @@ function assicuraDati(v) {
   if (v.tipo === "fase") {
     if (v.n === 1) serve.push("documenti");
     if (v.n === 2) serve.push("criteri");
-    if (v.n === 3) serve.push("analisi");
+    if (v.n === 3) { serve.push("analisi"); caricaIndicazioni(); }
     if (v.n === 4) serve.push("gap", "proposteOperatore");
     if (v.n === 5) serve.push("proposte", "gap", "grafo");
     if (v.n === 6) serve.push("deliverable");
@@ -169,6 +184,7 @@ function assicuraDati(v) {
     serve.push("sistema");
   } else if (v.tipo === "brief") {
     serve.push("garaBrief");
+    caricaRisposteBrief();
   }
   serve.forEach(carica);
   if (v.tipo === "fase" && v.n === 6 && v.sub) caricaContenutoDeliverable(v.sub);
@@ -223,13 +239,13 @@ function carica(chiave, forza = false) {
       break;
 
     case "analisi":
-      leggiPrimoDisponibile(
-        ["03_criteria/gara_brief.md", "03_criteria/strategy_audit.md"],
-        parseAnalisi).then(fine);
+      // Solo l'audit: prima si leggeva il gara brief per primo, e siccome
+      // il brief esiste dalla Fase 1 la Fase 3 non mostrava mai l'audit.
+      leggiRegistro("03_criteria/strategy_audit.md", parseDocumento).then(fine);
       break;
 
     case "garaBrief":
-      leggiRegistro("03_criteria/gara_brief.md", parseGaraBrief).then(fine);
+      leggiRegistro("03_criteria/gara_brief.md", parseDocumento).then(fine);
       break;
 
     case "gap":
@@ -383,42 +399,11 @@ function coperturaDa(s) {
   return "";
 }
 
-function parseAnalisi(testo) {
-  const sezioni = Md.sezioni(testo)
-    .filter((s2) => s2.livello >= 2 && s2.corpo.trim())
-    .map((s2) => {
-      const sev = Md.severita(s2.titolo) || Md.severita(s2.corpo);
-      const par = Md.paragrafi(s2.corpo, 1);
-      return {
-        ref: (/^((?:art\.?|sez\.?|cap\.?|§)\s*[\w.]+)/i.exec(s2.titolo) || [])[1] || "",
-        titolo: s2.titolo,
-        severita: sev,
-        badge: sev === "alta" ? "Criticità alta" : sev === "media" ? "Da presidiare" : sev === "bassa" ? "Conforme" : null,
-        nota: par[0] || "",
-        citazione: Md.citazione(s2.corpo),
-      };
-    })
-    .filter((s2) => s2.nota || s2.citazione);
-
-  const sintesi = Md.paragrafi(testo, 2);
-  if (!sintesi.length && !sezioni.length) return null;
-
-  const conteggi = { alta: 0, media: 0, bassa: 0 };
-  for (const s2 of sezioni) if (s2.severita) conteggi[s2.severita]++;
-  return { sintesi, sezioni, conteggi };
-}
-
-/** A differenza di parseAnalisi (che estrae solo le sezioni "annotate" con
-    una severità, per il pannello della Fase 3), qui il documento serve per
-    intero: ogni sezione di secondo livello con la sua prosa completa, non
-    solo il primo paragrafo. */
-function parseGaraBrief(testo) {
-  const sezioni = Md.sezioni(testo)
-    .filter((s2) => s2.livello >= 2 && s2.corpo.trim())
-    .map((s2) => ({ titolo: s2.titolo, paragrafi: Md.paragrafi(s2.corpo, 40) }));
-  const sintesi = Md.paragrafi(testo, 3);
-  if (!sintesi.length && !sezioni.length) return null;
-  return { sintesi, sezioni };
+/** Gara brief e audit strategico si mostrano per intero: sezioni,
+    sottosezioni e blocchi, resi da Viste con Md.rendiBlocchi. */
+function parseDocumento(testo) {
+  const doc = Md.documento(testo);
+  return doc.sezioni.length || doc.intro.length ? doc : null;
 }
 
 function parseGap(testo) {
@@ -662,15 +647,6 @@ function disegnaTestata() {
           h("span", { class: "kicker" }, "Sintesi · "),
           sintesiGara())),
       h("div", { class: "tenderhead__aside" },
-        h("div", { class: "tenderhead__actions" },
-          h("button", {
-            type: "button", class: "btn",
-            onClick: () => vai({ tipo: "attivita" }),
-          }, I.codice(13), "Claude Code"),
-          h("button", {
-            type: "button", class: "btn",
-            onClick: () => vai({ tipo: "attivita" }),
-          }, "Attività")),
         h("span", { class: "faint", style: { fontSize: "var(--fs-micro)" } },
           stato.ultimoEvento ? `ultimo evento ${UI.quandoRelativo(stato.ultimoEvento)}` : "nessun evento ricevuto"))));
 }
@@ -691,17 +667,20 @@ function disegnaStepper() {
     const st = Dominio.statoFase(stato.fasi, f.n);
     const meta = Dominio.STATO[st];
     const corrente = stato.vista.tipo === "fase" && stato.vista.n === f.n;
+    const blocco = Dominio.motivoBlocco(stato.fasi, f.n);
     const icona = st === "completata" ? "✓ " : st === "da_rivedere" ? "◆ " : st === "errore" ? "✕ " : "";
     return h("li", null,
       h("button", {
-        type: "button", class: "step", dataset: { st },
+        type: "button", class: "step", dataset: { st, locked: blocco ? "true" : "false" },
         "aria-current": corrente ? "step" : null,
-        onClick: () => vai({ tipo: "fase", n: f.n }),
+        "aria-disabled": blocco ? "true" : null,
+        title: blocco || null,
+        onClick: () => { if (!blocco) vai({ tipo: "fase", n: f.n }); },
       },
         h("span", { class: "step__bar", "aria-hidden": "true" }),
         h("span", { class: "step__num" }, icona, f.num),
         h("span", { class: "step__title" }, f.titolo),
-        h("span", { class: "step__st" }, meta.breve)));
+        h("span", { class: "step__st" }, blocco ? "bloccata" : meta.breve)));
   }));
 }
 
@@ -809,7 +788,19 @@ function disegnaVista() {
   else if (v.tipo === "brief") nodo = Viste.brief(stato);
   else nodo = Viste.impostazioni(stato);
 
+  // Un ridisegno (stream SSE, dati arrivati) non deve togliere il cursore
+  // dal campo che si sta compilando: si riprende per id.
+  const attivo = document.activeElement;
+  const ripresa = attivo && attivo.id && vp.contains(attivo)
+    ? { id: attivo.id, da: attivo.selectionStart, a: attivo.selectionEnd } : null;
   set(vp, nodo);
+  if (ripresa) {
+    const el = document.getElementById(ripresa.id);
+    if (el) {
+      el.focus({ preventScroll: true });
+      try { if (ripresa.da != null) el.setSelectionRange(ripresa.da, ripresa.a); } catch { /* campo senza selezione */ }
+    }
+  }
   disegnaAssistente();
 }
 
@@ -830,8 +821,82 @@ function vistaErroreGara(err) {
 
 function disegna() {
   disegnaTestata();
+  disegnaAvvisoPrezzario();
   disegnaStepper();
   disegnaVista();
+}
+
+/** Avviso in testa alla gara, visibile in ogni vista:
+    - prezzario mancante → la gara procede senza valutazioni economiche,
+      con l'invito a importarlo subito;
+    - prezzario arrivato dopo → le elaborazioni economiche fatte senza,
+      ciascuna con il suo pulsante di riesecuzione. */
+function disegnaAvvisoPrezzario() {
+  const el = document.getElementById("avviso-prezzario");
+  const p = stato.prezzario;
+  if (!p || stato.caricamento || stato.erroreGara || (p.disponibile && !(p.da_rielaborare || []).length)) {
+    el.hidden = true;
+    el.replaceChildren();
+    return;
+  }
+  el.hidden = false;
+  const nome = [p.regione, p.anno].filter(Boolean).join(" ") || "di riferimento";
+  const titolo = (t) => h("strong", {
+    style: { display: "block", fontSize: "var(--fs-sm)", color: "var(--ink-1)", marginBottom: "2px" },
+  }, t);
+  const testo = (...t) => h("span", { style: { fontSize: "var(--fs-xs)", color: "var(--ink-2)" } }, ...t);
+  const azioni = (...figli) => h("div", {
+    class: "row row--tight", style: { marginTop: "var(--s-3)", flexWrap: "wrap" },
+  }, ...figli);
+
+  if (!p.disponibile) {
+    const imp = stato.importPrezzario;
+    set(el, h("div", { class: "note note--warn note--lg", role: "status" }, I.triangolo(15),
+      h("div", { style: { flex: 1, minWidth: 0 } },
+        titolo(`Prezzario ${nome} non presente`),
+        testo("La gara procede senza valutazioni economiche: l'analisi strategica non confronta i prezzi del computo con il prezzario né stima la capacità di investimento, e il computo metrico lascia TBD le voci nuove. ",
+          h("strong", null, "Includilo ed elaboralo il prima possibile"),
+          ", poi rielabora la Fase 3 e il computo metrico."),
+        azioni(
+          h("button", {
+            type: "button", class: "btn btn--xs", disabled: imp.inCorso, onClick: importaPrezzario,
+          }, imp.inCorso ? "Importazione in corso…" : "Importa ora"),
+          h("span", { class: "faint", style: { fontSize: "var(--fs-micro)" } },
+            "Lo cerca sul Mac (~/.spada/prezzari) e tra le release di prometeus-prezzari. Da file: ",
+            h("code", { class: "mono" }, `./spada importa-prezzario ${p.regione || "<Regione>"} ${p.anno || "<anno>"} <cartella>`))),
+        imp.errore
+          ? h("p", { style: { margin: "var(--s-2) 0 0", fontSize: "var(--fs-xs)", color: "var(--crit)" } }, imp.errore)
+          : null)));
+    return;
+  }
+
+  set(el, h("div", { class: "note note--accent note--lg", role: "status" }, I.info(15),
+    h("div", { style: { flex: 1, minWidth: 0 } },
+      titolo(`Prezzario ${nome} ora disponibile`),
+      testo("Queste elaborazioni sono state fatte senza e non contengono le valutazioni economiche: ",
+        p.da_rielaborare.map((x) => x.etichetta).join(" · "),
+        ". Rieseguile per includerle."),
+      azioni(p.da_rielaborare.map((x) => h("button", {
+        type: "button", class: "btn btn--xs",
+        onClick: () => (x.tipo === "fase" ? rieseguiFase(x.fase) : rieseguiDeliverable(x.id)),
+      }, x.tipo === "fase" ? `Riesegui la Fase ${x.fase}` : `Riesegui ${x.etichetta}`))))));
+}
+
+async function importaPrezzario() {
+  const p = stato.prezzario;
+  if (!p || stato.importPrezzario.inCorso) return;
+  stato.importPrezzario = { inCorso: true, errore: null };
+  disegnaAvvisoPrezzario();
+  try {
+    await Api.importaPrezzario(p.regione, p.anno);
+    stato.importPrezzario = { inCorso: false, errore: null };
+    Toast.ok(`Prezzario ${p.regione} ${p.anno} importato: da ora le fasi includono le valutazioni economiche.`);
+    if (stato.sistema.prezzari !== null) caricaSistema();
+    await ricarica();
+  } catch (e) {
+    stato.importPrezzario = { inCorso: false, errore: e.message };
+    disegnaAvvisoPrezzario();
+  }
 }
 
 // ===========================================================================
@@ -917,6 +982,8 @@ function invalidaRegistri() {
   stato.runLog = vuoto();
   stato.proposteOperatore = vuoto();
   stato.garaBrief = vuoto();
+  stato.indicazioni.dati = null;   // la bozza non salvata resta
+  stato.risposteBrief.dati = null;
 }
 
 async function aggiornaOutput() {
@@ -1097,6 +1164,184 @@ async function rieseguiFase(n) {
     await ricarica();
   } catch (e) { Toast.errore(`Riesecuzione non riuscita: ${e.message}`); }
 }
+
+// ── Checkpoint Fase 3: indicazioni strategiche del professionista ──────────
+
+function caricaIndicazioni(forza = false) {
+  const ind = stato.indicazioni;
+  if (ind.caricando || (!forza && ind.dati)) return;
+  ind.caricando = true;
+  Api.indicazioni(SLUG)
+    .then((d) => {
+      ind.dati = d.disponibile ? d : null;
+      ind.errore = null;
+      if (d.disponibile && (!ind.bozza || !ind.modificata)) ind.bozza = structuredClone(d.valori);
+    })
+    .catch((e) => { ind.errore = e.message; })
+    .finally(() => { ind.caricando = false; disegnaVista(); });
+}
+
+/** Cosa manca alla bozza per poter approvare: stessa regola del backend
+    (strategia.py::_mancanti) — tono, ogni risposta, ogni priorità. */
+function mancantiIndicazioni() {
+  const { dati, bozza } = stato.indicazioni;
+  if (!dati || !bozza) return [];
+  const m = [];
+  if (!bozza.tono) m.push("tono generale");
+  dati.domande.forEach((_, k) => { if (!(bozza.risposte[k] || "").trim()) m.push(`risposta ${k + 1}`); });
+  bozza.priorita.forEach((p) => { if (!p.livello && !(p.indicazione || "").trim()) m.push(`priorità ${p.id}`); });
+  return m;
+}
+
+/** Modifica della bozza dal modulo: nessun ridisegno (il cursore resta
+    dov'è), si aggiornano solo stato, badge e pulsanti. */
+function aggiornaIndicazioni(modifica) {
+  const ind = stato.indicazioni;
+  if (!ind.bozza) return;
+  modifica(ind.bozza);
+  ind.modificata = true;
+  aggiornaStatoIndicazioni();
+}
+
+function aggiornaStatoIndicazioni() {
+  const ind = stato.indicazioni;
+  const mancanti = mancantiIndicazioni();
+  const fase3 = Dominio.statoFase(stato.fasi, 3);
+  const bloccato = ind.salvataggio || fase3 === "in_esecuzione";
+  const testo = document.getElementById("ind-stato");
+  if (testo) {
+    testo.textContent = ind.salvataggio ? "Salvataggio in corso…"
+      : mancanti.length ? `Per approvare manca: ${mancanti.join(", ")}.`
+      : ind.modificata ? "Modifiche non ancora salvate." : "Compilate e salvate.";
+    testo.dataset.tono = mancanti.length ? "warn" : ind.modificata ? "info" : "ok";
+  }
+  const badge = document.getElementById("ind-badge");
+  if (badge) {
+    badge.className = `badge badge--lg badge--${mancanti.length ? "warn" : "ok"}`;
+    badge.textContent = mancanti.length ? `${mancanti.length} da compilare` : fase3 === "completata" ? "Approvate" : "Compilate";
+  }
+  const salva = document.getElementById("ind-salva");
+  if (salva) salva.disabled = bloccato || !ind.modificata;
+  const approva = document.getElementById("ind-approva");
+  if (approva) approva.disabled = bloccato || mancanti.length > 0;
+}
+
+async function salvaIndicazioni(approva = false) {
+  const ind = stato.indicazioni;
+  if (ind.salvataggio || !ind.bozza) return;
+  ind.salvataggio = true;
+  aggiornaStatoIndicazioni();
+  try {
+    const d = await Api.salvaIndicazioni(SLUG, ind.bozza);
+    ind.dati = d;
+    ind.bozza = structuredClone(d.valori);
+    ind.modificata = false;
+    stato.registri.analisi = vuoto();   // il documento è cambiato: si rilegge
+    if (approva) await approvaFase(3);
+    else Toast.ok("Indicazioni salvate nell'audit strategico.");
+  } catch (e) {
+    Toast.errore(`Salvataggio non riuscito: ${e.message}`);
+  } finally {
+    ind.salvataggio = false;
+    assicuraDati(stato.vista);
+    disegnaVista();
+  }
+}
+
+// ── Gara brief: risposte alle domande aperte ─────────────────────────────────
+
+function caricaRisposteBrief(forza = false) {
+  const rb = stato.risposteBrief;
+  if (rb.caricando || (!forza && rb.dati)) return;
+  rb.caricando = true;
+  Api.risposteBrief(SLUG)
+    .then((d) => {
+      rb.dati = d.disponibile && d.sezione_presente ? d : null;
+      rb.errore = null;
+      if (rb.dati && (!rb.bozza || !rb.modificata)) rb.bozza = [...d.risposte];
+      // Risposte recuperate dall'archivio: vanno risalvate nel documento.
+      if (rb.dati && d.recuperate.length && !rb.modificata) rb.modificata = true;
+    })
+    .catch((e) => { rb.errore = e.message; })
+    .finally(() => { rb.caricando = false; disegnaVista(); });
+}
+
+function aggiornaRispostaBrief(k, valore) {
+  const rb = stato.risposteBrief;
+  if (!rb.bozza) return;
+  rb.bozza[k] = valore;
+  rb.modificata = true;
+  aggiornaStatoRisposteBrief();
+}
+
+function aggiornaStatoRisposteBrief() {
+  const rb = stato.risposteBrief;
+  if (!rb.dati || !rb.bozza) return;
+  const date = rb.bozza.filter((r) => (r || "").trim()).length;
+  const tot = rb.dati.domande.length;
+  const badge = document.getElementById("rb-badge");
+  if (badge) {
+    badge.className = `badge badge--lg badge--${date === tot ? "ok" : date ? "accent" : "neu"}`;
+    badge.textContent = `${date}/${tot} risposte`;
+  }
+  const testo = document.getElementById("rb-stato");
+  if (testo) {
+    testo.textContent = rb.salvataggio ? "Salvataggio in corso…"
+      : rb.modificata ? "Modifiche non ancora salvate." : "Risposte salvate nel gara brief.";
+    testo.dataset.tono = rb.modificata ? "info" : "ok";
+  }
+  const salva = document.getElementById("rb-salva");
+  if (salva) salva.disabled = rb.salvataggio || !rb.modificata;
+}
+
+async function salvaRisposteBrief() {
+  const rb = stato.risposteBrief;
+  if (rb.salvataggio || !rb.bozza) return;
+  rb.salvataggio = true;
+  aggiornaStatoRisposteBrief();
+  try {
+    const d = await Api.salvaRisposteBrief(SLUG, rb.bozza);
+    rb.dati = d;
+    rb.bozza = [...d.risposte];
+    rb.modificata = false;
+    stato.garaBrief = vuoto();   // il documento è cambiato: si rilegge
+    Toast.ok("Risposte salvate nel gara brief: le fasi successive le ricevono nella memoria di gara.");
+  } catch (e) {
+    Toast.errore(`Salvataggio non riuscito: ${e.message}`);
+  } finally {
+    rb.salvataggio = false;
+    assicuraDati(stato.vista);
+    disegnaVista();
+  }
+}
+
+/** Copia negli appunti: API moderna se disponibile (localhost è un
+    contesto sicuro), altrimenti il vecchio textarea nascosto. */
+async function copiaTesto(testo, messaggio = "Copiato negli appunti.") {
+  try {
+    await navigator.clipboard.writeText(testo);
+  } catch {
+    const t = h("textarea", { style: { position: "fixed", opacity: "0" } }, testo);
+    document.body.appendChild(t);
+    t.select();
+    document.execCommand("copy");
+    t.remove();
+  }
+  Toast.ok(messaggio);
+}
+
+function scaricaTesto(testo, nomeFile) {
+  const url = URL.createObjectURL(new Blob([testo], { type: "text/plain;charset=utf-8" }));
+  const a = h("a", { href: url, download: nomeFile, style: { display: "none" } });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+const vaiAlleIndicazioni = () =>
+  document.getElementById("sez-indicazioni-strategiche-del-professionista")
+    ?.scrollIntoView({ behavior: "smooth", block: "start" });
 
 async function approvaFase(n) {
   try {
@@ -1306,6 +1551,7 @@ async function ricarica() {
   try {
     const d = await Api.dettaglioGara(SLUG);
     stato.manifest = d.manifest || {};
+    stato.prezzario = d.prezzario || null;
     stato.fasi = d.fasi?.fasi || {};
     stato.attivita = d.attivita || {};
     stato.erroreGara = null;
@@ -1326,6 +1572,8 @@ async function ricarica() {
 const Gara = {
   vai, ricarica, disegna, disegnaVista,
   eseguiFase, rieseguiFase, approvaFase, decidi,
+  aggiornaIndicazioni, salvaIndicazioni, mancantiIndicazioni, aggiornaStatoIndicazioni, vaiAlleIndicazioni,
+  aggiornaRispostaBrief, salvaRisposteBrief, aggiornaStatoRisposteBrief, copiaTesto, scaricaTesto,
   avviaDeliverable, rieseguiDeliverable,
   intervieni, creaPropostaOperatore, aggiornaFormProposta,
   apriGap, espandi, filtraAttivita,

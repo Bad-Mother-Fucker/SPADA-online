@@ -136,6 +136,17 @@ const Api = (() => {
     streamUrl: (slug) => `${base()}/gare/${encodeURIComponent(slug)}/stream`,
     sistemaAuth: () => richiesta("/sistema/auth"),
     sistemaPrezzari: () => richiesta("/sistema/prezzari"),
+    risposteBrief: (slug) => richiesta(`/gare/${encodeURIComponent(slug)}/brief/risposte`),
+    salvaRisposteBrief: (slug, risposte) => richiesta(`/gare/${encodeURIComponent(slug)}/brief/risposte`, {
+      method: "PUT", body: JSON.stringify({ risposte }),
+    }),
+    indicazioni: (slug) => richiesta(`/gare/${encodeURIComponent(slug)}/strategia/indicazioni`),
+    salvaIndicazioni: (slug, dati) => richiesta(`/gare/${encodeURIComponent(slug)}/strategia/indicazioni`, {
+      method: "PUT", body: JSON.stringify(dati),
+    }),
+    importaPrezzario: (regione, anno) => richiesta("/sistema/prezzari/importa", {
+      method: "POST", body: JSON.stringify({ regione, anno }),
+    }),
     sistemaPipeline: () => richiesta("/sistema/pipeline"),
   };
 })();

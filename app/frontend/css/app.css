@@ -786,6 +786,36 @@ legend { padding: 0; margin-bottom: var(--s-3); font-size: var(--fs-xs); font-we
 /* ========================== PAGINA GARA · GUSCIO ======================= */
 
 .tenderhead { margin-bottom: var(--s-4); }
+.avviso-prezzario { margin-bottom: var(--s-4); }
+
+/* Documento reso per intero: gara brief, audit strategico. */
+.doc__title { margin: var(--s-2) 0 var(--s-3); font-size: var(--fs-xl); line-height: 1.25; color: var(--ink-1); text-wrap: balance; }
+.doc__azioni { flex: none; }
+.doc__toc { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-4); }
+.doc__sez { scroll-margin-top: 84px; }
+.doc__sez-head { margin-bottom: var(--s-4); gap: var(--s-3); }
+.doc__sez-title { margin: 0; font-size: var(--fs-lg); color: var(--ink-1); }
+.doc__sub { margin-top: var(--s-4); padding: var(--s-4); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--glass-3); }
+.doc__sub-title { margin: 0 0 var(--s-3); font-size: var(--fs-md); color: var(--ink-1); }
+.md { font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--ink-1); min-width: 0; }
+.md > * { margin-top: 0; margin-bottom: 0; }
+.md > * + * { margin-top: var(--s-3); }
+.md p { text-wrap: pretty; }
+.md li p, .md__note-body p { margin: 0; }
+.md__meta { color: var(--ink-2); }
+.md__h { margin: 0; font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--ink-1); }
+.md__list { margin: 0; padding-left: 1.3em; }
+.md__list li + li { margin-top: var(--s-1); }
+.md__list .md__list { margin-top: var(--s-1); }
+.md__table .table { font-size: var(--fs-xs); }
+.md__table th, .md__table td { vertical-align: top; text-align: left; }
+.md__note .md__note-body { flex: 1; min-width: 0; }
+.md__note .md__note-body > * + * { margin-top: var(--s-2); }
+.md__note .md__note-body p { font-size: var(--fs-xs); color: var(--ink-1); }
+.md__code { font-family: var(--font-mono); font-size: 0.9em; padding: 1px 5px; border-radius: var(--r-xs); background: var(--wash); }
+.md__ref { font-family: var(--font-mono); font-size: 0.85em; padding: 1px 6px; border-radius: var(--r-xs); background: var(--accent-soft); color: var(--accent); font-weight: var(--fw-semibold); white-space: nowrap; }
+.md__stato { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.md__stato-label { font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: var(--track-caps); color: var(--ink-3); font-weight: var(--fw-semibold); }
 .tenderhead__grid {
   display: flex;
   flex-wrap: wrap;
@@ -852,7 +882,11 @@ legend { padding: 0; margin-bottom: var(--s-3); font-size: var(--fs-xs); font-we
   transition: background var(--d-2) var(--e-out);
 }
 .step:hover { background: var(--wash); }
-.step[aria-current="step"] { background: var(--accent-soft); }
+/* La fase che stai guardando: bordo pieno, distinto dal colore di stato
+   (che dice a che punto è la fase, non dove sei). */
+.step[aria-current="step"] { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+.step[data-locked="true"] { cursor: not-allowed; opacity: 0.45; }
+.step[data-locked="true"]:hover { background: transparent; }
 .step__bar { height: 4px; border-radius: var(--r-pill); background: var(--neu-soft); }
 .step[data-st="completata"] .step__bar { background: var(--ok); }
 .step[data-st="in_esecuzione"] .step__bar { background: linear-gradient(90deg, var(--info) 60%, var(--info-soft) 60%); }
@@ -1871,3 +1905,39 @@ details.tech pre {
   .tenderhead__actions { justify-content: flex-start; }
   .split__aside { max-width: none; }
 }
+
+
+/* Grafo interattivo (vis-network): la tela occupa la card, il pannello
+   del nodo selezionato le sta sopra a destra. */
+.graphvis { position: relative; height: min(68vh, 640px); min-height: 420px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--glass-3); overflow: hidden; }
+.graphvis__tela { position: absolute; inset: 0; }
+.graphvis__pannello { position: absolute; top: var(--s-3); right: var(--s-3); width: min(300px, calc(100% - 2 * var(--s-3))); max-height: calc(100% - 2 * var(--s-3)); overflow-y: auto; padding: var(--s-4); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--glass-1); backdrop-filter: blur(var(--blur-2)); -webkit-backdrop-filter: blur(var(--blur-2)); box-shadow: var(--el-2); }
+.graphvis__pannello[hidden] { display: none; }
+.graphvis__titolo { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: var(--fs-md); color: var(--ink-1); }
+.graphvis__testo { margin: var(--s-2) 0 0; font-size: var(--fs-sm); color: var(--ink-1); }
+.graphvis__meta { margin: var(--s-1) 0 0; font-size: var(--fs-micro); color: var(--ink-3); }
+.graphvis__sezione { margin-top: var(--s-3); font-size: var(--fs-micro); text-transform: uppercase; letter-spacing: var(--track-caps); color: var(--ink-3); font-weight: var(--fw-semibold); }
+.graphvis__vicini { list-style: none; margin: var(--s-2) 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.graphvis__vicino { width: 100%; text-align: left; border: 0; background: transparent; padding: 4px 6px; border-radius: var(--r-xs); font-size: var(--fs-xs); color: var(--ink-1); cursor: pointer; }
+.graphvis__vicino:hover { background: var(--wash); }
+div.vis-tooltip { font-family: var(--font-ui); font-size: var(--fs-xs); color: var(--ink-1); background: var(--glass-1); border: 1px solid var(--hairline); border-radius: var(--r-sm); padding: var(--s-2) var(--s-3); box-shadow: var(--el-2); white-space: pre-line; max-width: 320px; }
+
+/* Modulo indicazioni strategiche (checkpoint Fase 3). */
+.strat__blocco { margin-top: var(--s-5); }
+.strat__blocco-head { margin-bottom: var(--s-3); }
+.strat__blocco-head .doc__sub-title { margin-bottom: 2px; }
+.strat__aiuto { margin: var(--s-2) 0 0; font-size: var(--fs-xs); color: var(--ink-3); max-width: 80ch; }
+.strat__domanda { display: grid; gap: var(--s-2); padding: var(--s-3) 0; border-top: 1px solid var(--hairline); }
+.strat__q { display: flex; gap: var(--s-3); align-items: flex-start; font-size: var(--fs-sm); color: var(--ink-1); line-height: var(--lh-sm); }
+.strat__n { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: var(--fs-micro); background: var(--accent-soft); color: var(--accent); }
+.strat__crit { display: grid; grid-template-columns: minmax(180px, 1.3fr) 130px minmax(200px, 2fr); gap: var(--s-2) var(--s-3); align-items: center; padding: var(--s-2) 0; border-top: 1px solid var(--hairline); }
+.strat__crit-nome { font-size: var(--fs-sm); color: var(--ink-1); }
+.strat__piede { position: sticky; bottom: var(--s-3); z-index: 2; display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between; margin-top: var(--s-5); padding: var(--s-3) var(--s-4); border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--glass-1); backdrop-filter: blur(var(--blur-2)); -webkit-backdrop-filter: blur(var(--blur-2)); box-shadow: var(--el-2); }
+.strat__stato { font-size: var(--fs-xs); color: var(--ink-2); }
+.strat__stato[data-tono="warn"] { color: var(--warn); }
+.strat__stato[data-tono="ok"] { color: var(--ok); }
+@media (max-width: 760px) { .strat__crit { grid-template-columns: 1fr; } }
+
+/* Copia / scarica le domande, con o senza risposte. */
+.esporta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-top: var(--s-3); }
+.esporta__opz { display: inline-flex; align-items: center; gap: 6px; margin-right: var(--s-2); font-size: var(--fs-xs); color: var(--ink-2); cursor: pointer; }

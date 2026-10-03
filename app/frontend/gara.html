@@ -56,6 +56,9 @@
     <!-- ==================== GUSCIO · intestazione gara ==================== -->
     <header class="card card--xl tenderhead" id="testata-gara"></header>
 
+    <!-- Prezzario mancante, o arrivato dopo elaborazioni fatte senza. -->
+    <div class="avviso-prezzario" id="avviso-prezzario" hidden></div>
+
     <!-- ====================== GUSCIO · stepper 7 fasi ===================== -->
     <nav class="stepper" aria-label="Fasi della pipeline">
       <ol id="stepper"></ol>
@@ -73,6 +76,8 @@
 <script src="js/md.js"></script>
 <script src="js/api.js"></script>
 <!-- viste.js prima di gara.js: definisce i renderer che il guscio invoca. -->
+<script src="vendor/vis-network.min.js"></script>
+<script src="js/grafo-vis.js"></script>
 <script src="js/viste.js"></script>
 <script src="js/gara.js"></script>
 </body>

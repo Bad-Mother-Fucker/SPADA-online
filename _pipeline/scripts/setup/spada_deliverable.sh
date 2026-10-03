@@ -35,6 +35,7 @@ GARE_DIR="${SPADA_GARE_DIR:-$HOME/spada/gare}"
 _SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
 PIPELINE_DIR="${SPADA_PIPELINE_DIR:-$(cd "$(dirname "$_SELF")/../.." && pwd)}"
 GARA_DIR="$GARE_DIR/$SLUG"
+source "$(dirname "$_SELF")/spada_comune.sh"
 
 [ -d "$GARA_DIR" ] || error "Gara non trovata: $GARA_DIR"
 [ -f "$GARA_DIR/manifest.json" ] || error "manifest.json mancante in $GARA_DIR — non è una gara valida."
@@ -65,15 +66,14 @@ NOME="$(echo "$DELIVERABLE_JSON" | python3 -c 'import json,sys; print(json.load(
 
 # Mappa tipo -> agente dedicato: tenuta in sincronia a mano con
 # AGENTE_PER_TIPO in app/backend/deliverables.py (Sprint 10.3).
-declare -A AGENTE_PER_TIPO=(
-  [relazione_tecnica]="offer-writer"
-  [computo_metrico]="deliverable-computo-metrico"
-  [legge_10]="deliverable-legge-10"
-  [cronoprogramma]="deliverable-cronoprogramma"
-  [tavole_tecniche]="deliverable-tavole-tecniche"
-  [altro]="deliverable-generico"
-)
-AGENTE="${AGENTE_PER_TIPO[$TIPO]:-deliverable-generico}"
+case "$TIPO" in
+  relazione_tecnica) AGENTE="offer-writer" ;;
+  computo_metrico)   AGENTE="deliverable-computo-metrico" ;;
+  legge_10)          AGENTE="deliverable-legge-10" ;;
+  cronoprogramma)    AGENTE="deliverable-cronoprogramma" ;;
+  tavole_tecniche)   AGENTE="deliverable-tavole-tecniche" ;;
+  *)                 AGENTE="deliverable-generico" ;;
+esac
 COMANDO_FILE="_pipeline/comandi/deliverables/${TIPO}.md"
 
 if [ "$TIPO" = "relazione_tecnica" ]; then
@@ -101,14 +101,15 @@ GIT_REF="$(git -C "$PIPELINE_DIR" rev-parse --short HEAD 2>/dev/null || echo n.d
 PIPELINE_VERSION_FULL="$PIPELINE_VERSION (git $GIT_REF)"
 MODELLO="$(python3 -c "import json;print(json.load(open('manifest.json'))['esecuzione']['modello'])")"
 EFFORT="$(python3 -c "import json;print(json.load(open('manifest.json'))['esecuzione']['effort'])")"
+PREZZARIO_VERSION="$(versione_prezzario_gara 2>/dev/null || echo null)"
 
 # ── Registrazione run + stato deliverable, PRIMA di invocare claude ──
 RUN_ID="$(python3 -c 'import uuid; print(uuid.uuid4())')"
 AVVIATO_IL="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-python3 - "$RUN_ID" "$AVVIATO_IL" "$PIPELINE_VERSION_FULL" "$MODELLO" "$EFFORT" "$DELIVERABLE_ID" "$AGENTE" "$OUTPUT_DIR" <<'PY'
+python3 - "$RUN_ID" "$AVVIATO_IL" "$PIPELINE_VERSION_FULL" "$MODELLO" "$EFFORT" "$DELIVERABLE_ID" "$AGENTE" "$OUTPUT_DIR" "$PREZZARIO_VERSION" <<'PY'
 import json, sys
-run_id, avviato_il, pv, modello, effort, deliverable_id, agente, output_dir = sys.argv[1:9]
+run_id, avviato_il, pv, modello, effort, deliverable_id, agente, output_dir, pzv = sys.argv[1:10]
 
 try:
     with open("_state/run_log.json") as f:
@@ -118,7 +119,7 @@ except FileNotFoundError:
 log["runs"].append({
     "run_id": run_id, "fase": 6, "riesecuzione": False,
     "avviato_il": avviato_il, "concluso_il": None,
-    "pipeline_version": pv, "prezzario_version": None,
+    "pipeline_version": pv, "prezzario_version": json.loads(pzv),
     "modello": modello, "effort": effort, "esito": "in_corso", "errore": None,
     "deliverable_id": deliverable_id,
 })
@@ -158,7 +159,11 @@ trap 'rm -f "$PROMPT_FILE"' EXIT
 {
   echo "Stai eseguendo il deliverable '$DELIVERABLE_ID' ($NOME) della gara $SLUG come invocazione a se' stante."
   echo "Tipo deliverable: $TIPO — criterio: $CRITERIO — cartella output: $OUTPUT_DIR/"
-  echo "Segui esattamente le istruzioni in $COMANDO_FILE (risolto da \$HOME/.claude/commands/deliverables/${TIPO}.md)."
+  echo "Segui esattamente le istruzioni in $COMANDO_FILE (risolto da $SPADA_CLAUDE_DIR/commands/deliverables/${TIPO}.md)."
+  echo ""
+  nota_percorsi
+  echo ""
+  nota_prezzario
   echo ""
   echo "Dati del deliverable da manifest.json:"
   echo '```json'
@@ -173,9 +178,10 @@ trap 'rm -f "$PROMPT_FILE"' EXIT
 
 # ── Invocazione headless ─────────────────────────────────────────────
 set +e
-claude -p "$(cat "$PROMPT_FILE")" \
-  --setting-sources user \
-  --model "$MODELLO" \
+# shellcheck disable=SC2046  # effort_cli e' vuoto o "--effort <livello>"
+bash "$SPADA_CLAUDE" -p "$(cat "$PROMPT_FILE")" \
+  --model "$(modello_cli "$MODELLO")" $(effort_cli "$EFFORT") \
+  --permission-mode "$SPADA_PERMISSION_MODE" \
   --output-format stream-json --verbose \
   > "_state/run_${RUN_ID}.stream.jsonl" 2>&1
 ESITO_CODICE=$?

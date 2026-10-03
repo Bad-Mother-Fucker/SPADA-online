@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$HOME/.claude/scripts/render/render_hook.sh\"",
+            "command": "\"$CLAUDE_CONFIG_DIR/scripts/render/render_hook.sh\"",
             "timeout": 20
           }
         ]
@@ -14,11 +14,11 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Task",
+        "matcher": "Task|Agent",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.claude/scripts/telemetry/attivita_hook.py\"",
+            "command": "python3 \"$CLAUDE_CONFIG_DIR/scripts/telemetry/attivita_hook.py\"",
             "timeout": 10
           }
         ]
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.claude/scripts/telemetry/attivita_hook.py\"",
+            "command": "python3 \"$CLAUDE_CONFIG_DIR/scripts/telemetry/attivita_hook.py\"",
             "timeout": 10
           }
         ]
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$HOME/.claude/scripts/telemetry/attivita_hook.py\"",
+            "command": "python3 \"$CLAUDE_CONFIG_DIR/scripts/telemetry/attivita_hook.py\"",
             "timeout": 10
           }
         ]

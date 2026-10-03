@@ -3,7 +3,7 @@
 in modo incrementale (Sprint 3.4).
 
 Registrato per tre eventi (vedi _pipeline/settings.json):
-  PreToolUse (matcher "Task")  -> un subagente parte
+  PreToolUse (matcher "Task|Agent") -> un subagente parte
   SubagentStop                 -> un subagente finisce
   Stop                         -> la sessione di fase termina: rigenera
                                    la sintesi in linguaggio naturale in
@@ -64,7 +64,9 @@ def save_attivita(data):
 
 
 def handle_pre_tool_use(payload, data):
-    if payload.get("tool_name") != "Task":
+    # "Agent" e' il nome attuale del tool che lancia un subagente;
+    # "Task" quello delle versioni di Claude Code su cui e' nato l'hook.
+    if payload.get("tool_name") not in ("Task", "Agent"):
         return
     tool_input = payload.get("tool_input") or {}
     data["agenti_attivi"].append({

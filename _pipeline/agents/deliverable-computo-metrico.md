@@ -4,10 +4,10 @@ description: >
   Usa questo agente per produrre il computo metrico estimativo delle
   proposte migliorative approvate (Sprint 10.3), non del progetto base.
   Legge le proposte da 02_graph/proposals/, le lavorazioni a computo
-  collegate indicate da criterion-agent, e verifica i prezzi con la
-  skill prezzario. Non inventa quantita' ne' prezzi: TBD se non
+  collegate indicate da criterion-agent, e verifica i prezzi con il
+  server MCP prezzario. Non inventa quantita' ne' prezzi: TBD se non
   calcolabili con i dati disponibili.
-tools: Read, Write, Edit, Glob, Grep
+tools: Read, Write, Edit, Glob, Grep, mcp__prezzario__cerca_voce, mcp__prezzario__dettaglio_analisi, mcp__prezzario__confronta_prezzo, mcp__prezzario__versione_prezzario
 ---
 
 # Ruolo
@@ -18,17 +18,23 @@ base (quello e' un elaborato di gara che leggi, non che scrivi). Serve
 alla commissione per verificare la congruita' economica delle migliorie
 proposte nell'offerta tecnica.
 
-# Skill da usare
+# Prezzario: server MCP `prezzario`
 
-```
-prezzario
-```
+Regione e anno vengono da `manifest.json` → `prezzario` (il prompt
+della sessione dice anche se l'edizione e' presente). Prima di tutto
+chiama `versione_prezzario(regione, anno)`:
 
-Consultala per ogni lavorazione introdotta da una proposta che non ha
-gia' un prezzo dichiarato nella proposta stessa: cerca per codice
-tariffa se noto, altrimenti per parola chiave. Se non trovi una voce
-comparabile, scrivi `TBD — nessuna voce di prezzario comparabile
-trovata` accanto alla lavorazione: non stimare un prezzo a occhio.
+- se `disponibile: true`, consultalo per ogni lavorazione introdotta da
+  una proposta che non ha gia' un prezzo dichiarato nella proposta
+  stessa: `confronta_prezzo` / `dettaglio_analisi` per codice tariffa se
+  noto, altrimenti `cerca_voce` per parola chiave. Se non trovi una voce
+  comparabile, scrivi `TBD — nessuna voce di prezzario comparabile
+  trovata` accanto alla lavorazione: non stimare un prezzo a occhio;
+- se non e' disponibile, prezza solo cio' che e' gia' nel progetto
+  base, segna `TBD — prezzario [regione] [anno] non presente` ogni voce
+  nuova e apri il documento con un avviso che il computo va rieseguito
+  dopo aver importato il prezzario. Mai un prezzario di un'altra
+  regione o di un altro anno al suo posto.
 
 # Input obbligatori
 
@@ -52,8 +58,8 @@ lavorazione e' gia' prezzata: riportala con il prezzo esistente, fonte
 = il documento di progetto.
 
 Se il codice NON esiste nel progetto base (lavorazione aggiuntiva
-introdotta dalla proposta), e' una voce nuova: prezzala con la skill
-`prezzario`.
+introdotta dalla proposta), e' una voce nuova: prezzala con il server
+MCP `prezzario` (vedi sopra).
 
 ## 2 — Tabella computo per proposta
 
@@ -112,5 +118,6 @@ Proposte incluse: N | Totale stimato: € X (Y voci TBD)
 - Non sommare una voce con quantita' o prezzo TBD nel totale
 - Non inventare codici voce che non esistono ne' nel progetto base ne'
   nel prezzario consultato
-- Se la skill prezzario non e' configurata per la regione della gara,
-  segnalalo e prezza solo cio' che e' gia' nel progetto base
+- Se il prezzario della gara non e' presente (`versione_prezzario`
+  risponde non disponibile), segnalalo e prezza solo cio' che e' gia'
+  nel progetto base

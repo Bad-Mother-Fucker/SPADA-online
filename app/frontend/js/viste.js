@@ -33,7 +33,7 @@ const Viste = (() => {
           "Questa vista richiede un backend più recente")),
       h("p", { style: { margin: 0, fontSize: "var(--fs-sm)", color: "var(--ink-2)" } },
         "Il servizio non espone ", h("code", { class: "mono" }, percorso || "questo endpoint"),
-        ": l'API in esecuzione è precedente a questa versione dell'interfaccia. I dati della gara sono intatti — manca solo l'aggiornamento del backend sulla VM."));
+        ": l'API in esecuzione è precedente a questa versione dell'interfaccia. I dati della gara sono intatti — riavvia l'app con ./spada riavvia per caricare il backend aggiornato."));
   }
 
   function scheletroBlocco(righe = 3) {
@@ -84,6 +84,7 @@ const Viste = (() => {
     const st = Dominio.statoFase(stato.fasi, n);
     const fase = Dominio.fase(n);
     const azioni = [];
+    blocco = Dominio.motivoBlocco(stato.fasi, n) || blocco;
 
     if (st === "in_coda") {
       // Se il pannello ha appena elencato cosa manca, il bottone non deve
@@ -93,7 +94,16 @@ const Viste = (() => {
         disabled: !!blocco, title: blocco || "",
         onClick: () => Gara.eseguiFase(n),
       }, `Avvia Fase ${n} — ${fase.titolo.toLowerCase()}`));
-    } else if (st === "da_rivedere") {
+    } else if (st === "da_rivedere" && n === 3 && !stato.indicazioni.dati?.compilata) {
+      // Il checkpoint della Fase 3 è il modulo delle indicazioni: finché
+      // non è compilato, il pulsante porta lì invece di approvare.
+      azioni.push(h("button", {
+        type: "button", class: "btn btn--primary btn--block",
+        onClick: () => Gara.vaiAlleIndicazioni(),
+      }, "Compila le indicazioni strategiche"));
+      azioni.push(h("p", { class: "faint", style: { margin: 0, fontSize: "var(--fs-micro)", textAlign: "center" } },
+        "Si approva dal modulo in fondo all'audit, quando tono, risposte e priorità sono compilati."));
+    } else if (st === "da_rivedere" && Dominio.GATE_UMANO.has(n)) {
       azioni.push(h("button", {
         type: "button", class: "btn btn--primary btn--block",
         onClick: () => Gara.approvaFase(n),
@@ -102,7 +112,9 @@ const Viste = (() => {
         type: "button", class: "btn btn--block",
         onClick: () => Gara.rieseguiFase(n),
       }, "Riesegui la fase"));
-    } else if (st === "errore") {
+    } else if (st === "errore" || st === "da_rivedere") {
+      // da_rivedere su una fase senza checkpoint: la pipeline l'ha rimessa
+      // in discussione dopo la riesecuzione di una fase precedente.
       azioni.push(h("button", {
         type: "button", class: "btn btn--primary btn--block",
         onClick: () => Gara.rieseguiFase(n),
@@ -219,7 +231,7 @@ const Viste = (() => {
             I.carica(22),
             h("div", { class: "dropzone__title" }, "Trascina qui i file, o rilasciali sulla categoria giusta"),
             h("div", { class: "dropzone__hint" },
-              "PDF, PDF.P7M, XLSX, DOCX · max 40 MB per file. La categoria viene indovinata dal nome ed è correggibile."),
+              "PDF, PDF.P7M, XLSX, DOCX, di qualunque dimensione. La categoria viene indovinata dal nome ed è correggibile."),
           ]);
 
     // I rifiuti restano visibili accanto ai file buoni: si vede subito
@@ -440,38 +452,28 @@ const Viste = (() => {
   function fase3(stato) {
     const res = stato.registri.analisi;
 
+    // L'audit strategico per intero (output/03_criteria/strategy_audit.md,
+    // scritto da strategy-auditor): le quattro analisi con la loro
+    // classificazione, le domande chiave, il riepilogo e le indicazioni
+    // strategiche del professionista.
     const contenuto = risorsa(res, {
-      vuoto: () => vuotoInline("Analisi non ancora prodotta",
-        "La sintesi e le sezioni annotate compaiono al termine della Fase 3.",
-
-        h("p", { class: "faint", style: { margin: 0, fontSize: "var(--fs-micro)" } },
-          "L'azione per questa fase è nel pannello a destra.")),
-      render: (dati) => h("section", { class: "split__main" },
+      vuoto: () => h("section", { class: "split__main" },
         h("div", { class: "card" },
-          secTitle("Sintesi dell'analisi"),
-          dati.sintesi.length
-            ? dati.sintesi.map((p) => h("p", { class: "lead" }, p))
-            : h("p", { class: "lead muted" }, "Il documento non contiene una sintesi in prosa."),
-          h("div", { class: "row row--tight" },
-            dati.conteggi.alta ? h("span", { class: "badge badge--lg badge--crit" }, I.triangolo(11), `${dati.conteggi.alta} criticità alte`) : null,
-            dati.conteggi.media ? h("span", { class: "badge badge--lg badge--warn" }, `${dati.conteggi.media} medie`) : null,
-            dati.conteggi.bassa ? h("span", { class: "badge badge--lg badge--ok" }, `${dati.conteggi.bassa} sezioni conformi`) : null,
-            !dati.sezioni.length ? h("span", { class: "badge badge--lg" }, "nessuna sezione annotata") : null)),
-
-        dati.sezioni.length
-          ? h("div", { class: "card" },
-              h("h3", { class: "sec-title", style: { marginBottom: "var(--s-4)" } }, "Sezioni annotate"),
-              h("div", { class: "stack stack--3" },
-                dati.sezioni.map((sez) => h("article", { class: `sezione sezione--${sez.severita || "media"}` },
-                  h("div", { class: "sezione__head" },
-                    h("div", { class: "row row--tight", style: { alignItems: "baseline" } },
-                      sez.ref ? h("span", { class: "mono", style: { fontSize: "var(--fs-micro)", color: "var(--ink-3)" } }, sez.ref) : null,
-                      h("h4", null, sez.titolo)),
-                    h("span", { class: `badge badge--sm badge--${TONO_SEV[sez.severita] || "neu"}` },
-                      sez.badge || ETICHETTA_SEV[sez.severita] || "da presidiare")),
-                  sez.nota ? h("p", { class: "sezione__note" }, sez.nota) : null,
-                  sez.citazione ? h("blockquote", { class: "quote" }, `«${sez.citazione}»`) : null))))
-          : null),
+          vuotoInline("Audit strategico non ancora prodotto",
+            "Compare al termine della Fase 3: budget sicurezza, gap prezzi rispetto al prezzario, viabilità del cantiere, capacità di investimento migliorativo, domande chiave e indicazioni strategiche del professionista.",
+            h("p", { class: "faint", style: { margin: 0, fontSize: "var(--fs-micro)" } },
+              "L'azione per questa fase è nel pannello a destra.")))),
+      render: (doc) => {
+        const modulo = (id) => moduloIndicazioni(stato, id);
+        const haSezione = doc.sezioni.some((s2) => s2.titolo.toLowerCase().startsWith("indicazioni strategiche"));
+        return h("section", { class: "split__main" },
+          documentoReso(doc, {
+            kicker: "Audit strategico", stato, conClassificazione: true,
+            percorsoHtml: "11_view/03_criteria/strategy_audit.html", percorsoMd: "03_criteria/strategy_audit.md",
+            sostituzioni: { "indicazioni strategiche": modulo },
+          }),
+          haSezione ? null : modulo("sez-indicazioni-strategiche-del-professionista"));
+      },
     });
 
     const corpo3 = Dominio.corpoFase(stato.fasi, 3) || {};
@@ -492,6 +494,252 @@ const Viste = (() => {
   }
 
   // ===================================================================
+  // DOMANDE · esportazione e risposte alle domande del gara brief
+  // ===================================================================
+
+  // Scelta «con le risposte» per ogni elenco: sopravvive ai ridisegni.
+  const preferenzeEsporta = {};
+
+  /** Le domande (con o senza risposte) come testo semplice da condividere. */
+  function testoDomande({ titolo, origine, nomeGara, cig, domande, risposte, conRisposte }) {
+    const righe = [
+      `${titolo} — ${nomeGara}`,
+      `${origine}${cig ? ` · CIG ${cig}` : ""} · ${new Date().toLocaleDateString("it-IT")}`,
+      "",
+    ];
+    domande.forEach((q, k) => {
+      righe.push(`${k + 1}. ${Md.testoSemplice(q)}`);
+      if (conRisposte) {
+        const r = (risposte[k] || "").trim();
+        const linee = r ? r.split("\n") : ["(non ancora data)"];
+        righe.push(`   Risposta: ${linee[0]}`, ...linee.slice(1).map((x) => `             ${x}`));
+      }
+      righe.push("");
+    });
+    return righe.join("\n").trimEnd() + "\n";
+  }
+
+  /** Copia / Scarica, con o senza risposte. `risposte` è una funzione: si
+      esporta ciò che è scritto nel modulo in quel momento, anche se non
+      ancora salvato. */
+  function barraEsporta({ stato, chiave, titolo, origine, nomeGara, domande, risposte }) {
+    if (!(chiave in preferenzeEsporta)) preferenzeEsporta[chiave] = true;
+    const cig = stato.manifest?.gara?.CIG || "";
+    const testo = () => testoDomande({
+      titolo, origine, nomeGara, cig, domande, risposte: risposte(), conRisposte: preferenzeEsporta[chiave],
+    });
+    const nomeFile = () => `${chiave}-${stato.slug}${preferenzeEsporta[chiave] ? "-con-risposte" : ""}.txt`;
+    return h("div", { class: "esporta" },
+      h("label", { class: "esporta__opz" },
+        h("input", {
+          type: "checkbox", checked: preferenzeEsporta[chiave],
+          onChange: (e) => { preferenzeEsporta[chiave] = e.target.checked; },
+        }),
+        "con le risposte"),
+      h("button", {
+        type: "button", class: "btn btn--sm",
+        onClick: () => Gara.copiaTesto(testo(), `${UI.plurale(domande.length, "domanda copiata", "domande copiate")} negli appunti${preferenzeEsporta[chiave] ? ", con le risposte" : ""}.`),
+      }, I.documento(11), "Copia"),
+      h("button", {
+        type: "button", class: "btn btn--sm",
+        onClick: () => Gara.scaricaTesto(testo(), nomeFile()),
+      }, I.scarica(11), "Scarica .txt"));
+  }
+
+  function moduloDomandeBrief(stato, id, nomeGara) {
+    const rb = stato.risposteBrief;
+    const titolo = h("h3", { class: "doc__sez-title" }, "Domande aperte per il professionista");
+    if (!rb.dati || !rb.bozza) {
+      return h("section", { class: "card doc__sez", id },
+        titolo,
+        rb.errore
+          ? h("div", { class: "note note--crit", style: { marginTop: "var(--s-3)" } }, I.avviso(14), h("p", null, `Modulo non disponibile: ${rb.errore}`))
+          : h("div", { class: "sk", style: { marginTop: "var(--s-3)", height: "120px" } }));
+    }
+    const d = rb.dati;
+    const date = rb.bozza.filter((r) => (r || "").trim()).length;
+    const tot = d.domande.length;
+
+    const domande = d.domande.map((q, k) => h("div", { class: "strat__domanda" },
+      h("label", { class: "strat__q", for: `rb-risposta-${k}` },
+        h("span", { class: "strat__n mono" }, String(k + 1)),
+        h("span", { class: "strat__testo" }, Md.inline(q))),
+      d.recuperate.includes(k)
+        ? h("p", { class: "strat__aiuto", style: { margin: 0 } }, "Risposta ripresa dalla versione precedente del brief: salvala per riportarla nel documento.")
+        : null,
+      h("textarea", {
+        class: "textarea", id: `rb-risposta-${k}`, rows: "3", placeholder: "La tua risposta…",
+        value: rb.bozza[k] || "",
+        onInput: (e) => Gara.aggiornaRispostaBrief(k, e.target.value),
+      })));
+
+    const nodo = h("section", { class: "card doc__sez strat", id },
+      h("div", { class: "row row--between row--top doc__sez-head" },
+        titolo,
+        h("span", { class: `badge badge--lg badge--${date === tot ? "ok" : date ? "accent" : "neu"}`, id: "rb-badge" }, `${date}/${tot} risposte`)),
+      h("p", { class: "strat__aiuto", style: { marginTop: 0 } },
+        "Da discutere prima della strategia (Gate A). Le risposte si salvano nel gara brief, sotto ogni domanda, e arrivano alle fasi successive nella memoria di gara. Non serve rispondere a tutte."),
+      barraEsporta({
+        stato, chiave: "domande-gara-brief", titolo: "Domande aperte", origine: "Gara brief", nomeGara,
+        domande: d.domande, risposte: () => stato.risposteBrief.bozza || [],
+      }),
+      h("div", { class: "strat__blocco" }, domande),
+      h("div", { class: "strat__piede" },
+        h("span", { class: "strat__stato", id: "rb-stato" }),
+        h("button", {
+          type: "button", class: "btn btn--primary", id: "rb-salva", disabled: rb.salvataggio || !rb.modificata,
+          onClick: () => Gara.salvaRisposteBrief(),
+        }, "Salva risposte")));
+
+    requestAnimationFrame(() => Gara.aggiornaStatoRisposteBrief());
+    return nodo;
+  }
+
+  // ===================================================================
+  // MODULO · indicazioni strategiche del professionista (checkpoint F3)
+  //
+  // Campi separati come nella sezione del template di strategy-audit:
+  // risposte alle domande chiave, tono, priorità per criterio, vincoli,
+  // opportunità, note. Si salva nel documento (PUT /strategia/indicazioni)
+  // e si approva quando tono, risposte e priorità sono compilati.
+  // ===================================================================
+
+  const TONI = [
+    { id: "conservativo", hint: "Proposte prudenti, ancorate a prove solide e a costi contenuti." },
+    { id: "bilanciato", hint: "Equilibrio fra punteggio atteso e costo o rischio delle migliorie." },
+    { id: "audace", hint: "Proposte ambiziose dove il punteggio lo giustifica, accettando più rischio." },
+  ];
+
+  function moduloIndicazioni(stato, id) {
+    const ind = stato.indicazioni;
+    const titolo = h("h3", { class: "doc__sez-title" }, "Indicazioni strategiche del professionista");
+    if (!ind.dati || !ind.bozza) {
+      return h("section", { class: "card doc__sez", id },
+        titolo,
+        ind.errore
+          ? h("div", { class: "note note--crit", style: { marginTop: "var(--s-3)" } }, I.avviso(14), h("p", null, `Modulo non disponibile: ${ind.errore}`))
+          : h("div", { class: "sk", style: { marginTop: "var(--s-3)", height: "120px" } }));
+    }
+    const d = ind.dati, b = ind.bozza;
+    const fase3 = Dominio.statoFase(stato.fasi, 3);
+    const approvata = fase3 === "completata";
+    const mancanti = Gara.mancantiIndicazioni();
+    const bloccato = ind.salvataggio || fase3 === "in_esecuzione";
+    const aggiorna = (fn) => Gara.aggiornaIndicazioni(fn);
+    const sottotitolo = (t, aiuto) => h("div", { class: "strat__blocco-head" },
+      h("h4", { class: "doc__sub-title" }, t), aiuto ? h("p", { class: "strat__aiuto" }, aiuto) : null);
+
+    const risposte = d.domande.length
+      ? d.domande.map((q, k) => h("div", { class: "strat__domanda" },
+          h("label", { class: "strat__q", for: `ind-risposta-${k}` },
+            h("span", { class: "strat__n mono" }, String(k + 1)),
+            h("span", { class: "strat__testo" }, Md.inline(q))),
+          h("textarea", {
+            class: "textarea", id: `ind-risposta-${k}`, rows: "3", placeholder: "La tua risposta…",
+            value: b.risposte[k] || "",
+            onInput: (e) => aggiorna((x) => { x.risposte[k] = e.target.value; }),
+          })))
+      : [h("p", { class: "muted" }, "L'audit non contiene domande chiave.")];
+
+    const toni = h("div", { class: "seg seg--wash", role: "group", "aria-label": "Tono generale" },
+      TONI.map((t) => h("button", {
+        type: "button", class: "seg__btn", dataset: { tono: t.id }, "aria-pressed": String(b.tono === t.id),
+        onClick: (e) => {
+          aggiorna((x) => { x.tono = t.id; });
+          e.currentTarget.parentElement.querySelectorAll("button").forEach((btn) =>
+            btn.setAttribute("aria-pressed", String(btn.dataset.tono === t.id)));
+          const aiuto = document.getElementById("ind-tono-aiuto");
+          if (aiuto) aiuto.textContent = t.hint;
+        },
+      }, t.id)));
+
+    const etichette = Object.fromEntries(d.criteri.map((c) => [c.id, c.etichetta]));
+    const priorita = b.priorita.map((p, k) => h("div", { class: "strat__crit" },
+      h("label", { class: "strat__crit-nome", for: `ind-crit-${p.id}` }, Md.inline(etichette[p.id] || p.id)),
+      h("select", {
+        class: "select input--sm", id: `ind-liv-${p.id}`, "aria-label": `Priorità di ${p.id}`,
+        onChange: (e) => aggiorna((x) => { x.priorita[k].livello = e.target.value; }),
+      },
+        ["", "ALTA", "MEDIA", "BASSA"].map((l) => h("option", { value: l, selected: p.livello === l }, l || "priorità…"))),
+      h("input", {
+        type: "text", class: "input input--sm", id: `ind-crit-${p.id}`, value: p.indicazione || "",
+        placeholder: "Indicazione per questo criterio",
+        onInput: (e) => aggiorna((x) => { x.priorita[k].indicazione = e.target.value; }),
+      })));
+
+    const lista = (chiave, idCampo, segnaposto) => h("textarea", {
+      class: "textarea", id: idCampo, rows: "3", placeholder: segnaposto,
+      value: (b[chiave] || []).join("\n"),
+      onInput: (e) => aggiorna((x) => { x[chiave] = e.target.value.split("\n"); }),
+    });
+
+    const nodo = h("section", { class: "card doc__sez strat", id },
+      h("div", { class: "row row--between row--top doc__sez-head" },
+        titolo,
+        h("span", { class: `badge badge--lg badge--${mancanti.length ? "warn" : "ok"}`, id: "ind-badge" },
+          mancanti.length ? `${mancanti.length} da compilare` : approvata ? "Approvate" : "Compilate")),
+      h("p", { class: "strat__aiuto", style: { marginTop: 0 } },
+        "Guidano l'analisi dei criteri (Fase 4) e la stesura dell'offerta: criterion-agent le usa come cornice delle proposte, offer-writer per le priorità e il budget di facciate. ",
+        approvata
+          ? "Il checkpoint è già approvato: salvando le modifiche le passi di nuovo alle fasi successive."
+          : "La Fase 3 si approva quando tono, risposte e priorità sono compilati."),
+
+      h("div", { class: "strat__blocco" },
+        sottotitolo("Risposte alle domande chiave"),
+        d.domande.length
+          ? barraEsporta({
+              stato, chiave: "domande-audit-strategico", titolo: "Domande chiave", origine: "Audit strategico",
+              nomeGara: Md.testoSemplice((stato.registri.analisi.dati?.titolo || "").replace(/^audit strategico\s*[—–-]\s*/i, "")) || stato.manifest?.nome || stato.slug,
+              domande: d.domande, risposte: () => stato.indicazioni.bozza?.risposte || [],
+            })
+          : null,
+        risposte),
+
+      h("div", { class: "strat__blocco" },
+        sottotitolo("Tono generale"),
+        toni,
+        h("p", { class: "strat__aiuto", id: "ind-tono-aiuto" },
+          (TONI.find((t) => t.id === b.tono) || { hint: "Scegli il tono con cui la pipeline costruirà le proposte." }).hint)),
+
+      h("div", { class: "strat__blocco" },
+        sottotitolo("Priorità per criterio", "ALTA dà una facciata in più al criterio nella relazione tecnica (offer-writer). Basta il livello o l'indicazione."),
+        priorita),
+
+      h("div", { class: "grid-auto strat__blocco" },
+        h("div", { class: "field" },
+          h("label", { class: "field__label", for: "ind-vincoli" }, "Vincoli specifici"),
+          lista("vincoli", "ind-vincoli", "Uno per riga, es. nessun intervento visibile sulla cupola"),
+          h("span", { class: "field__hint" }, "Facoltativo. Uno per riga.")),
+        h("div", { class: "field" },
+          h("label", { class: "field__label", for: "ind-opportunita" }, "Opportunità da valorizzare"),
+          lista("opportunita", "ind-opportunita", "Una per riga"),
+          h("span", { class: "field__hint" }, "Facoltativo. Una per riga."))),
+
+      h("div", { class: "field strat__blocco" },
+        h("label", { class: "field__label", for: "ind-note" }, "Note aggiuntive"),
+        h("textarea", {
+          class: "textarea", id: "ind-note", rows: "3", placeholder: "Testo libero", value: b.note || "",
+          onInput: (e) => aggiorna((x) => { x.note = e.target.value; }),
+        })),
+
+      h("div", { class: "strat__piede" },
+        h("span", { class: "strat__stato", id: "ind-stato" }),
+        h("div", { class: "row row--tight" },
+          h("button", {
+            type: "button", class: "btn", id: "ind-salva", disabled: bloccato || !ind.modificata,
+            onClick: () => Gara.salvaIndicazioni(false),
+          }, "Salva"),
+          h("button", {
+            type: "button", class: "btn btn--primary", id: "ind-approva", disabled: bloccato || mancanti.length > 0,
+            onClick: () => Gara.salvaIndicazioni(true),
+          }, approvata ? "Salva e aggiorna le fasi successive" : "Salva e approva il checkpoint"))));
+
+    // Testo di stato e pulsanti si aggiornano in posto mentre si scrive.
+    requestAnimationFrame(() => Gara.aggiornaStatoIndicazioni());
+    return nodo;
+  }
+
+  // ===================================================================
   // GARA BRIEF · vista trasversale
   //
   // Il documento di sintesi prodotto da disciplinare-analyst in Fase 1
@@ -503,44 +751,95 @@ const Viste = (() => {
   // ===================================================================
 
   function brief(stato) {
-    const res = stato.garaBrief;
-    const haMd = (stato.output || []).includes("03_criteria/gara_brief.md");
-    const haHtml = (stato.output || []).includes("11_view/03_criteria/gara_brief.html");
+    const contenuto = risorsa(stato.garaBrief, {
+      vuoto: () => h("div", { class: "card" },
+        vuotoInline("Gara brief non ancora prodotto",
+          "Il documento di sintesi si scrive in Fase 1, subito dopo l'estrazione dei criteri dal disciplinare: scadenze, punteggio, vincoli di formato, criteri, potenziale, domande aperte.",
+          h("button", { type: "button", class: "btn btn--primary", onClick: () => Gara.vai({ tipo: "fase", n: 1 }) }, "Vai alla Fase 1"))),
+      render: (doc) => {
+        const nomeGara = Md.testoSemplice(doc.titolo.replace(/^gara brief\s*[—–-]\s*/i, "")) || stato.manifest?.nome || stato.slug;
+        return documentoReso(doc, {
+          kicker: "Gara Brief", stato,
+          percorsoHtml: "11_view/03_criteria/gara_brief.html", percorsoMd: "03_criteria/gara_brief.md",
+          sostituzioni: { "domande aperte": (id) => moduloDomandeBrief(stato, id, nomeGara) },
+        });
+      },
+    });
+    return h("div", { class: "split" }, h("section", { class: "split__main" }, contenuto));
+  }
 
-    const azioni = (haMd || haHtml)
-      ? h("div", { class: "row row--tight", style: { justifyContent: "flex-end" } },
-          haHtml ? h("a", {
-            class: "btn btn--sm btn--accent",
-            href: Api.percorsoOutput(stato.slug, "11_view/03_criteria/gara_brief.html"),
-            target: "_blank", rel: "noopener",
-          }, I.scarica(11), "Versione da condividere") : null,
-          haMd ? h("a", {
-            class: "btn btn--sm",
-            href: Api.percorsoOutput(stato.slug, "03_criteria/gara_brief.md"),
-            target: "_blank", rel: "noopener",
-          }, I.scarica(11), "Markdown") : null)
+  // ===================================================================
+  // DOCUMENTO RESO · gara brief e audit strategico per intero
+  //
+  // Una card per sezione di secondo livello, una scheda interna per ogni
+  // sottosezione (i criteri del brief, le indicazioni dell'audit), con
+  // tabelle, elenchi e avvisi resi da Md.rendiBlocchi. Prima di qui la
+  // vista mostrava solo la prosa e scartava tabelle ed elenchi, cioè la
+  // maggior parte del documento.
+  // ===================================================================
+
+  const idSezione = (t) => `sez-${UI.slugify(t)}`;
+
+  /** "**Classificazione:** ⚠️ BASSO" → { testo: "BASSO", tono: "warn" }. */
+  function classificazione(blocchi) {
+    for (const b of blocchi) {
+      const testo = b.tipo === "paragrafo" ? b.righe.join(" ") : b.tipo === "citazione" ? b.testo : "";
+      const m = /\*\*Classificazione[^*]*\*\*\s*:?\s*(.+)$/i.exec(testo);
+      if (!m) continue;
+      const grezzo = m[1];
+      const valore = grezzo.replace(/^[^A-Za-zÀ-ÿ]+/, "").split(/\s[—–(]|\.\s/)[0].replace(/[*_]/g, "").trim();
+      const tono = /🔴|❌/.test(grezzo) || /^CRITIC/i.test(valore) ? "crit"
+        : /⚠/.test(grezzo) || /^(SFAV|LIMITAT|ASSENTE|BASSO)/i.test(valore) ? "warn"
+        : /✅/.test(grezzo) || /^(OK|FAV|AMPIO)/i.test(valore) ? "ok"
+        : /^(NON |N\.?D|N\.?C)/i.test(valore) ? "neu" : "accent";
+      return { testo: valore, tono };
+    }
+    return null;
+  }
+
+  function documentoReso(doc, { kicker, stato, percorsoHtml, percorsoMd, conClassificazione = false, sostituzioni = {} }) {
+    const output = stato.output || [];
+    const titolo = doc.titolo.replace(/^(gara brief|audit strategico)\s*[—–-]\s*/i, "") || kicker;
+
+    const scarica = h("div", { class: "row row--tight doc__azioni" },
+      output.includes(percorsoHtml) ? h("a", {
+        class: "btn btn--sm btn--accent", href: Api.percorsoOutput(stato.slug, percorsoHtml), target: "_blank", rel: "noopener",
+      }, I.scarica(11), "Versione da condividere") : null,
+      output.includes(percorsoMd) ? h("a", {
+        class: "btn btn--sm", href: Api.percorsoOutput(stato.slug, percorsoMd), target: "_blank", rel: "noopener",
+      }, I.scarica(11), "Markdown") : null);
+
+    const indice = doc.sezioni.length > 3
+      ? h("nav", { class: "doc__toc", "aria-label": "Sezioni del documento" },
+          doc.sezioni.map((s2) => h("button", {
+            type: "button", class: "pill",
+            onClick: () => document.getElementById(idSezione(s2.titolo))?.scrollIntoView({ behavior: "smooth", block: "start" }),
+          }, s2.titolo)))
       : null;
 
-    const contenuto = risorsa(res, {
-      vuoto: () => vuotoInline("Gara brief non ancora prodotto",
-        "Il documento di sintesi si scrive in Fase 1, subito dopo l'estrazione dei criteri dal disciplinare: nome gara, stazione appaltante, cosa serve per vincere.",
-        h("button", { type: "button", class: "btn btn--primary", onClick: () => Gara.vai({ tipo: "fase", n: 1 }) }, "Vai alla Fase 1")),
-      render: (dati) => h("div", { class: "stack stack--4" },
-        dati.sintesi.length
-          ? h("div", { class: "card" },
-              secTitle("Sintesi"),
-              dati.sintesi.map((p) => h("p", { class: "lead" }, p)))
-          : null,
-        dati.sezioni.map((sez) => h("div", { class: "card" },
-          h("h3", { class: "sec-title" }, sez.titolo),
-          h("div", { class: "prose prose--boxed" },
-            sez.paragrafi.length
-              ? sez.paragrafi.map((p) => h("p", null, p))
-              : h("p", { class: "muted" }, "Sezione senza prosa (tabella o elenco non anteprimato)."))))),
-    });
-
-    return h("div", { class: "split" },
-      h("section", { class: "split__main" }, azioni, contenuto));
+    return h("div", { class: "stack stack--4 doc" },
+      h("header", { class: "card doc__head" },
+        h("div", { class: "row row--between row--top" },
+          h("div", { class: "kicker" }, kicker),
+          scarica),
+        h("h2", { class: "doc__title" }, Md.inline(titolo)),
+        h("div", { class: "md" }, Md.rendiBlocchi(doc.intro)),
+        indice),
+      doc.sezioni.map((s2) => {
+        // Una sezione che la vista rende da sé (es. il modulo delle
+        // indicazioni strategiche al posto dei loro segnaposto).
+        const chiave = Object.keys(sostituzioni).find((k) => s2.titolo.toLowerCase().startsWith(k));
+        if (chiave) return sostituzioni[chiave](idSezione(s2.titolo));
+        const cl = conClassificazione ? classificazione(s2.blocchi) : null;
+        return h("section", { class: "card doc__sez", id: idSezione(s2.titolo) },
+          h("div", { class: "row row--between row--top doc__sez-head" },
+            h("h3", { class: "doc__sez-title" }, Md.inline(s2.titolo)),
+            cl ? h("span", { class: `badge badge--lg badge--${cl.tono}` }, cl.testo) : null),
+          s2.blocchi.length ? h("div", { class: "md" }, Md.rendiBlocchi(s2.blocchi)) : null,
+          s2.sottosezioni.map((sub) => h("article", { class: "doc__sub" },
+            h("h4", { class: "doc__sub-title" }, Md.inline(sub.titolo)),
+            h("div", { class: "md" }, Md.rendiBlocchi(sub.blocchi)))));
+      }));
   }
 
   // ===================================================================
@@ -1300,6 +1599,7 @@ const Viste = (() => {
       for (const x of stato.registri.gap.dati) {
         perColonna.gap.push({
           id: x.id || "GAP", etichetta: x.titolo || "(senza titolo)",
+          collegamenti: [[x.requisito, "riguarda"], [x.proposta, "coperto da"]],
           destinazione: destinazioneNodo("gap", x.id),
         });
       }
@@ -1308,6 +1608,7 @@ const Viste = (() => {
       for (const x of stato.registri.deliverable.dati) {
         perColonna.deliverable.push({
           id: x.id, etichetta: x.nome || x.id,
+          collegamenti: [[x.criterio, "per il criterio"]],
           destinazione: destinazioneNodo("deliverable", x.id),
         });
       }
@@ -1335,108 +1636,76 @@ const Viste = (() => {
     }
 
     const filtri = [{ chiave: "tutti", etichetta: "Tutti i nodi", forma: "2px", conteggio: totale }]
-      .concat(colonne.map((c) => ({ chiave: c.chiave, etichetta: c.etichetta, forma: c.forma, conteggio: c.nodi.length })))
+      .concat(colonne.map((c) => ({ chiave: c.chiave, etichetta: c.etichetta, forma: c.forma, tono: c.tono, conteggio: c.nodi.length })))
       .map((f) => h("button", {
         type: "button", class: "pill", dataset: { tone: "accent" },
         "aria-pressed": String(filtro === f.chiave),
         onClick: () => Gara.vai({ tipo: "grafo", filtro: f.chiave, fase: stato.vista.fase }),
       },
-        h("span", { style: { width: "7px", height: "7px", borderRadius: f.forma, background: "currentColor", flex: "none" }, "aria-hidden": "true" }),
+        h("span", { style: { width: "8px", height: "8px", borderRadius: f.forma, background: f.tono || "currentColor", flex: "none" }, "aria-hidden": "true" }),
         f.etichetta,
         h("span", { class: "pill__count mono" }, String(f.conteggio))));
 
-    const svgArchi = s("svg", { class: "graph__edges", "aria-hidden": "true" });
-    const canvas = h("div", { class: "graph__canvas" },
-      svgArchi,
-      h("div", { class: "graph__cols", style: { gridTemplateColumns: `repeat(${colonne.length}, 1fr)` } },
-        colonne.map((c) => {
-          const attiva = filtro === "tutti" || filtro === c.chiave;
-          return h("div", { class: "graph__col", dataset: { active: String(attiva) } },
-            h("div", { class: "graph__colhead", style: { color: c.tono } },
-              h("span", { class: "graph__shape", style: { borderRadius: c.forma }, "aria-hidden": "true" }),
-              c.etichetta),
-            c.nodi.slice(0, 6).map((n, i) => h("button", {
-              type: "button", class: "node",
-              dataset: { nodo: n.id },
-              title: n.confidence ? `confidence: ${n.confidence}` : "",
-              style: { animationDelay: `${i * 55}ms` },
-              onClick: () => Gara.vai(n.destinazione),
-            },
-              h("div", { class: "node__id mono", style: { color: attiva ? c.tono : "var(--ink-4)" } }, n.id),
-              h("div", { class: "node__label" }, n.etichetta))),
-            c.nodi.length > 6
-              ? h("div", { style: { fontSize: "var(--fs-micro)", color: "var(--ink-4)" } },
-                  `+${UI.plurale(c.nodi.length - 6, c.uno, c.etichetta.toLowerCase())}`)
-              : null);
-        })));
-
-    // Gli archi sono quelli veri del grafo: si tracciano dopo il layout,
-    // misurando i nodi effettivamente resi. Quelli verso nodi non
-    // visibili (oltre i primi 6, o filtrati) semplicemente non si vedono.
-    const archi = (res.dati.archi || []);
-    requestAnimationFrame(() => disegnaArchi(canvas, svgArchi, archi));
+    // Nodi e archi per la rete. Gli archi sono quelli veri del grafo
+    // (02_graph/, via GET /grafo) più i collegamenti dichiarati nei
+    // registri: gap → requisito e proposta, deliverable → criterio.
+    const nodi = colonne.flatMap((c) => c.nodi.map((n) => ({ ...n, gruppo: c.chiave, tipoLeggibile: c.uno })));
+    const ids = new Set(nodi.map((n) => n.id));
+    const risolvi = (rif) => {
+      const r = String(rif || "").replace(/\[|\]/g, "").trim();
+      if (!r) return null;
+      if (ids.has(r)) return r;
+      const base = r.split(/[.\s,;]/)[0];
+      return ids.has(base) ? base : null;
+    };
+    const archi = (res.dati.archi || []).filter((a) => ids.has(a.da) && ids.has(a.a));
+    for (const n of nodi) {
+      for (const [verso, tipo] of n.collegamenti || []) {
+        const t = risolvi(verso);
+        if (t && t !== n.id) archi.push({ da: n.id, a: t, tipo });
+      }
+    }
 
     const senzaFrontmatter = (res.dati.nodi_senza_frontmatter || []).length;
+    const rete = GrafoVis.disponibile()
+      ? GrafoVis.vista({ nodi, archi }, { filtro, apri: (dest) => Gara.vai(dest) })
+      : h("div", { class: "note note--crit" }, I.avviso(14),
+          h("p", null, "Libreria del grafo non caricata (vendor/vis-network.min.js): ricarica la pagina."));
 
     return h("section", { class: "card" },
       h("div", { class: "row row--between row--top", style: { marginBottom: "var(--s-4)" } },
         h("div", { class: "filterbar__group", role: "group", "aria-label": "Filtra per tipo di nodo" }, filtri),
-        h("label", { class: "row row--tight", style: { flex: "none" } },
-          h("span", { style: { fontSize: "var(--fs-micro)", color: "var(--ink-3)" } }, "Fase"),
-          h("select", {
-            class: "select input--sm", style: { width: "auto" },
-            onChange: (e) => Gara.vai({ tipo: "grafo", filtro: filtro, fase: e.target.value }),
-          },
-            h("option", { value: "" }, "Tutte le fasi"),
-            Dominio.FASI.map((f) => h("option", {
-              value: String(f.n), selected: String(f.n) === String(stato.vista.fase || ""),
-            }, `${f.n} · ${f.titolo}`))))),
+        h("div", { class: "row row--tight", style: { flex: "none" } },
+          h("button", { type: "button", class: "btn btn--sm", onClick: () => GrafoVis.centra() }, "Centra"),
+          h("label", { class: "row row--tight" },
+            h("span", { style: { fontSize: "var(--fs-micro)", color: "var(--ink-3)" } }, "Fase"),
+            h("select", {
+              class: "select input--sm", style: { width: "auto" },
+              onChange: (e) => Gara.vai({ tipo: "grafo", filtro: filtro, fase: e.target.value }),
+            },
+              h("option", { value: "" }, "Tutte le fasi"),
+              Dominio.FASI.map((f) => h("option", {
+                value: String(f.n), selected: String(f.n) === String(stato.vista.fase || ""),
+              }, `${f.n} · ${f.titolo}`)))))),
 
       senzaFrontmatter
         ? h("div", { class: "note note--warn", style: { marginBottom: "var(--s-4)" } }, I.avviso(14),
             h("p", null, `${UI.plurale(senzaFrontmatter, "pagina del grafo è inclusa", "pagine del grafo sono incluse")} senza frontmatter valido: compaiono come nodo senza dati invece di essere scartate in silenzio.`))
         : null,
+      !archi.length
+        ? h("div", { class: "note", style: { marginBottom: "var(--s-4)" } }, I.info(14),
+            h("p", null, "Per ora ci sono solo i nodi, senza collegamenti: gli archi tra documenti, criteri e proposte li costruisce la Fase 2 (Estrazione requisiti), che scrive il knowledge graph in 02_graph/."))
+        : null,
 
-      h("div", { class: "graph" }, canvas),
+      rete,
 
       h("div", { class: "row row--between", style: { marginTop: "var(--s-4)" } },
         h("p", { style: { margin: 0, maxWidth: "76ch", fontSize: "var(--fs-xs)", color: "var(--ink-3)" } },
-          "Il grafo è la vista di tracciabilità: da un deliverable si risale alla proposta, al gap, al requisito e al documento che lo impone. Clic su un nodo per aprire l'elemento nella sua fase."),
+          "Trascina per spostarti, rotella per lo zoom, passa su un nodo per i dettagli. Clic su un nodo per vederne i collegamenti, doppio clic per aprirlo nella sua fase."),
         h("span", { style: { fontSize: "var(--fs-micro)", color: "var(--ink-4)" } },
-          `${UI.plurale(archi.length, "arco", "archi")} · filtro: `,
+          `${UI.plurale(nodi.length, "nodo", "nodi")} · ${UI.plurale(archi.length, "arco", "archi")} · filtro: `,
           h("strong", { style: { color: "var(--ink-2)" } },
             filtro === "tutti" ? "tutti i tipi di nodo" : filtro))));
-  }
-
-  /** Traccia gli archi reali misurando la posizione dei nodi resi. */
-  function disegnaArchi(canvas, svg, archi) {
-    if (!canvas.isConnected) return;
-    const base = canvas.getBoundingClientRect();
-    svg.setAttribute("viewBox", `0 0 ${Math.round(base.width)} ${Math.round(base.height)}`);
-    svg.replaceChildren();
-
-    const centro = new Map();
-    for (const el of canvas.querySelectorAll("[data-nodo]")) {
-      const r = el.getBoundingClientRect();
-      centro.set(el.dataset.nodo, {
-        sx: r.right - base.left, dx: r.left - base.left,
-        y: r.top - base.top + r.height / 2,
-      });
-    }
-
-    const linee = [];
-    for (const a of archi) {
-      const da = centro.get(a.da), verso = centro.get(a.a);
-      if (!da || !verso) continue;
-      // La curva evita che archi paralleli si sovrappongano in una riga sola.
-      const x1 = da.sx + 4, x2 = verso.dx - 4;
-      const dx = Math.max(18, (x2 - x1) / 2);
-      linee.push(s("path", {
-        d: `M ${x1} ${da.y} C ${x1 + dx} ${da.y}, ${x2 - dx} ${verso.y}, ${x2} ${verso.y}`,
-        fill: "none", stroke: "currentColor", "stroke-width": "1",
-      }));
-    }
-    if (linee.length) svg.append(...linee);
   }
 
   // ===================================================================

@@ -1,32 +1,115 @@
-# SPADA Online
+# SPADA — versione locale
 
-Ricostruzione da zero, in repository nuovi, del sistema Prometeus
-S.P.A.D.A. (analisi gare d'appalto e offerta tecnica) come applicazione
-web con UI, backend e pipeline condivisa — invece del modello a
-template clonato per gara del repo storico `prometeus-spada`.
+Il sistema Prometeus S.P.A.D.A. (analisi gare d'appalto e offerta
+tecnica) in esecuzione **sul tuo computer**: stessa applicazione di
+SPADA Online (interfaccia, backend, worker, pipeline di agenti), senza
+VM, Cloudflare né dominio. Si apre nel browser su
+<http://localhost:8000>.
 
-**`prometeus-spada` resta la sola fonte di riferimento, in sola
-lettura.** Non viene mai modificato, non riceve branch né commit da
-questo progetto: si legge e si copia da lì, adattando. Vedi
-`docs/sprint1-inventario.md` per la mappa completa di cosa è stato
-portato e come.
+Nasce come trasposizione di `SPADA-online` (branch `server-locale`):
+il codice applicativo è lo stesso, cambia solo come gira.
 
-## Struttura di questo repo
+## Uso
 
-```
-SPADA-online/
-├── _pipeline/    agenti, skill, comandi, script, hook — condivisi da ogni gara (Sprint 1-3, 10.3)
-├── app/          backend FastAPI, worker, frontend (Sprint 4-10)
-├── infra/        artefatti di deploy: systemd, tunnel, runbook, deploy CI/CD (Sprint 9-10)
-├── .github/      workflow di deploy automatico (Sprint 10)
-└── docs/         inventario, decisioni, schemi
+```bash
+./spada setup      # una volta (e dopo ogni aggiornamento del codice)
+./spada login      # una volta: autentica Claude per SPADA
+./spada verifica   # facoltativo: prova reale e piccola con Claude
+./spada avvia      # avvia e apre http://localhost:8000
+./spada ferma      # spegne
 ```
 
-Le gare vere e proprie (dati, mai codice) vivono fuori da questo repo,
-in `~/spada/gare/<slug>/`, ciascuna con il proprio `.git` — vedi
-struttura target nel piano e `_pipeline/scripts/setup/new_gara.sh`.
+Altri comandi: `./spada stato`, `./spada log`, `./spada riavvia`,
+`./spada importa-prezzario <Regione> <anno> [cartella | file .dcf]`.
 
-## Stato di avanzamento
+Requisiti: macOS, Claude Code (`claude`) con una subscription, Python
+≥ 3.10 (es. `brew install python@3.12`), Node.js, `pdftotext`
+(`brew install poppler`).
+
+## Dove stanno le cose
+
+```
+questa cartella/      codice (app/, _pipeline/, spada)
+~/spada/
+├── gare/<slug>/      dati di ogni gara, ciascuna col proprio .git
+├── _data/spada.db    database: prezzari + stato applicativo
+├── _claude/          configurazione Claude Code dedicata a SPADA
+├── _pipeline         → symlink a questa cartella/_pipeline
+├── _venv/            ambiente Python del backend
+├── _log/             api.log, worker.log
+└── spada.env         porta e modalità permessi
+```
+
+## Prezzari
+
+Stessa fonte della VM: le edizioni pubblicate come release in
+`prometeus-prezzari`, importate in `~/spada/_data/spada.db` e
+interrogate dagli agenti tramite il server MCP `prezzario`.
+`./spada setup` importa da solo, una volta ciascuna, le edizioni della
+cache locale (`~/.spada/prezzari/<Regione>/<anno>/`) e tutte le release
+di `prometeus-prezzari` (serve `gh` autenticato). Le altre si importano
+con `./spada importa-prezzario <Regione> <anno> [cartella con i JSON]`,
+oppure direttamente dal file PriMus (ACCA) pubblicato dalla regione:
+`./spada importa-prezzario Basilicata 2025 ~/Downloads/LisBasilicata_OOPP_2025.dcf`
+(solo elenco prezzi; l'anno deve essere quello dichiarato nel file).
+
+**Gara senza prezzario.** Se il prezzario della regione/anno della gara
+non è presente, la gara si crea e si esegue lo stesso (in «Nuova gara»:
+*Altra regione o anno*). Le fasi ricevono nel prompt l'indicazione di
+saltare le valutazioni economiche (gap prezzi e capacità di
+investimento nell'analisi strategica, prezzi delle voci nuove nel
+computo metrico) e il pannello della gara mostra un avviso con il
+pulsante **Importa ora**. Quando il prezzario arriva, l'avviso elenca le
+elaborazioni fatte senza (`prezzario_version: null` in
+`_state/run_log.json`) con il pulsante per rieseguirle.
+
+## Cosa cambia rispetto alla VM
+
+| VM (SPADA Online) | Locale |
+|---|---|
+| `spada-api` e `spada-worker` come servizi systemd | `./spada avvia` / `ferma`: stessi due processi, in background, log in `~/spada/_log` |
+| Frontend su Cloudflare Pages, API dietro Cloudflare Tunnel | Un solo indirizzo: FastAPI serve anche il frontend su `localhost:8000` |
+| Cloudflare Access come autenticazione | Il server ascolta solo su `127.0.0.1`: raggiungibile solo da questo computer |
+| Pipeline collegata a `~/.claude` di un utente di sistema dedicato | Pipeline collegata a `~/spada/_claude` (`CLAUDE_CONFIG_DIR`): la tua configurazione `~/.claude` non viene toccata |
+| Token in `/etc/spada/auth.env` | `./spada login` sulla config dedicata (o `CLAUDE_CODE_OAUTH_TOKEN` in `~/spada/_data/auth.env`) |
+| `claude mcp add --scope user` | `~/spada/_claude/mcp-spada.json` con `--strict-mcp-config`: una fase vede solo il server `prezzario` |
+| Script per bash 5 (Ubuntu) | Compatibili col bash 3.2 di macOS |
+| Deploy automatico da GitHub Actions | Nessuno: `git pull` + `./spada setup` + `./spada riavvia` |
+
+Altre differenze:
+
+- **Permessi delle sessioni Claude.** Fasi, deliverable e intervento
+  diretto girano con `--permission-mode auto` (configurabile in
+  `~/spada/spada.env`): Claude Code approva da solo le azioni ordinarie
+  e blocca quelle rischiose. Sul Mac personale, con documenti di gara
+  non fidati in ingresso, è il compromesso giusto.
+  `bypassPermissions` toglie ogni controllo, come sulla VM dedicata.
+- **Mac acceso durante le fasi.** Ogni fase gira sotto `caffeinate -i`:
+  il Mac non va in stop per inattività finché una fase è in corso.
+  Chiudere il coperchio lo sospende comunque, e la fase va rilanciata.
+- **Modelli.** La nuova gara propone gli alias `sonnet` e `opus`, che
+  puntano sempre all'ultima versione disponibile. I manifest con
+  `claude-sonnet-5` / `claude-opus-5` vengono convertiti da soli.
+- **Effort.** L'effort scelto alla creazione della gara ora arriva
+  davvero a `claude` (`--effort`); sulla VM restava solo nel manifest.
+
+## Struttura del codice
+
+```
+_pipeline/    agenti, skill, comandi, script, hook — condivisi da ogni gara
+  scripts/setup/spada_claude.sh   unico punto da cui si lancia `claude`
+  scripts/setup/spada_comune.sh   funzioni condivise da fasi e deliverable
+app/          backend FastAPI, worker, frontend statico
+infra/backup/ backup di gare/ e spada.db
+docs/         note degli sprint di SPADA Online
+spada         comando di gestione locale
+```
+
+---
+
+## Storia: SPADA Online
+
+### Stato di avanzamento (versione VM)
 
 | Sprint | Oggetto | Stato |
 |---|---|---|
@@ -47,7 +130,7 @@ VM Google Cloud con `spada-api`/`spada-worker` via systemd, Cloudflare
 Tunnel per il backend, Cloudflare Pages per il frontend, Cloudflare
 Access come unico livello di autenticazione (operatore singolo).
 
-### Sprint 10 — dettaglio
+#### Sprint 10 — dettaglio
 
 Nato dall'analisi di un prompt di design per l'interfaccia, che ha fatto
 emergere funzionalità non solo di UI ma di sistema. Quattro sotto-sprint,

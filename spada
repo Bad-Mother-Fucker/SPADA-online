@@ -1,0 +1,405 @@
+#!/bin/bash
+# spada — avvia e gestisce SPADA sul computer locale (macOS).
+#
+#   ./spada setup                 prepara tutto (una volta, e dopo ogni aggiornamento del codice)
+#   ./spada login                 autentica Claude per SPADA (una volta)
+#   ./spada avvia                 avvia server + worker e apre http://localhost:8000
+#   ./spada ferma                 ferma server e worker
+#   ./spada riavvia               ferma e riavvia
+#   ./spada stato                 mostra cosa è attivo
+#   ./spada verifica              prova reale con Claude: agenti, prezzario, permessi (dopo il login)
+#   ./spada log                   segue i log di server e worker
+#   ./spada importa-prezzario <Regione> <anno> [cartella con i JSON | file .dcf PriMus]
+#
+# Dove stanno le cose:
+#   codice        questa cartella
+#   dati          ~/spada/  (gare/, _data/spada.db, _claude/, _log/) — SPADA_HOME per cambiarla
+#   configurazione ~/spada/spada.env (porta, modalità permessi di Claude)
+#
+# È la versione locale dei servizi systemd della VM (spada-api,
+# spada-worker): stessi due processi, stesso database, stessa pipeline.
+
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export SPADA_HOME="${SPADA_HOME:-$HOME/spada}"
+CONFIG_FILE="$SPADA_HOME/spada.env"
+if [ -f "$CONFIG_FILE" ]; then
+  # Un valore passato a mano (SPADA_PORTA=8001 ./spada avvia) vince sul file.
+  _porta_env="${SPADA_PORTA:-}"; _permessi_env="${SPADA_PERMISSION_MODE:-}"
+  set -a
+  # shellcheck disable=SC1090
+  . "$CONFIG_FILE"
+  set +a
+  [ -z "$_porta_env" ] || SPADA_PORTA="$_porta_env"
+  [ -z "$_permessi_env" ] || SPADA_PERMISSION_MODE="$_permessi_env"
+fi
+
+export SPADA_GARE_DIR="${SPADA_GARE_DIR:-$SPADA_HOME/gare}"
+export SPADA_DATA_DIR="${SPADA_DATA_DIR:-$SPADA_HOME/_data}"
+export SPADA_DB_PATH="${SPADA_DB_PATH:-$SPADA_DATA_DIR/spada.db}"
+export SPADA_CLAUDE_DIR="${SPADA_CLAUDE_DIR:-$SPADA_HOME/_claude}"
+# Symlink verso $REPO_DIR/_pipeline: un percorso senza spazi da passare a
+# script, hook e configurazione MCP.
+export SPADA_PIPELINE_DIR="$SPADA_HOME/_pipeline"
+export SPADA_PERMISSION_MODE="${SPADA_PERMISSION_MODE:-auto}"
+PORTA="${SPADA_PORTA:-8000}"
+VENV="$SPADA_HOME/_venv"
+RUN_DIR="$SPADA_HOME/_run"
+LOG_DIR="$SPADA_HOME/_log"
+URL="http://localhost:$PORTA"
+
+VERDE='\033[0;32m'; GIALLO='\033[1;33m'; ROSSO='\033[0;31m'; NC='\033[0m'
+info()  { printf "${VERDE}▶${NC} %s\n" "$1"; }
+avviso(){ printf "${GIALLO}⚠${NC}  %s\n" "$1"; }
+errore(){ printf "${ROSSO}✗${NC}  %s\n" "$1" >&2; exit 1; }
+
+# ── Utilità ──────────────────────────────────────────────────────────
+
+trova_python() {
+  # Serve >= 3.10 (backend e server MCP): il python3 di sistema di
+  # macOS è 3.9.
+  local c
+  for c in python3.13 python3.12 python3.11 python3.10 /opt/homebrew/bin/python3 /usr/local/bin/python3 python3; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+      command -v "$c"
+      return 0
+    fi
+  done
+  return 1
+}
+
+pid_vivo() {
+  local f="$RUN_DIR/$1.pid"
+  [ -f "$f" ] && kill -0 "$(cat "$f")" 2>/dev/null
+}
+
+ambiente_processi() {
+  # Python del venv per primo nel PATH: gli hook e gli script della
+  # pipeline chiamano `python3`, che deve essere >= 3.10.
+  export PATH="$VENV/bin:$PATH"
+}
+
+claude_dedicato() {
+  env -u ANTHROPIC_API_KEY CLAUDE_CONFIG_DIR="$SPADA_CLAUDE_DIR" claude "$@"
+}
+
+login_attivo() {
+  if [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] || grep -q '^CLAUDE_CODE_OAUTH_TOKEN=.' "$SPADA_DATA_DIR/auth.env" 2>/dev/null; then
+    return 0
+  fi
+  claude_dedicato auth status --json 2>/dev/null | grep -q '"loggedIn": *true'
+}
+
+setup_fatto() {
+  [ -x "$VENV/bin/python" ] && [ -L "$SPADA_PIPELINE_DIR" ] && [ -f "$SPADA_CLAUDE_DIR/mcp-spada.json" ]
+}
+
+prezzario_importato() {
+  "$VENV/bin/python" - "$SPADA_DB_PATH" "$1" "$2" <<'PY'
+import sqlite3, sys
+try:
+    con = sqlite3.connect(sys.argv[1])
+    riga = con.execute("SELECT 1 FROM prezzario_versioni WHERE lower(regione)=lower(?) AND anno=?",
+                       (sys.argv[2], int(sys.argv[3]))).fetchone()
+except Exception:
+    riga = None
+sys.exit(0 if riga else 1)
+PY
+}
+
+# importa_se_manca <Regione> <anno> [cartella con i JSON o con il .dcf]
+importa_se_manca() {
+  if prezzario_importato "$1" "$2"; then
+    echo "  prezzario $1 $2 già importato"
+    return 0
+  fi
+  info "Importo il prezzario $1 $2${3:+ da $3}"
+  bash "$SPADA_PIPELINE_DIR/scripts/setup/import_prezzario.sh" "$@" | sed 's/^/  /' \
+    || avviso "Import di $1 $2 non riuscito: riprova con './spada importa-prezzario $1 $2'."
+}
+
+# ── Comandi ──────────────────────────────────────────────────────────
+
+cmd_setup() {
+  info "Controllo i prerequisiti"
+  command -v claude >/dev/null 2>&1 || errore "Claude Code (comando 'claude') non trovato nel PATH."
+  command -v node >/dev/null 2>&1   || errore "Node.js non trovato: serve per i report HTML e l'offerta .docx."
+  command -v npm >/dev/null 2>&1    || errore "npm non trovato."
+  command -v git >/dev/null 2>&1    || errore "git non trovato."
+  local py
+  py="$(trova_python)" || errore "Serve Python >= 3.10 (es. 'brew install python@3.12')."
+  echo "  python: $py ($("$py" --version 2>&1))"
+  command -v pdftotext >/dev/null 2>&1 || avviso "pdftotext non trovato ('brew install poppler'): l'estrazione dei PDF ne ha bisogno."
+  command -v openssl >/dev/null 2>&1   || avviso "openssl non trovato: serve per i file firmati .p7m."
+
+  info "Preparo le cartelle in $SPADA_HOME"
+  mkdir -p "$SPADA_GARE_DIR" "$SPADA_DATA_DIR" "$SPADA_CLAUDE_DIR" "$RUN_DIR" "$LOG_DIR"
+
+  if [ -L "$SPADA_PIPELINE_DIR" ]; then
+    rm "$SPADA_PIPELINE_DIR"
+  elif [ -e "$SPADA_PIPELINE_DIR" ]; then
+    errore "$SPADA_PIPELINE_DIR esiste e non è un symlink: spostalo prima di rieseguire il setup."
+  fi
+  ln -s "$REPO_DIR/_pipeline" "$SPADA_PIPELINE_DIR"
+  echo "  $SPADA_PIPELINE_DIR → $REPO_DIR/_pipeline"
+
+  if [ ! -f "$CONFIG_FILE" ]; then
+    cat > "$CONFIG_FILE" <<'ENV'
+# Configurazione di SPADA in locale — letta da ./spada a ogni comando.
+
+# Porta del server: l'app si apre su http://localhost:<porta>.
+SPADA_PORTA=8000
+
+# Modalità permessi delle sessioni Claude che scrivono (fasi, deliverable,
+# intervento diretto):
+#   auto              Claude Code approva da solo le azioni ordinarie e
+#                     blocca quelle rischiose (consigliata su un Mac personale)
+#   bypassPermissions nessun controllo, come sulla VM dedicata
+SPADA_PERMISSION_MODE=auto
+ENV
+    echo "  creato $CONFIG_FILE"
+  fi
+
+  info "Ambiente Python del backend ($VENV)"
+  [ -x "$VENV/bin/python" ] || "$py" -m venv "$VENV"
+  "$VENV/bin/python" -m pip install --quiet --upgrade pip
+  "$VENV/bin/python" -m pip install --quiet -r "$REPO_DIR/app/backend/requirements.txt"
+
+  info "Dipendenze Node della pipeline (offerta .docx)"
+  # npm ci: installa esattamente il lockfile, senza riscriverlo.
+  (cd "$REPO_DIR/_pipeline" && npm ci --silent --no-audit --no-fund)
+
+  info "Collego la pipeline alla configurazione Claude dedicata ($SPADA_CLAUDE_DIR)"
+  ambiente_processi
+  SPADA_PYTHON="$VENV/bin/python" bash "$SPADA_PIPELINE_DIR/scripts/setup/link_pipeline.sh" "$SPADA_PIPELINE_DIR" | sed 's/^/  /'
+
+  info "Database"
+  (cd "$REPO_DIR/app/backend" && "$VENV/bin/python" -c 'from db import init_db; init_db()')
+  echo "  $SPADA_DB_PATH"
+
+  # Prezzari: tutte le edizioni disponibili, una volta sola ciascuna —
+  # prima la cache locale del vecchio modello (~/.spada/prezzari), poi
+  # le release pubblicate in prometeus-prezzari (le stesse della VM).
+  local cache="${SPADA_PREZZARI_CACHE:-$HOME/.spada/prezzari}" dir regione anno tag titolo
+  if [ -d "$cache" ]; then
+    for dir in "$cache"/*/*; do
+      [ -d "$dir" ] || continue
+      importa_se_manca "$(basename "$(dirname "$dir")")" "$(basename "$dir")" "$dir"
+    done
+  fi
+  if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+    while IFS="$(printf '\t')" read -r tag titolo; do
+      [ -n "$tag" ] || continue
+      anno="${tag##*-}"
+      # Titolo della release: "Prezzario Campania 2026" → "Campania".
+      regione="$(printf '%s' "$titolo" | sed -E "s/^Prezzario +//; s/ +$anno\$//")"
+      [ -n "$regione" ] || regione="${tag%-*}"
+      importa_se_manca "$regione" "$anno" </dev/null
+    done < <(gh release list --repo "${SPADA_PREZZARI_REPO:-Bad-Mother-Fucker/prometeus-prezzari}" \
+               --json tagName,name --jq '.[] | "\(.tagName)\t\(.name)"' 2>/dev/null || true)
+  else
+    avviso "gh non autenticato: salto i prezzari pubblicati in prometeus-prezzari ('gh auth login', poi rilancia il setup)."
+  fi
+
+  echo ""
+  if login_attivo; then
+    info "Setup completato. Avvia l'app con: ./spada avvia"
+  else
+    info "Setup completato."
+    avviso "Manca l'autenticazione di Claude per SPADA: esegui './spada login' (una volta sola), poi './spada avvia'."
+  fi
+}
+
+cmd_login() {
+  [ -d "$SPADA_CLAUDE_DIR" ] || errore "Esegui prima './spada setup'."
+  info "Login di Claude per SPADA (configurazione dedicata in $SPADA_CLAUDE_DIR)"
+  echo "  Si apre il browser: accedi con l'account Claude che vuoi usare per le gare."
+  echo "  La tua configurazione personale di Claude Code (~/.claude) non viene toccata."
+  echo ""
+  claude_dedicato auth login
+  echo ""
+  if login_attivo; then
+    info "Claude autenticato per SPADA. Controllo finale consigliato: ./spada verifica"
+  else
+    errore "Login non riuscito: riprova './spada login'."
+  fi
+}
+
+cmd_avvia() {
+  setup_fatto || errore "SPADA non è ancora installato: esegui './spada setup'."
+  ambiente_processi
+
+  if pid_vivo api && pid_vivo worker; then
+    info "SPADA è già attivo su $URL"
+    [ "${1:-}" = "--senza-browser" ] || open "$URL"
+    return 0
+  fi
+  # Un solo processo vivo (es. crash dell'altro): si riparte puliti.
+  if pid_vivo api || pid_vivo worker; then
+    cmd_ferma >/dev/null
+  fi
+
+  if lsof -nP -iTCP:"$PORTA" -sTCP:LISTEN >/dev/null 2>&1; then
+    errore "La porta $PORTA è già usata da un altro programma. Cambia SPADA_PORTA in $CONFIG_FILE."
+  fi
+
+  login_attivo || avviso "Claude non è autenticato per SPADA: l'app si apre, ma le fasi falliranno finché non esegui './spada login'."
+
+  info "Avvio il server (127.0.0.1:$PORTA)"
+  (
+    cd "$REPO_DIR/app/backend"
+    nohup "$VENV/bin/python" -m uvicorn main:app --host 127.0.0.1 --port "$PORTA" \
+      --timeout-graceful-shutdown 5 >> "$LOG_DIR/api.log" 2>&1 &
+    echo $! > "$RUN_DIR/api.pid"
+  )
+  info "Avvio il worker (esegue le fasi, una alla volta)"
+  (
+    cd "$REPO_DIR/app/worker"
+    nohup "$VENV/bin/python" worker.py >> "$LOG_DIR/worker.log" 2>&1 &
+    echo $! > "$RUN_DIR/worker.pid"
+  )
+
+  local i
+  for i in $(seq 1 40); do
+    if curl -sf "http://127.0.0.1:$PORTA/salute" >/dev/null 2>&1; then
+      pid_vivo worker || errore "Il worker si è fermato subito: vedi $LOG_DIR/worker.log"
+      info "SPADA è attivo: $URL"
+      [ "${1:-}" = "--senza-browser" ] || open "$URL"
+      return 0
+    fi
+    pid_vivo api || break
+    sleep 0.5
+  done
+  echo ""
+  tail -n 20 "$LOG_DIR/api.log" >&2 || true
+  errore "Il server non risponde: vedi $LOG_DIR/api.log"
+}
+
+ferma_processo() {
+  local nome="$1" f="$RUN_DIR/$1.pid" pid i
+  [ -f "$f" ] || return 0
+  pid="$(cat "$f")"
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -TERM "$pid" 2>/dev/null || true
+    for i in $(seq 1 24); do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.5
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -KILL "$pid" 2>/dev/null || true
+    fi
+    echo "  $nome fermato"
+  fi
+  rm -f "$f"
+}
+
+cmd_ferma() {
+  info "Fermo SPADA"
+  # Prima il worker: termina anche la fase eventualmente in corso, che
+  # resterà marcata "errore" (si rilancia dall'app).
+  ferma_processo worker
+  ferma_processo api
+}
+
+cmd_stato() {
+  if pid_vivo api; then
+    info "Server attivo su $URL (pid $(cat "$RUN_DIR/api.pid"))"
+  else
+    avviso "Server fermo"
+  fi
+  if pid_vivo worker; then
+    info "Worker attivo (pid $(cat "$RUN_DIR/worker.pid"))"
+  else
+    avviso "Worker fermo"
+  fi
+  if login_attivo; then
+    info "Claude autenticato per SPADA"
+  else
+    avviso "Claude non autenticato per SPADA: './spada login'"
+  fi
+  if [ -f "$SPADA_DB_PATH" ]; then
+    echo ""
+    echo "Prezzari importati:"
+    sqlite3 "$SPADA_DB_PATH" "SELECT '  ' || regione || ' ' || anno || ' — ' || totale_voci_articoli || ' voci' FROM prezzario_versioni ORDER BY regione, anno" 2>/dev/null || echo "  nessuno"
+    echo "Gare: $(sqlite3 "$SPADA_DB_PATH" 'SELECT COUNT(*) FROM gare' 2>/dev/null || echo 0)  ·  Fasi in coda o in corso: $(sqlite3 "$SPADA_DB_PATH" "SELECT COUNT(*) FROM job WHERE stato IN ('in_coda','in_esecuzione')" 2>/dev/null || echo 0)"
+  fi
+  echo ""
+  echo "Dati: $SPADA_HOME   ·   Log: $LOG_DIR"
+}
+
+cmd_verifica() {
+  # Prova reale e piccola (una cartella temporanea): la stessa
+  # invocazione di una fase, per scoprire subito — non a metà di una
+  # gara — se login, agenti della pipeline, server MCP prezzario e
+  # permessi di scrittura funzionano. Modello sonnet come le fasi: la
+  # modalità permessi "auto" non è disponibile su haiku, che ripiega
+  # sulla richiesta di permesso e falserebbe la prova.
+  setup_fatto || errore "Esegui prima './spada setup'."
+  login_attivo || errore "Claude non è autenticato per SPADA: esegui prima './spada login'."
+  ambiente_processi
+  local regione anno tmp risultato
+  regione="$(sqlite3 "$SPADA_DB_PATH" 'SELECT regione FROM prezzario_versioni ORDER BY anno DESC LIMIT 1' 2>/dev/null || true)"
+  anno="$(sqlite3 "$SPADA_DB_PATH" 'SELECT anno FROM prezzario_versioni ORDER BY anno DESC LIMIT 1' 2>/dev/null || true)"
+  [ -n "$regione" ] || errore "Nessun prezzario importato: './spada importa-prezzario <Regione> <anno>'."
+  tmp="$(mktemp -d)"
+  info "Verifica con Claude in $tmp (modello sonnet, modalità permessi: $SPADA_PERMISSION_MODE, ~1 minuto)"
+  risultato="$(cd "$tmp" && bash "$SPADA_PIPELINE_DIR/scripts/setup/spada_claude.sh" -p "Verifica tecnica dell'installazione, rispondi in modo conciso.
+1. Elenca i nomi dei subagent personalizzati disponibili (non quelli integrati di Claude Code).
+2. Chiama il tool MCP versione_prezzario con regione \"$regione\" e anno $anno e riporta se l'edizione risulta disponibile.
+3. Crea nella directory corrente il file verifica.txt con contenuto OK.
+Chiudi con una riga per punto: 'AGENTI: <numero>', 'PREZZARIO: si/no', 'FILE: scritto/non scritto'." \
+    --model sonnet --permission-mode "$SPADA_PERMISSION_MODE" --no-session-persistence 2>&1)" || true
+  echo "$risultato" | tail -n 12 | sed 's/^/  /'
+  echo ""
+  local ok=1
+  if echo "$risultato" | grep -q -E 'criterion-agent|graph-builder|offer-writer'; then
+    info "Agenti della pipeline visibili"
+  else
+    avviso "Gli agenti della pipeline non risultano visibili"; ok=0
+  fi
+  if echo "$risultato" | grep -q -i -E 'PREZZARIO:[^a-z]*s[iì]'; then
+    info "Server MCP prezzario raggiungibile ($regione $anno)"
+  else
+    avviso "Il server MCP prezzario non ha risposto come atteso"; ok=0
+  fi
+  if [ -f "$tmp/verifica.txt" ]; then
+    info "Scrittura file consentita"
+  else
+    avviso "Il file di prova non è stato scritto: controlla SPADA_PERMISSION_MODE in $CONFIG_FILE"; ok=0
+  fi
+  rm -rf "$tmp"
+  [ "$ok" = 1 ] && info "Verifica superata: SPADA è pronto per eseguire le fasi." || errore "Verifica non superata (dettagli sopra)."
+}
+
+cmd_log() {
+  touch "$LOG_DIR/api.log" "$LOG_DIR/worker.log"
+  tail -n 50 -f "$LOG_DIR/api.log" "$LOG_DIR/worker.log"
+}
+
+cmd_importa_prezzario() {
+  setup_fatto || errore "Esegui prima './spada setup'."
+  [ $# -ge 2 ] || errore "Uso: ./spada importa-prezzario <Regione> <anno> [cartella con i JSON | file .dcf PriMus]"
+  ambiente_processi
+  bash "$SPADA_PIPELINE_DIR/scripts/setup/import_prezzario.sh" "$@"
+}
+
+uso() {
+  sed -n '3,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+COMANDO="${1:-}"
+[ $# -gt 0 ] && shift
+case "$COMANDO" in
+  setup)              cmd_setup ;;
+  login)              cmd_login ;;
+  avvia)              cmd_avvia "$@" ;;
+  ferma)              cmd_ferma ;;
+  riavvia)            cmd_ferma; cmd_avvia "$@" ;;
+  stato)              cmd_stato ;;
+  verifica)           cmd_verifica ;;
+  log)                cmd_log ;;
+  importa-prezzario)  cmd_importa_prezzario "$@" ;;
+  ""|-h|--help|aiuto) uso ;;
+  *)                  uso; exit 1 ;;
+esac

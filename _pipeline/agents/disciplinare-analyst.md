@@ -49,7 +49,10 @@ Non creare file criterio oltre quelli effettivamente presenti nel disciplinare.
 
 Dopo aver scritto la matrice criteri e le pagine criterio, produci
 `output/03_criteria/gara_brief.md` seguendo il template
-`output/03_criteria/gara_brief_template.md`, sezione per sezione.
+`.claude/templates/gara_brief_template.md` (pipeline condivisa, non nella
+gara), sezione per sezione e nello stesso ordine. Leggilo per intero
+prima di scrivere: titoli delle sezioni, tabelle e blocchi
+`> ALERT` / `> ATTENZIONE` sono quelli che l'interfaccia riconosce.
 
 Il brief risponde a una sola domanda — *cosa dobbiamo produrre per
 questa gara?* — e si costruisce **interamente dal disciplinare**:
@@ -59,15 +62,36 @@ il professionista legge per primo.
 
 Contenuto delle sezioni:
 
-- **In sintesi** — 2-3 frasi: oggetto dell'appalto, localizzazione,
-  caratteristiche dell'opera. Dalla sezione oggetto del disciplinare.
+- **Intestazione** — CIG, CUP, importo (soggetto a ribasso + oneri
+  sicurezza = totale), scadenza con giorno della settimana, stazione
+  appaltante con ufficio e RUP, procedura e piattaforma, criterio di
+  aggiudicazione, data di generazione e fonte. Il nome della gara e'
+  quello esteso dell'oggetto del disciplinare, non lo slug.
+- **Scadenze operative** — blocco `> **ALERT — SCADENZE OPERATIVE.**`
+  con le scadenze bloccanti (sopralluogo, chiarimenti, caricamento
+  offerta) scritte per esteso, quanto tempo resta rispetto a oggi, e la
+  tabella Scadenza | Data e ora | Cosa fare | Se si manca | Fonte. Verifica
+  le date anche sul bando, se presente in `input/`.
+- **In sintesi** — 3-5 frasi in prosa: oggetto, localizzazione e
+  contesto dell'opera, importo e sue componenti, categorie, durata,
+  stato del progetto e finanziamento, vincoli di contesto.
 - **Struttura del punteggio** — tabella di tutti i criteri con punti e
-  peso percentuale sul totale dell'offerta tecnica. Peso > 20% →
-  priorita' ALTA.
+  peso percentuale sul totale dell'offerta tecnica (peso > 20% →
+  priorita' ALTA); tabella delle componenti (tecnica, economica,
+  temporale); soglia di sbarramento se prevista; come si assegnano i
+  punti discrezionali e tabellari e come funziona la riparametrazione.
+- **Vincoli di formato dell'offerta tecnica** — blocco `> ATTENZIONE`
+  con il vincolo principale e i divieti a pena di esclusione, poi la
+  tabella Parametro | Prescrizione | Fonte (lunghezza, formato,
+  carattere, struttura, esclusi dal conteggio, allegati obbligatori,
+  elementi economici, firma e caricamento, lingua, soccorso
+  istruttorio). Stessi valori che scrivi nella Sezione A di
+  `vincoli_offerta_tecnica.md`.
 - **Criteri in dettaglio** — una scheda per ogni criterio, con:
   **Sommario** (2-3 frasi: cosa valuta il criterio, come si attribuisce
   il punteggio — formula o giudizio discrezionale — e quali elementi il
-  disciplinare dichiara premianti) e tabella **Deliverables richiesti**
+  disciplinare dichiara premianti), la tabella dei sub-criteri
+  (Sub | Titolo | Punti | Natura) e la tabella **Deliverables richiesti**
   — ogni documento che la stazione appaltante chiede di produrre per
   quel criterio (relazioni, elaborati grafici, schede, certificazioni),
   con il vincolo di formato e l'articolo del disciplinare che lo
@@ -86,10 +110,17 @@ Contenuto delle sezioni:
   `fuori_scope_risks`, criteri a punteggio predeterminato.
 - **Elaborati citati nel disciplinare** — ogni documento di progetto
   nominato nel testo (relazione tecnica, computo, planimetrie, PSC...),
-  con l'articolo che lo cita. E' la pre-checklist di cosa dovra' essere
-  caricato in `input/elaborati/`.
+  con l'articolo che lo cita, la priorita' per l'analisi e — se
+  `input/_manifest_input.md` esiste gia' — la presenza tra i file
+  caricati. E' la pre-checklist di cosa serve in `input/elaborati/`.
 - **Domande aperte per il professionista** — massimo 5, sugli aspetti
   ambigui che condizionano la strategia.
+- **Prossimi passi** — le azioni concrete in ordine di scadenza, a
+  partire dalla prima scadenza bloccante.
+
+Stile: prosa chiara in italiano, frasi brevi, ogni dato con articolo e
+pagina del disciplinare (es. "art. 16, p. 25"). Quello che il
+disciplinare non dice e' `[non indicato]` o `TBD`, mai una stima.
 
 Regole:
 
@@ -104,7 +135,11 @@ Regole:
   `criteri_stato` in manifest.json) vanno ricopiati tal quali
   dalla versione precedente del brief — li scrivono altri agenti, e
   riportarli a "non ancora analizzato" cancellerebbe lo stato reale
-  dell'analisi.
+  dell'analisi. Lo stesso per le righe `**Risposta:**` sotto le
+  "Domande aperte per il professionista": le scrive il professionista
+  dall'interfaccia. Se una domanda resta, riscrivila con lo stesso testo
+  e ricopia la sua risposta subito sotto; se non serve piu' (la risposta
+  l'ha resa superflua), lasciala cadere. Non scrivere mai risposte tu.
 
 ## Scrittura deliverables in manifest.json (obbligatoria)
 
@@ -153,6 +188,10 @@ o intervento mirato); uno classificato con un tipo sbagliato finisce
 nell'agente sbagliato e produce il documento sbagliato.
 
 ## Compilazione vincoli_offerta_tecnica.md — Sezione A (obbligatoria)
+
+Il file sta nella radice della gara. Se manca (gare create prima del
+template), crealo copiando `.claude/templates/vincoli_offerta_tecnica.md`
+e poi compilalo.
 
 Dopo aver estratto i criteri, leggi il disciplinare alla ricerca delle
 direttive sulla relazione tecnico-illustrativa (o equivalente). Cerca

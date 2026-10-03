@@ -7,10 +7,19 @@ from pathlib import Path
 
 SLUG_RE = re.compile(r"^[a-z0-9-]{1,64}$")
 
-GARE_DIR = Path(os.environ.get("SPADA_GARE_DIR", os.path.expanduser("~/spada/gare"))).resolve()
-PIPELINE_DIR = Path(os.environ.get("SPADA_PIPELINE_DIR", os.path.expanduser("~/spada/_pipeline"))).resolve()
-DATA_DIR = Path(os.environ.get("SPADA_DATA_DIR", os.path.expanduser("~/spada/_data"))).resolve()
+SPADA_HOME = Path(os.environ.get("SPADA_HOME", os.path.expanduser("~/spada")))
+GARE_DIR = Path(os.environ.get("SPADA_GARE_DIR", str(SPADA_HOME / "gare"))).resolve()
+# Non .resolve(): ~/spada/_pipeline è un symlink verso la cartella del
+# progetto, il cui percorso contiene spazi — si passa agli script quello
+# del symlink.
+PIPELINE_DIR = Path(os.environ.get("SPADA_PIPELINE_DIR", str(SPADA_HOME / "_pipeline")))
+DATA_DIR = Path(os.environ.get("SPADA_DATA_DIR", str(SPADA_HOME / "_data"))).resolve()
 DB_PATH = Path(os.environ.get("SPADA_DB_PATH", str(DATA_DIR / "spada.db")))
+# Config Claude Code dedicata alla pipeline (vedi spada_claude.sh).
+CLAUDE_DIR = Path(os.environ.get("SPADA_CLAUDE_DIR", str(SPADA_HOME / "_claude")))
+SPADA_CLAUDE = PIPELINE_DIR / "scripts" / "setup" / "spada_claude.sh"
+# Modalità permessi delle sessioni che scrivono (vedi spada_comune.sh).
+PERMISSION_MODE = os.environ.get("SPADA_PERMISSION_MODE", "auto")
 
 
 class SlugNonValido(ValueError):

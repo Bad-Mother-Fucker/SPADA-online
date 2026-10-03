@@ -123,6 +123,10 @@ function cardGara(g, indice) {
 
     h("span", { class: "tender__tags" },
       h("span", { class: "chip chip--sq" }, `${g.regione} ${g.anno_prezzario}`),
+      g.prezzario_disponibile === false
+        ? h("span", { class: "badge badge--sm badge--warn", title: `Prezzario ${g.regione} ${g.anno_prezzario} non presente: niente valutazioni economiche finché non lo importi.` },
+            "senza prezzario")
+        : null,
       h("span", { class: "chip chip--sq chip--mono" }, g.modello),
       h("span", { class: "chip chip--sq" }, `effort ${g.effort}`)),
 
@@ -357,6 +361,8 @@ function apriNuovaGara() {
     slugAuto: true,
     regione: "",
     anno: String(new Date().getFullYear()),
+    // true = regione/anno scritti a mano: prezzario non (ancora) presente.
+    altro: false,
     modello: Dominio.MODELLI[0].id,
     effort: "high",
     inCorso: false,
@@ -388,20 +394,21 @@ function apriNuovaGara() {
     return { ok: true, msg: "Derivato dal nome. Modificabile finché la gara non è avviata.", crit: false };
   }
 
-  /* Il prezzario serve alla pipeline quando valorizza le voci, non per
-     registrare la gara: un'installazione senza prezzari importati deve
-     comunque poter creare una gara. Regione e anno restano obbligatori
-     per il backend, ma si possono scrivere a mano. */
+  /* Il prezzario serve alle valutazioni economiche, non per registrare
+     né per eseguire la gara: senza, le fasi girano lo stesso e saltano
+     gap prezzi, capacità di investimento e prezzi del computo. Regione e
+     anno restano obbligatori (dicono QUALE prezzario manca), ma si possono
+     scrivere a mano. */
   function validazionePrezzario() {
     const r = form.regione.trim();
     const a = Number(form.anno);
     if (!r) return { ok: false, msg: "Indica la regione del prezzario di riferimento." };
     if (!Number.isInteger(a) || a < 2000 || a > 2100) return { ok: false, msg: "L'anno deve essere fra 2000 e 2100." };
-    if (prezzari && prezzari.length && !prezzari.some((p) => p.regione === r && p.anno === a)) {
-      return { ok: true, msg: `Nessun prezzario ${r} ${a} è installato: la gara si crea comunque, ma le fasi che valorizzano le voci lo richiederanno.`, avviso: true };
-    }
-    if (prezzari && !prezzari.length) {
-      return { ok: true, msg: "Nessun prezzario installato su questa istanza: la gara si crea comunque. Il prezzario serve dalla Fase 4 in poi.", avviso: true };
+    if (prezzari && !prezzari.some((p) => p.regione.toLowerCase() === r.toLowerCase() && p.anno === a)) {
+      return {
+        ok: true, avviso: true,
+        msg: `Il prezzario ${r} ${a} non è presente: la gara si crea e si esegue lo stesso, ma senza valutazioni economiche (gap prezzi, capacità di investimento, prezzi del computo). Te lo segnalerò nel pannello della gara finché non lo importi.`,
+      };
     }
     return { ok: true, msg: "" };
   }
@@ -555,41 +562,81 @@ function apriNuovaGara() {
     aggiorna();
   }
 
-  /** Con i prezzari installati si sceglie da un elenco; senza, si scrive.
-      In entrambi i casi la gara si può creare. */
+  /** Con i prezzari installati si sceglie da un elenco, che ha in fondo
+      «Altra regione o anno» per un prezzario non presente; senza
+      prezzari installati si scrive. In ogni caso la gara si può creare. */
+  const ALTRO = "__altro__";
+
   function costruisciCampiPrezzario() {
     const conElenco = Array.isArray(prezzari) && prezzari.length > 0;
-
-    if (conElenco) {
-      const regioni = [...new Set(prezzari.map((p) => p.regione))].sort();
-      if (!form.regione) form.regione = regioni[0];
-      el.selRegione = h("select", {
-        class: "select",
-        onChange: (e) => { form.regione = e.target.value; sincronizzaAnni(); aggiorna(); },
-      }, regioni.map((r) => h("option", { value: r, selected: form.regione === r }, r)));
-      el.selAnno = h("select", {
-        class: "select mono",
-        onChange: (e) => { form.anno = e.target.value; aggiorna(); },
-      });
-      set(el.campoRegione, el.selRegione);
-      set(el.campoAnno, el.selAnno);
-      sincronizzaAnni();
-    } else {
-      el.selRegione = h("input", {
-        type: "text", class: "input", value: form.regione, placeholder: "Es. Campania",
-        onInput: (e) => { form.regione = e.target.value; aggiorna(); },
-      });
-      el.selAnno = h("input", {
-        type: "number", class: "input mono", value: form.anno, min: "2000", max: "2100",
-        onInput: (e) => { form.anno = e.target.value; aggiorna(); },
-      });
-      set(el.campoRegione, el.selRegione);
-      set(el.campoAnno, el.selAnno);
+    const regioni = conElenco ? [...new Set(prezzari.map((p) => p.regione))].sort() : [];
+    if (!conElenco) {
+      // Elenco ancora in arrivo (null): campi liberi provvisori, senza
+      // decidere nulla. Nessun prezzario installato ([]): campi liberi.
+      form.altro = Array.isArray(prezzari);
+    } else if (!form.altro && form.regione && !regioni.includes(form.regione)) {
+      // Scritta a mano mentre l'elenco arrivava e non presente: resta tale.
+      form.altro = true;
     }
+
+    el.inRegione = h("input", {
+      type: "text", class: "input", value: form.altro || !conElenco ? form.regione : "", placeholder: "Es. Puglia",
+      "aria-label": "Regione del prezzario (scritta a mano)",
+      onInput: (e) => { form.regione = e.target.value; aggiorna(); },
+    });
+    el.inAnno = h("input", {
+      type: "number", class: "input mono", value: form.anno, min: "2000", max: "2100",
+      "aria-label": "Anno del prezzario (scritto a mano)",
+      onInput: (e) => { form.anno = e.target.value; aggiorna(); },
+    });
+
+    if (!conElenco) {
+      el.selRegione = el.selAnno = null;
+      set(el.campoRegione, el.inRegione);
+      set(el.campoAnno, el.inAnno);
+      return;
+    }
+
+    if (!form.altro && !form.regione) form.regione = regioni[0];
+    el.selRegione = h("select", {
+      class: "select",
+      onChange: (e) => {
+        if (e.target.value === ALTRO) {
+          form.altro = true;
+          form.regione = el.inRegione.value;
+          form.anno = el.inAnno.value;
+        } else {
+          form.altro = false;
+          form.regione = e.target.value;
+          sincronizzaAnni();
+        }
+        mostraCampiLiberi();
+        if (form.altro) el.inRegione.focus();
+        aggiorna();
+      },
+    },
+      regioni.map((r) => h("option", { value: r, selected: !form.altro && form.regione === r }, r)),
+      h("option", { value: ALTRO, selected: form.altro }, "Altra regione o anno (prezzario non presente)…"));
+    el.selAnno = h("select", {
+      class: "select mono",
+      onChange: (e) => { form.anno = e.target.value; aggiorna(); },
+    });
+    el.inRegione.style.marginTop = "var(--s-2)";
+    set(el.campoRegione, el.selRegione, el.inRegione);
+    set(el.campoAnno, el.selAnno, el.inAnno);
+    mostraCampiLiberi();
+    sincronizzaAnni();
+  }
+
+  function mostraCampiLiberi() {
+    if (!el.selAnno) return;
+    el.inRegione.hidden = !form.altro;
+    el.inAnno.hidden = !form.altro;
+    el.selAnno.hidden = form.altro;
   }
 
   function sincronizzaAnni() {
-    if (!el.selAnno || el.selAnno.tagName !== "SELECT") return;
+    if (!el.selAnno || form.altro) return;
     const anni = [...new Set(prezzari.filter((p) => p.regione === form.regione).map((p) => p.anno))]
       .sort((a, b) => b - a);
     set(el.selAnno, anni.map((a) => h("option", { value: String(a) }, String(a))));
@@ -621,11 +668,11 @@ function apriNuovaGara() {
     // già tutto: ripeterlo qui sarebbe rumore.
     el.hintAnni.textContent = prezzari === null
       ? "Lettura dei prezzari installati…"
-      : !prezzari.length
+      : !prezzari.length || form.altro
         ? ""
         : anniPer(form.regione)
           ? `Disponibile per ${form.regione}: ${anniPer(form.regione)}`
-          : "Nessuna annualità installata per questa regione.";
+          : "";
 
     el.modelli.forEach((b, i) =>
       b.setAttribute("aria-pressed", String(Dominio.MODELLI[i].id === form.modello)));

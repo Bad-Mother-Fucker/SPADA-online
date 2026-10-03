@@ -16,7 +16,9 @@ un sandbox a livello di sistema operativo — Bash potrebbe in teoria
 uscirne con percorsi assoluti o `cd ..`. Non fingiamo una garanzia più
 forte di quella reale: il perimetro effettivo è "stesso utente di
 sistema del worker, stessa fiducia della pipeline stessa", coerente con
-l'architettura a operatore singolo (Cloudflare Access, Sprint 9).
+l'architettura a operatore singolo (versione locale: il server ascolta
+solo su 127.0.0.1). Le azioni restano soggette alla modalità permessi
+SPADA_PERMISSION_MODE (default "auto"), come le fasi.
 
 Continuità multi-turno: `--output-format json` include `session_id` (id
 di conversazione headless); il turno successivo lo passa con
@@ -29,17 +31,19 @@ import threading
 from pathlib import Path
 
 from auth import get_claude_env
-from paths import gara_dir
+from paths import PERMISSION_MODE, SPADA_CLAUDE, gara_dir
 
 TIMEOUT_SECONDI = 10 * 60
 
 # Lock di processo, non solo di gara: uvicorn gira senza --workers (un
 # solo processo), quindi un threading.Lock qui basta a impedire due
-# `claude -p` di intervento concorrenti sulla stessa VM — a differenza
+# `claude -p` di intervento concorrenti sullo stesso computer — a differenza
 # del gate sulla tabella job (che copre solo le fasi accodate), questo
 # copre anche due /interventi quasi simultanei su gare diverse, che non
-# passano mai dalla coda job. Necessario su un e2-micro: due `claude -p`
-# insieme sono già abbastanza per saturarlo (vedi incidente Sprint 10).
+# passano mai dalla coda job. Nato per l'e2-micro della VM (due `claude -p`
+# insieme bastavano a saturarlo, incidente Sprint 10); tenuto in locale
+# perché due sessioni che scrivono insieme sulla stessa gara si
+# pesterebbero comunque i file.
 _LOCK_INTERVENTO = threading.Lock()
 
 
@@ -112,11 +116,11 @@ def invoca_intervento(slug: str, messaggio: str) -> dict:
     se claude -p fallisce o l'output non è il JSON atteso — mai un
     fallback silenzioso su un intervento che scrive file. Solleva
     InterventoGiaInCorso (senza nemmeno tentare) se un altro intervento
-    è già in esecuzione su questa VM: non si accoda, si rifiuta subito,
+    è già in esecuzione su questo computer: non si accoda, si rifiuta subito,
     così l'operatore lo sa e riprova invece di aspettare in silenzio."""
     if not _LOCK_INTERVENTO.acquire(blocking=False):
         raise InterventoGiaInCorso(
-            "Un altro intervento è già in esecuzione su questa VM: attendi che concluda e riprova."
+            "Un altro intervento è già in esecuzione: attendi che concluda e riprova."
         )
     try:
         d = gara_dir(slug)
@@ -128,8 +132,8 @@ def invoca_intervento(slug: str, messaggio: str) -> dict:
 
         session_precedente = _leggi_session_id(slug)
         argv = [
-            "claude", "-p", prompt,
-            "--setting-sources", "user",
+            "bash", str(SPADA_CLAUDE), "-p", prompt,
+            "--permission-mode", PERMISSION_MODE,
             "--output-format", "json",
         ]
         if session_precedente:

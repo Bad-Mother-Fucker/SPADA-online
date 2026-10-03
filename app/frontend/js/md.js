@@ -159,5 +159,209 @@ const Md = (() => {
     return null;
   }
 
-  return { tabelle, tabellaCon, righeMappate, colonna, ripulisci, sezioni, paragrafi, citazione, frontmatter, severita, decisione };
+  // ------------------------------------------------------------------
+  // Rendering completo di un documento (gara brief, audit strategico):
+  // markdown → nodi DOM costruiti con UI.h, mai innerHTML — il testo
+  // arriva da documenti di gara, non è fidato. Copre ciò che gli agenti
+  // scrivono davvero: titoli, paragrafi, tabelle pipe, elenchi (anche a
+  // due livelli), citazioni-avviso (> ALERT / > ATTENZIONE), separatori,
+  // grassetto, corsivo, codice, link http(s) e wikilink [[C1]].
+  // ------------------------------------------------------------------
+
+  const RE_TAB = /^\s*\|.*\|\s*$/;
+  const RE_SEP = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+  const RE_VOCE = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
+  const RE_TITOLO = /^(#{1,6})\s+(.*?)\s*#*\s*$/;
+  const RE_HR = /^\s*(-{3,}|\*{3,}|_{3,})\s*$/;
+  const RE_INLINE = /(\*\*[^*]+?\*\*|\[\[[^\]]+\]\]|`[^`]+`|\[[^\]]+\]\(https?:\/\/[^)\s]+\)|(?<![\w*])\*[^*\s][^*]*?\*(?![\w*])|(?<![\w])_[^_\s][^_]*?_(?![\w]))/g;
+
+  /** Blocchi del documento (frontmatter escluso). */
+  function blocchi(testo) {
+    const righe = String(testo || "").replace(/^---\n[\s\S]*?\n---\n/, "")
+      .replace(/<!--[\s\S]*?-->/g, "")   // istruzioni per gli agenti, non per chi legge
+      .split("\n");
+    const out = [];
+    let i = 0;
+    const inizioBlocco = (r, succ) =>
+      RE_TITOLO.test(r) || /^\s*>/.test(r) || RE_VOCE.test(r) || RE_HR.test(r) ||
+      (RE_TAB.test(r) && RE_SEP.test(succ || ""));
+
+    while (i < righe.length) {
+      const r = righe[i];
+      if (!r.trim()) { i++; continue; }
+      let m;
+      if ((m = RE_TITOLO.exec(r))) {
+        out.push({ tipo: "titolo", livello: m[1].length, testo: m[2] });
+        i++;
+      } else if (RE_HR.test(r)) {
+        out.push({ tipo: "hr" });
+        i++;
+      } else if (RE_TAB.test(r) && RE_SEP.test(righe[i + 1] || "")) {
+        const celle = (x) => x.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+        const intestazioni = celle(r);
+        const corpo = [];
+        i += 2;
+        while (i < righe.length && RE_TAB.test(righe[i])) corpo.push(celle(righe[i++]));
+        out.push({ tipo: "tabella", intestazioni, corpo });
+      } else if (/^\s*>/.test(r)) {
+        const q = [];
+        while (i < righe.length && /^\s*>/.test(righe[i])) q.push(righe[i++].replace(/^\s*>\s?/, ""));
+        out.push({ tipo: "citazione", testo: q.join(" "), figli: blocchi(q.join("\n")) });
+      } else if (RE_VOCE.test(r)) {
+        const ordinata = /^\s*\d/.test(r);
+        const voci = [];
+        while (i < righe.length) {
+          const x = righe[i];
+          const mv = RE_VOCE.exec(x);
+          if (mv) voci.push({ livello: mv[1].replace(/\t/g, "  ").length >= 2 ? 1 : 0, testo: mv[3] });
+          else if (voci.length && /^\s{2,}\S/.test(x)) voci[voci.length - 1].testo += " " + x.trim();
+          else break;
+          i++;
+        }
+        out.push({ tipo: "lista", ordinata, voci });
+      } else {
+        const righeP = [];
+        while (i < righe.length && righe[i].trim() && !inizioBlocco(righe[i], righe[i + 1])) righeP.push(righe[i++].trim());
+        out.push({ tipo: "paragrafo", righe: righeP });
+      }
+    }
+    return out;
+  }
+
+  /** Testo in linea senza formattazione markdown: per copiare o
+      scaricare testo semplice da condividere. */
+  function testoSemplice(t) {
+    return String(t || "")
+      .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, id, alias) => alias || id)
+      .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, "$1 ($2)")
+      .replace(/\*\*([^*]+)\*\*/g, "$1").replace(/`([^`]+)`/g, "$1")
+      .replace(/(^|[\s(])\*([^*\s][^*]*)\*/g, "$1$2").replace(/(^|[\s(])_([^_\s][^_]*)_/g, "$1$2");
+  }
+
+  /** Testo con formattazione in linea → nodi. */
+  function inline(testo) {
+    const { h } = UI;
+    const out = [];
+    let ultimo = 0;
+    for (const m of String(testo || "").matchAll(RE_INLINE)) {
+      if (m.index > ultimo) out.push(testo.slice(ultimo, m.index));
+      const t = m[0];
+      if (t.startsWith("**")) out.push(h("strong", null, inline(t.slice(2, -2))));
+      else if (t.startsWith("[[")) out.push(h("span", { class: "md__ref" }, t.slice(2, -2).split("|").pop()));
+      else if (t.startsWith("`")) out.push(h("code", { class: "md__code" }, t.slice(1, -1)));
+      else if (t.startsWith("[")) {
+        const ml = /^\[([^\]]+)\]\((.+)\)$/.exec(t);
+        out.push(h("a", { href: ml[2], target: "_blank", rel: "noopener" }, ml[1]));
+      } else out.push(h("em", null, inline(t.slice(1, -1))));
+      ultimo = m.index + t.length;
+    }
+    if (ultimo < String(testo || "").length) out.push(testo.slice(ultimo));
+    return out;
+  }
+
+  /** Tono di una citazione-avviso, dalla prima parola in grassetto. */
+  function tonoCitazione(testo) {
+    const t = String(testo || "").replace(/^[\s*_]+/, "").toUpperCase();
+    if (/^(ALERT|URGENTE|BLOCCANTE)/.test(t)) return "crit";
+    if (/^(ATTENZIONE|⚠|AVVISO)/.test(t)) return "warn";
+    return "info";
+  }
+
+  /** Un blocco → un nodo. I separatori si omettono: dove servono, la
+      separazione la fanno già le card della vista. */
+  function rendiBlocco(b) {
+    const { h, I } = UI;
+    switch (b.tipo) {
+      case "titolo":
+        return h(`h${Math.min(6, b.livello + 1)}`, { class: `md__h md__h${b.livello}` }, inline(b.testo));
+      case "hr":
+        return null;
+      case "tabella":
+        return h("div", { class: "table-wrap md__table" },
+          h("table", { class: "table" },
+            h("thead", null, h("tr", null, b.intestazioni.map((c) => h("th", null, inline(c))))),
+            h("tbody", null, b.corpo.map((r) =>
+              h("tr", null, b.intestazioni.map((_, j) => h("td", null, inline(r[j] || ""))))))));
+      case "citazione": {
+        const tono = tonoCitazione(b.testo);
+        return h("div", { class: `note note--${tono} md__note` },
+          tono === "info" ? I.info(14) : I.triangolo(14),
+          h("div", { class: "md__note-body" }, rendiBlocchi(b.figli)));
+      }
+      case "lista": {
+        const tag = b.ordinata ? "ol" : "ul";
+        const radice = h(tag, { class: "md__list" });
+        let ultimoLi = null;
+        for (const v of b.voci) {
+          const li = h("li", null, inline(v.testo));
+          if (v.livello === 1 && ultimoLi) {
+            let sotto = ultimoLi.querySelector(":scope > ul, :scope > ol");
+            if (!sotto) { sotto = h(tag, { class: "md__list" }); ultimoLi.append(sotto); }
+            sotto.append(li);
+          } else {
+            radice.append(li);
+            ultimoLi = li;
+          }
+        }
+        return radice;
+      }
+      case "paragrafo": {
+        const statoAnalisi = /^\*\*Stato analisi:\*\*\s*(.*)$/i.exec(b.righe.join(" "));
+        if (statoAnalisi) {
+          const valore = statoAnalisi[1].trim();
+          const tono = /non ancora|da analizzare|tbd/i.test(valore) ? "neu" : "ok";
+          return h("p", { class: "md__stato" },
+            h("span", { class: "md__stato-label" }, "Stato analisi"),
+            h("span", { class: `badge badge--${tono}` }, inline(valore)));
+        }
+        // Righe «**Etichetta:** valore» (intestazioni dei documenti): una per riga.
+        const aRighe = b.righe.length > 1 && b.righe.every((r) => /^\*\*[^*]+:\*\*/.test(r));
+        const figli = [];
+        b.righe.forEach((r, k) => {
+          if (k) figli.push(aRighe ? h("br") : " ");
+          figli.push(...inline(r));
+        });
+        return h("p", { class: aRighe ? "md__meta" : null }, figli);
+      }
+      default:
+        return null;
+    }
+  }
+
+  function rendiBlocchi(lista) {
+    return (lista || []).map(rendiBlocco).filter(Boolean);
+  }
+
+  /** Il documento diviso per sezioni di secondo livello, ciascuna con le
+      sue sottosezioni di terzo livello: la forma che le viste trasformano
+      in card. `intro` è ciò che sta tra il titolo e la prima sezione. */
+  function documento(testo) {
+    const bs = blocchi(testo);
+    let titolo = "";
+    const intro = [];
+    const sezioni = [];
+    let sez = null, sotto = null;
+    for (const b of bs) {
+      if (b.tipo === "titolo" && b.livello === 1 && !titolo) { titolo = b.testo; continue; }
+      if (b.tipo === "titolo" && b.livello === 2) {
+        sez = { titolo: b.testo, blocchi: [], sottosezioni: [] };
+        sezioni.push(sez);
+        sotto = null;
+        continue;
+      }
+      if (b.tipo === "titolo" && b.livello === 3 && sez) {
+        sotto = { titolo: b.testo, blocchi: [] };
+        sez.sottosezioni.push(sotto);
+        continue;
+      }
+      if (b.tipo === "hr") continue;
+      (sotto ? sotto.blocchi : sez ? sez.blocchi : intro).push(b);
+    }
+    return { titolo, intro, sezioni };
+  }
+
+  return {
+    tabelle, tabellaCon, righeMappate, colonna, ripulisci, sezioni, paragrafi, citazione, frontmatter, severita, decisione,
+    blocchi, inline, rendiBlocchi, documento, testoSemplice,
+  };
 })();

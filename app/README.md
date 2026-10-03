@@ -4,19 +4,22 @@
 app/
 ├── backend/     FastAPI (Sprint 4)
 ├── worker/      consumer coda FIFO, un job alla volta (Sprint 4)
-└── frontend/    Sprint 6 — non ancora iniziato
+└── frontend/    interfaccia statica, servita dallo stesso FastAPI
 ```
 
 ## Backend
 
+In locale si avvia con `./spada avvia` dalla radice del progetto, che
+lancia l'equivalente di:
+
 ```bash
 cd backend
-pip install -r requirements.txt
-export SPADA_GARE_DIR=~/spada/gare
-export SPADA_PIPELINE_DIR=~/spada/_pipeline
-export SPADA_DATA_DIR=~/spada/_data
-uvicorn main:app --host 0.0.0.0 --port 8000
+export SPADA_HOME=~/spada   # gare/, _data/, _claude/, _pipeline
+~/spada/_venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
+
+L'interfaccia è su `/` (stessa origine dell'API, niente CORS); lo
+stato del servizio su `/salute`.
 
 Schema applicativo (`gare`, `job`, `documenti`, `approvazioni`,
 `conversazioni`) applicato automaticamente all'avvio in
@@ -48,13 +51,14 @@ un crash o riavvio precedente): mai ripreso a metà automaticamente.
 
 ## Livello di autenticazione Claude (`backend/auth.py`)
 
-Unico punto che worker/API conoscono: `get_claude_env()`. Oggi legge
-`CLAUDE_CODE_OAUTH_TOKEN` da ambiente o `/etc/spada/auth.env`; domani
-un'API key per utente si innesta qui senza toccare `worker.py` né
-`spada_fase.sh` (principio 10 del piano). Solleva esplicitamente se
-manca — un job non parte mai senza autenticazione verificata, e fallisce
-esplicitamente (non silenziosamente) se `ANTHROPIC_API_KEY` è presente
-nell'ambiente (vietato dal piano, verifica finale di Sprint 9).
+Unico punto che worker/API conoscono: `get_claude_env()`. Versione
+locale: usa `CLAUDE_CODE_OAUTH_TOKEN` (ambiente o
+`~/spada/_data/auth.env`) se c'è, altrimenti il login della
+configurazione Claude dedicata (`./spada login`, verificato con
+`claude auth status`). Solleva esplicitamente se manca — un job non
+parte mai senza autenticazione verificata. `ANTHROPIC_API_KEY` non
+blocca più: `spada_claude.sh` la toglie dall'ambiente di ogni
+invocazione, così si usa sempre la subscription.
 
 ## Validazione percorsi (`backend/paths.py`)
 

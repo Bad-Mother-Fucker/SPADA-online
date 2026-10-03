@@ -133,6 +133,11 @@ def main():
         with con:
             con.execute("DELETE FROM prezzario_versioni WHERE regione = ? AND anno = ?",
                         (args.regione, args.anno))
+            # L'indice full-text non ha chiavi esterne: il CASCADE qui sopra
+            # non lo raggiunge, e a ogni reimport cerca_voce restituirebbe
+            # ogni voce una volta in più.
+            con.execute("DELETE FROM prezzario_articoli_fts WHERE regione = ? AND anno = ?",
+                        (args.regione, args.anno))
             meta = articoli_json.get("metadata", {})
             con.execute(
                 """INSERT INTO prezzario_versioni

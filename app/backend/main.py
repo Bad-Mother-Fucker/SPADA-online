@@ -1,10 +1,9 @@
-"""SPADA Online — backend FastAPI (Sprint 4).
+"""SPADA — backend FastAPI (Sprint 4), versione locale.
 
-Avvio locale/dev:
-  uvicorn main:app --reload --port 8000
-
-In produzione (Sprint 9): systemd, dietro Cloudflare Tunnel, separato
-dal processo worker (worker.py) che consuma la coda job.
+Avvio: `./spada avvia` dalla radice del progetto (uvicorn su
+127.0.0.1:8000 + worker.py in un processo separato che consuma la coda
+job). Serve anche il frontend statico (app/frontend/) dalla stessa
+origine: http://localhost:8000 è l'unico indirizzo da aprire.
 """
 import logging
 import os
@@ -16,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fastapi import FastAPI
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from db import init_db
@@ -24,18 +24,22 @@ from routers import gare, sistema
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("spada.api")
 
-app = FastAPI(title="SPADA Online API", version="0.1.0")
+app = FastAPI(title="SPADA API", version="0.1.0")
 
-# Frontend (Cloudflare Pages) e backend (Cloudflare Tunnel) sono origini
-# diverse per costruzione (Sprint 9). Un solo operatore autorizzato passa
-# comunque da Cloudflare Access davanti a entrambe: qui basta abilitare il
-# fetch cross-origin, non serve un secondo livello di autenticazione.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[os.environ.get("SPADA_FRONTEND_ORIGIN", "*")],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
+
+# In locale frontend e API hanno la stessa origine: CORS non serve. Resta
+# attivabile (SPADA_FRONTEND_ORIGIN) solo per servire il frontend da un
+# altro indirizzo, es. un server di sviluppo. L'autenticazione che sulla
+# VM faceva Cloudflare Access qui la fa l'indirizzo d'ascolto: uvicorn
+# risponde solo su 127.0.0.1, cioè da questo computer.
+if os.environ.get("SPADA_FRONTEND_ORIGIN"):
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[os.environ["SPADA_FRONTEND_ORIGIN"]],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 @app.on_event("startup")
@@ -61,6 +65,22 @@ async def _http_exception_con_causa_originale(request, exc):
     return await http_exception_handler(request, exc)
 
 
-@app.get("/")
-def radice():
-    return {"servizio": "SPADA Online API", "stato": "attivo"}
+@app.get("/salute")
+def salute():
+    return {"servizio": "SPADA API", "stato": "attivo"}
+
+
+class _FrontendStatico(StaticFiles):
+    """File del frontend sempre rivalidati (no-cache, non no-store): dopo
+    un aggiornamento del codice il browser prende subito i JS nuovi,
+    invece di mescolarli con una versione in cache."""
+
+    async def get_response(self, path, scope):
+        risposta = await super().get_response(path, scope)
+        risposta.headers["Cache-Control"] = "no-cache"
+        return risposta
+
+
+# Montato per ultimo: le rotte API (/gare, /sistema, /salute) hanno la
+# precedenza, tutto il resto è il frontend (index.html su "/").
+app.mount("/", _FrontendStatico(directory=str(FRONTEND_DIR), html=True), name="frontend")

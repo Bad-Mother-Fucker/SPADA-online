@@ -47,7 +47,7 @@ Output standard:
 ### Step 3 — Produzione gara brief
 
 Dopo l'estrazione dei criteri, produci `output/03_criteria/gara_brief.md`
-seguendo il template `output/03_criteria/gara_brief_template.md`.
+seguendo il template `.claude/templates/gara_brief_template.md` (pipeline condivisa).
 
 Il gara brief si costruisce interamente dalle informazioni del
 disciplinare — nessun elaborato richiesto.

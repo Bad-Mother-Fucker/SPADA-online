@@ -17,9 +17,13 @@ from grafo import estrai_grafo, leggi_corpo, leggi_frontmatter
 from interventi import InterventoGiaInCorso, invoca_intervento
 from models import (
     ApprovazioneRequest, AssistenteRequest, CreaGaraRequest,
-    InterventoRequest, ProposaOperatoreRequest,
+    IndicazioniStrategicheRequest, InterventoRequest, ProposaOperatoreRequest,
+    RisposteBriefRequest,
 )
+import brief
+import strategia
 from paths import PIPELINE_DIR, SlugNonValido, gara_dir, percorso_sotto_gara, valida_slug
+from prezzario import edizioni_installate, regione_canonica, stato_prezzario
 
 router = APIRouter(prefix="/gare", tags=["gare"])
 
@@ -41,11 +45,13 @@ def _leggi_json(path: Path, default=None):
 def elenco_gare():
     with get_conn() as con:
         righe = con.execute("SELECT * FROM gare ORDER BY creato_il DESC").fetchall()
+    installate = {(e["regione"].lower(), e["anno"]) for e in edizioni_installate()}
     risultato = []
     for r in righe:
         fasi = _leggi_json(gara_dir(r["slug"]) / "_state" / "fasi.json", {})
         risultato.append({**dict(r), "fase_corrente": fasi.get("fase_corrente"),
-                           "fasi": fasi.get("fasi", {})})
+                           "fasi": fasi.get("fasi", {}),
+                           "prezzario_disponibile": ((r["regione"] or "").lower(), r["anno_prezzario"]) in installate})
     return risultato
 
 
@@ -58,6 +64,12 @@ def crea_gara(body: CreaGaraRequest):
     script = PIPELINE_DIR / "scripts" / "setup" / "new_gara.sh"
     if not script.exists():
         raise HTTPException(500, f"new_gara.sh non trovato in {script}")
+    # Il prezzario può mancare: la gara si crea lo stesso e le fasi
+    # saltano le valutazioni economiche. La regione si allinea però al
+    # nome già usato nel database ("campania" → "Campania").
+    body.regione = regione_canonica(body.regione)
+    if not body.regione:
+        raise HTTPException(400, "Indica la regione del prezzario di riferimento.")
 
     proc = subprocess.run(
         ["bash", str(script),
@@ -95,7 +107,8 @@ def dettaglio_gara(slug: str):
     manifest = _leggi_json(d / "manifest.json", {})
     fasi = _leggi_json(d / "_state" / "fasi.json", {})
     attivita = _leggi_json(d / "_state" / "attivita.json", {})
-    return {"manifest": manifest, "fasi": fasi, "attivita": attivita}
+    return {"manifest": manifest, "fasi": fasi, "attivita": attivita,
+            "prezzario": stato_prezzario(d, manifest)}
 
 
 @router.delete("/{slug}", status_code=204)
@@ -141,8 +154,18 @@ def carica_documento(slug: str, categoria: str, file: UploadFile):
     dest_dir.mkdir(parents=True, exist_ok=True)
     nome_file = Path(file.filename).name  # scarta ogni componente di percorso dal nome client
     dest = dest_dir / nome_file
-    contenuto = file.file.read()
-    dest.write_bytes(contenuto)
+    # A blocchi, non file.read(): nessun limite di dimensione lato
+    # interfaccia, quindi un elaborato da centinaia di MB non deve passare
+    # tutto in memoria. Prima su un file temporaneo nella stessa cartella,
+    # poi rinominato: un upload interrotto non lascia un documento a metà
+    # al posto di quello buono.
+    temporaneo = dest_dir / f".{nome_file}.caricamento"
+    try:
+        with temporaneo.open("wb") as out:
+            shutil.copyfileobj(file.file, out, length=8 * 1024 * 1024)
+        temporaneo.replace(dest)
+    finally:
+        temporaneo.unlink(missing_ok=True)
 
     with get_conn() as con:
         con.execute(
@@ -184,10 +207,53 @@ def elenco_documenti(slug: str):
     return [dict(r) for r in righe]
 
 
+NOMI_FASI_UI = {
+    1: "Acquisizione documenti", 2: "Estrazione requisiti", 3: "Analisi capitolato",
+    4: "Ricerca soluzioni", 5: "Revisione proposte", 6: "Deliverables", 7: "Audit e consegna",
+}
+
+
+def _corpo_fase(fasi: dict, n: int) -> dict:
+    return next((v for k, v in fasi.items() if k.startswith(f"{n}_")), {})
+
+
+def _verifica_sequenza(d: Path, fase: int, tipo: str):
+    """Ogni fase sblocca la successiva (stessa regola di
+    Dominio.sbloccata nel frontend): si esegue la fase n solo con la n-1
+    completata e, se è un checkpoint, approvata. Il checkpoint della 3 si
+    approva dopo che la fase ha girato; quelli di 5 e 7 (senza agente)
+    dopo la fase precedente."""
+    fasi = _leggi_json(d / "_state" / "fasi.json", {}).get("fasi", {})
+
+    def chiusa(n):
+        c = _corpo_fase(fasi, n)
+        return c.get("stato") == "completata" and not c.get("richiede_approvazione")
+
+    if tipo == "approva":
+        if fase not in (3, 5, 7):
+            raise HTTPException(400, f"La Fase {fase} non ha un checkpoint da approvare.")
+        if fase == 3 and _corpo_fase(fasi, 3).get("stato") != "completata":
+            raise HTTPException(409, "Esegui prima la Fase 3: il checkpoint si approva sul suo risultato.")
+        if fase == 3:
+            ind = strategia.leggi(d)
+            if not ind.get("compilata"):
+                manca = ", ".join(ind.get("mancanti", [])[:4]) or "la sezione"
+                raise HTTPException(409, f"Compila le indicazioni strategiche prima di approvare (manca: {manca}).")
+        if fase in (5, 7) and not chiusa(fase - 1):
+            raise HTTPException(409, f"Il checkpoint della Fase {fase} si sblocca al completamento della Fase {fase - 1} ({NOMI_FASI_UI[fase - 1]}).")
+        return
+    if fase > 1 and not chiusa(fase - 1):
+        prec = _corpo_fase(fasi, fase - 1)
+        motivo = ("quando approvi il checkpoint" if prec.get("richiede_approvazione")
+                  else "al completamento")
+        raise HTTPException(409, f"La Fase {fase} si sblocca {motivo} della Fase {fase - 1} ({NOMI_FASI_UI[fase - 1]}).")
+
+
 def _accoda_job(slug: str, fase: int, tipo: str, deliverable_id: str | None = None):
-    _gara_o_404(slug)
+    d = _gara_o_404(slug)
     if not (1 <= fase <= 7):
         raise HTTPException(400, "fase deve essere 1-7")
+    _verifica_sequenza(d, fase, tipo)
     with get_conn() as con:
         cur = con.execute(
             "INSERT INTO job (gara_slug, fase, tipo, stato, creato_il, deliverable_id) VALUES (?,?,?,?,?,?)",
@@ -209,7 +275,51 @@ def riesegui_fase(slug: str, fase: int):
 
 @router.post("/{slug}/fasi/{fase}/approva", status_code=202)
 def approva_fase(slug: str, fase: int):
-    return _accoda_job(slug, fase, "approva")
+    esito = _accoda_job(slug, fase, "approva")
+    if fase == 3:
+        # Le indicazioni approvate arrivano alle fasi successive tramite
+        # memoria.md e l'handoff della Fase 3 (spada_fase.sh li mette nel prompt).
+        d = gara_dir(slug)
+        strategia.registra_per_le_fasi_successive(d, strategia.leggi(d))
+    return esito
+
+
+# ── Checkpoint Fase 3 — indicazioni strategiche del professionista ──
+def _nessuna_fase_in_corso(slug: str):
+    with get_conn() as con:
+        if con.execute("SELECT 1 FROM job WHERE gara_slug=? AND stato='in_esecuzione'", (slug,)).fetchone():
+            raise HTTPException(409, "Una fase è in esecuzione su questa gara: riprova a esecuzione conclusa.")
+
+
+# ── Gara brief — risposte alle domande aperte ───────────────────────
+@router.get("/{slug}/brief/risposte")
+def leggi_risposte_brief(slug: str):
+    return brief.leggi(_gara_o_404(slug))
+
+
+@router.put("/{slug}/brief/risposte")
+def salva_risposte_brief(slug: str, body: RisposteBriefRequest):
+    d = _gara_o_404(slug)
+    _nessuna_fase_in_corso(slug)
+    try:
+        return brief.scrivi(d, body.risposte)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.get("/{slug}/strategia/indicazioni")
+def leggi_indicazioni(slug: str):
+    return strategia.leggi(_gara_o_404(slug))
+
+
+@router.put("/{slug}/strategia/indicazioni")
+def salva_indicazioni(slug: str, body: IndicazioniStrategicheRequest):
+    d = _gara_o_404(slug)
+    _nessuna_fase_in_corso(slug)
+    try:
+        return strategia.scrivi(d, body.model_dump())
+    except strategia.IndicazioniNonValide as e:
+        raise HTTPException(400, str(e))
 
 
 # ── Sprint 10.3 — deliverables come workspace separati ──────────────
@@ -399,19 +509,20 @@ def cronologia_assistente(slug: str):
 @router.post("/{slug}/interventi")
 def intervento(slug: str, body: InterventoRequest):
     _gara_o_404(slug)
-    # Gate VM-wide, non per-gara: la VM è un e2-micro (2 vCPU burstable,
-    # 1GB RAM) e ogni `claude -p` (fase, deliverable o intervento) è un
-    # processo pesante a sé. Il worker già serializza le fasi (un job
+    # Gate globale, non per-gara: ogni `claude -p` (fase, deliverable o
+    # intervento) è un processo pesante a sé — nato per l'e2-micro della
+    # VM, tenuto in locale per non far girare insieme sessioni che
+    # scrivono. Il worker già serializza le fasi (un job
     # alla volta, qualunque gara), ma /interventi bypassa la coda job
     # per design (risposta diretta, non accodata) — senza questo
     # controllo, un intervento su una gara e una fase in corso su
-    # un'altra girerebbero insieme, sufficiente a saturare la VM.
+    # un'altra girerebbero insieme.
     with get_conn() as con:
         in_corso = con.execute(
             "SELECT 1 FROM job WHERE stato='in_esecuzione'"
         ).fetchone()
     if in_corso:
-        raise HTTPException(409, "Una fase è in esecuzione su questa VM (qualunque gara): riprova a conclusione.")
+        raise HTTPException(409, "Una fase è in esecuzione (qualunque gara): riprova a conclusione.")
 
     with get_conn() as con:
         con.execute(

@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 
 from auth import get_claude_env
-from paths import PIPELINE_DIR, gara_dir
+from paths import SPADA_CLAUDE, gara_dir
 
 TIMEOUT_SECONDI = 5 * 60
 
@@ -19,7 +19,7 @@ TIMEOUT_SECONDI = 5 * 60
 # in --tools (che riguarda solo i tool nativi) e resta disponibile:
 # è comunque un server di sole query, nessuna mutazione possibile.
 TOOLS_CONSENTITI = "Read,Grep,Glob"
-TOOLS_VIETATI = "Write,Edit,Bash,Task,NotebookEdit,mcp__prezzario__* "  # spazio finale innocuo, difesa in profondità
+TOOLS_VIETATI = "Write,Edit,Bash,Task,Agent,NotebookEdit,mcp__prezzario__* "  # spazio finale innocuo, difesa in profondità
 
 
 def _leggi_o_vuoto(path: Path) -> str:
@@ -65,9 +65,10 @@ def invoca_assistente(slug: str, messaggio: str) -> str:
 
     import os
     env = {**os.environ, **env_claude}
+    # spada_claude.sh aggiunge config dedicata, --setting-sources user e
+    # il solo server MCP prezzario (versione locale).
     argv = [
-        "claude", "-p", prompt,
-        "--setting-sources", "user",
+        "bash", str(SPADA_CLAUDE), "-p", prompt,
         "--tools", TOOLS_CONSENTITI,
         "--disallowedTools", TOOLS_VIETATI,
     ]

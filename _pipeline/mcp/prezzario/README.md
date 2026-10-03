@@ -25,10 +25,11 @@ si interroga solo via server MCP.
 schema.sql              schema SQLite (FTS5 su voce+articolo, tabelle
                          normalizzate e ORDINATE per l'Analisi)
 import_prezzario.py      importatore con validazione bloccante
+primus_dcf.py            convertitore file PriMus (.dcf) → i due JSON di import
 server.py                server MCP (FastMCP): cerca_voce, dettaglio_analisi,
                          confronta_prezzo, versione_prezzario
 setup.sh                 crea il venv (mcp, in requirements.txt)
-run.sh                   avvia il server nel venv (usato da `claude mcp add`)
+run.sh                   avvia il server nel venv (usato da mcp-spada.json)
 requirements.txt
 ```
 
@@ -70,6 +71,29 @@ estratti (~50 MB) non restano sul disco.
 
 Reimportare la stessa edizione la sostituisce: nessun duplicato.
 
+### Da file PriMus (.dcf)
+
+Se la regione pubblica il prezzario in formato ACCA PriMus e in
+`prometeus-prezzari` non c'è la release, si importa direttamente il file:
+
+```bash
+bash ../../scripts/setup/import_prezzario.sh Basilicata 2025 ~/Downloads/LisBasilicata_OOPP_2025.dcf
+```
+
+`primus_dcf.py` estrae l'elenco prezzi dal contenitore e lo scrive negli
+stessi due JSON (analisi vuota: i file PriMus regionali non la
+includono), poi l'import procede identico, validazioni comprese. La
+mappatura dei campi è nel docstring di `primus_dcf.py`. Rifiuta il file
+se dichiara un anno diverso da quello indicato. Dopo l'import ne tiene
+una copia in `~/.spada/prezzari/<Regione>/<anno>/`, da cui `./spada setup`
+lo reimporta su un database nuovo.
+
+Il formato non è documentato da ACCA: la lettura è stata verificata sul
+PriMus Campania 2026 confrontato con l'edizione importata dai JSON —
+31.755 voci su 31.755 con prezzo, unità di misura e incidenza della
+manodopera identici. Unica differenza di convenzione: nel PriMus
+Campania 2.789 codici hanno il suffisso ` (CAM)`, che i JSON tolgono.
+
 Se serve il controllo manuale dei singoli passi:
 
 ```bash
@@ -108,10 +132,11 @@ distinte, che è il motivo per cui non vanno aggregati), e
 
 ## Registrazione
 
-`scripts/setup/link_pipeline.sh` registra il server automaticamente
-(`claude mcp add --transport stdio prezzario --scope user`), così è
-disponibile a ogni gara senza configurazione per-gara. Verifica con
-`claude mcp list`.
+`scripts/setup/link_pipeline.sh` (lanciato da `./spada setup`) scrive
+`~/spada/_claude/mcp-spada.json`, che `spada_claude.sh` passa a ogni
+invocazione con `--mcp-config --strict-mcp-config`: il server è
+disponibile a ogni gara senza configurazione per-gara, ed è l'unico
+server MCP che una fase vede. Verifica con `./spada verifica`.
 
 ## Soglie di scostamento (`confronta_prezzo`)
 

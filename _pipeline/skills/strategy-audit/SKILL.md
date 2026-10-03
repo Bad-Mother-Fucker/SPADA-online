@@ -139,9 +139,9 @@ Prezzario regionale:
 - Chiama `versione_prezzario(regione, anno)`. Se `disponibile: false`:
   quella edizione non e' ancora stata importata in `spada.db` —
   classificazione `NON DISPONIBILE`, non improvvisare una regione ne'
-  un'edizione. Segnala che serve eseguire
-  `import_prezzario.py` (vedi `_pipeline/mcp/prezzario/README.md`)
-  prima di poter completare questa analisi.
+  un'edizione. Segnala che serve importarlo
+  (`./spada importa-prezzario <Regione> <anno>`, o «Importa ora» nel
+  pannello della gara) prima di poter completare questa analisi.
 
 ### Procedura
 
@@ -280,9 +280,9 @@ Prezzario regionale:
 
 [Se NON DISPONIBILE — prezzario non ancora importato per questa regione/anno]:
 > ℹ️ Confronto non eseguibile: il prezzario [Regione] [Anno] non e'
-> ancora stato importato in `spada.db`. Serve eseguire
-> `import_prezzario.py` (vedi `_pipeline/mcp/prezzario/README.md`) con
-> i due file sorgente di quella regione/anno, poi riesegui strategy-auditor.
+> ancora stato importato in `spada.db`. Va importato
+> (`./spada importa-prezzario [Regione] [Anno]`, o «Importa ora» nel
+> pannello della gara), poi va rieseguita la Fase 3.
 
 [Se NON DISPONIBILE — documento prezzi mancante]:
 > ℹ️ Nessun documento di tipo elenco_prezzi o analisi_prezzi trovato

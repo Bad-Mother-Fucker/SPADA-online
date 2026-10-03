@@ -29,7 +29,7 @@
       "required": ["modello", "effort"],
       "additionalProperties": false,
       "properties": {
-        "modello": { "type": "string", "description": "Es. claude-sonnet-5, claude-opus-5." },
+        "modello": { "type": "string", "description": "Alias della CLI Claude Code (sonnet, opus) o id modello completo. I manifest della VM con claude-sonnet-5/claude-opus-5 restano validi: spada_comune.sh li converte in alias." },
         "effort": { "type": "string", "enum": ["low", "medium", "high", "xhigh", "max"] }
       }
     },

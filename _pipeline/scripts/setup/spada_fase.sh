@@ -18,6 +18,7 @@
 # Variabili di ambiente:
 #   SPADA_GARE_DIR      — default: ~/spada/gare
 #   SPADA_PIPELINE_DIR  — default: ~/spada/_pipeline
+#   SPADA_PERMISSION_MODE, SPADA_CLAUDE_DIR, SPADA_DB_PATH — vedi spada_comune.sh
 
 set -euo pipefail
 
@@ -38,18 +39,12 @@ GARE_DIR="${SPADA_GARE_DIR:-$HOME/spada/gare}"
 _SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
 PIPELINE_DIR="${SPADA_PIPELINE_DIR:-$(cd "$(dirname "$_SELF")/../.." && pwd)}"
 GARA_DIR="$GARE_DIR/$SLUG"
+source "$(dirname "$_SELF")/spada_comune.sh"
 
 [ -d "$GARA_DIR" ] || error "Gara non trovata: $GARA_DIR"
 [ -f "$GARA_DIR/manifest.json" ] || error "manifest.json mancante in $GARA_DIR — non è una gara valida."
 
-declare -A NOMI_FASE=(
-  [1]="1_acquisizione_documenti" [2]="2_costruzione_grafo" [3]="3_analisi_strategica"
-  [4]="4_elaborazione_criteri"  [5]="5_revisione_proposte" [6]="6_stesura_offerta"
-  [7]="7_approvazione_finale"
-)
-NOME_FASE="${NOMI_FASE[$FASE]}"
-declare -A GATE_UMANO=( [3]=1 [5]=1 [7]=1 )
-declare -A SENZA_AGENTE=( [5]=1 [7]=1 )
+NOME_FASE="$(nome_fase "$FASE")"
 
 cd "$GARA_DIR"
 
@@ -59,23 +54,9 @@ GIT_REF="$(git -C "$PIPELINE_DIR" rev-parse --short HEAD 2>/dev/null || echo n.d
 PIPELINE_VERSION_FULL="$PIPELINE_VERSION (git $GIT_REF)"
 
 # ── Versione prezzario, se questa gara ne consulta uno (best-effort) ─
-PREZZARIO_VERSION="null"
-if [ -f "$PIPELINE_DIR/../_data/spada.db" ] || [ -f "${SPADA_DB_PATH:-}" ]; then
-  DB_PATH="${SPADA_DB_PATH:-$PIPELINE_DIR/../_data/spada.db}"
-  REGIONE="$(python3 -c "import json;print(json.load(open('manifest.json'))['prezzario']['regione'])" 2>/dev/null || echo "")"
-  ANNO="$(python3 -c "import json;print(json.load(open('manifest.json'))['prezzario']['anno'])" 2>/dev/null || echo "")"
-  if [ -n "$REGIONE" ] && [ -n "$ANNO" ]; then
-    PREZZARIO_VERSION="$(python3 -c "
-import sqlite3, json, sys
-try:
-    con = sqlite3.connect('$DB_PATH')
-    row = con.execute('SELECT regione, anno, hash_sorgente FROM prezzario_versioni WHERE regione=? AND anno=?', ('$REGIONE', $ANNO)).fetchone()
-    print(json.dumps(f'{row[0]}-{row[1]}-{row[2]}') if row else 'null')
-except Exception:
-    print('null')
-" 2>/dev/null || echo "null")"
-  fi
-fi
+# null se l'edizione non è importata: la fase gira lo stesso, senza
+# valutazioni economiche (vedi nota_prezzario più sotto).
+PREZZARIO_VERSION="$(versione_prezzario_gara 2>/dev/null || echo null)"
 
 # ── --riesegui: archivia output precedente, marca fasi a valle ──────
 if [ "$FLAG" = "--riesegui" ]; then
@@ -103,7 +84,7 @@ fi
 
 # ── --approva: solo gate umani, nessuna invocazione claude ───────────
 if [ "$FLAG" = "--approva" ]; then
-  [ -n "${GATE_UMANO[$FASE]:-}" ] || error "--approva si usa solo sulle fasi 3, 5, 7 (gate umano)."
+  fase_con_gate_umano "$FASE" || error "--approva si usa solo sulle fasi 3, 5, 7 (gate umano)."
   python3 - "$FASE" "$PIPELINE_VERSION_FULL" "$PREZZARIO_VERSION" <<'PY'
 import json, sys, uuid
 from datetime import datetime, timezone
@@ -136,7 +117,7 @@ PY
 fi
 
 # ── Fasi 5 e 7 senza --approva: riportano lo stato, non invocano nulla ─
-if [ -n "${SENZA_AGENTE[$FASE]:-}" ]; then
+if fase_senza_agente "$FASE"; then
   info "Fase $FASE ($NOME_FASE) è un gate umano: nessun agente da eseguire."
   case "$FASE" in
     5) [ -f output/06_registers/proposal_register.md ] && \
@@ -200,7 +181,11 @@ trap 'rm -f "$PROMPT_FILE"' EXIT
 
 {
   echo "Stai eseguendo la Fase $FASE ($NOME_FASE) della gara $SLUG come invocazione a se' stante."
-  echo "Segui esattamente le istruzioni in _pipeline/comandi/fasi/${NOME_FASE}.md (risolto da \$HOME/.claude/commands/fasi/${NOME_FASE}.md)."
+  echo "Segui esattamente le istruzioni in _pipeline/comandi/fasi/${NOME_FASE}.md (risolto da $SPADA_CLAUDE_DIR/commands/fasi/${NOME_FASE}.md)."
+  echo ""
+  nota_percorsi
+  echo ""
+  nota_prezzario
   echo ""
   echo "Contesto iniziale — _state/memoria.md:"
   echo '```'
@@ -208,7 +193,7 @@ trap 'rm -f "$PROMPT_FILE"' EXIT
   echo '```'
   if [ "$FASE" -gt 1 ]; then
     PREV=$((FASE - 1))
-    PREV_NOME="${NOMI_FASE[$PREV]}"
+    PREV_NOME="$(nome_fase "$PREV")"
     if [ -f "_state/handoff/${PREV_NOME}.json" ]; then
       echo ""
       echo "Handoff della fase precedente — _state/handoff/${PREV_NOME}.json:"
@@ -221,9 +206,10 @@ trap 'rm -f "$PROMPT_FILE"' EXIT
 
 # ── Invocazione headless ─────────────────────────────────────────────
 set +e
-claude -p "$(cat "$PROMPT_FILE")" \
-  --setting-sources user \
-  --model "$MODELLO" \
+# shellcheck disable=SC2046  # effort_cli e' vuoto o "--effort <livello>"
+bash "$SPADA_CLAUDE" -p "$(cat "$PROMPT_FILE")" \
+  --model "$(modello_cli "$MODELLO")" $(effort_cli "$EFFORT") \
+  --permission-mode "$SPADA_PERMISSION_MODE" \
   --output-format stream-json --verbose \
   > "_state/run_${RUN_ID}.stream.jsonl" 2>&1
 ESITO_CODICE=$?
@@ -273,6 +259,6 @@ if [ "$ESITO" = "errore" ]; then
 fi
 
 info "Fase $FASE completata — run $RUN_ID"
-if [ -n "${GATE_UMANO[$FASE]:-}" ]; then
+if fase_con_gate_umano "$FASE"; then
   warn "Richiede approvazione umana prima di considerarla chiusa: spada-fase $SLUG $FASE --approva quando fatto."
 fi
