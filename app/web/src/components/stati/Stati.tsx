@@ -6,6 +6,9 @@ import type { ApiError } from "@/lib/api"
 import { Api } from "@/lib/api"
 
 /** Stato vuoto: spiega cosa comparirà qui e offre l'azione per popolarlo. */
+/** Il dettaglio dell'errore arriva dal servizio senza punteggiatura garantita: chiude la frase. */
+const frase = (t?: string) => { const x = (t || "").trim(); return x ? ` ${/[.!?…]$/.test(x) ? x : x + "."}` : "" }
+
 export function StatoVuoto({ icona, titolo, testo, azioni, className }: { icona: ReactNode; titolo: string; testo: ReactNode; azioni?: ReactNode; className?: string }) {
   return (
     <div className={cn("animate-apparizione flex flex-col items-center rounded-lg border border-dashed bg-card px-6 py-12 text-center", className)}>
@@ -29,7 +32,7 @@ export function StatoErrore({ titolo, errore, percorso, nota, onRiprova, inCorso
           <p className="mt-1 text-sm text-foreground-2">
             {errore.timeout ? "Il servizio non ha risposto in tempo per " : errore.stato ? <>Il servizio ha risposto <code className="font-mono text-foreground">{errore.stato}</code> per </> : "Nessuna risposta dal servizio per "}
             <code className="font-mono text-foreground">{percorso}</code>.
-            {errore.dettaglio && errore.dettaglio !== errore.message ? ` ${errore.dettaglio}` : errore.stato && errore.message ? ` ${errore.message}` : ""}
+            {frase(errore.dettaglio || errore.message)}
             {nota && <> {nota}</>}
           </p>
           <div className="mt-4 flex flex-wrap gap-2">

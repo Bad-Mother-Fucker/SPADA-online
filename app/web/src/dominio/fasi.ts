@@ -1,4 +1,4 @@
-// Vocabolario condiviso: le 7 fasi, gli stati, le categorie. Porting di
+// Vocabolario condiviso: le 8 fasi, gli stati, le categorie. Porting di
 // app/frontend/js/dominio.js. Le viste non devono mai conoscere le chiavi
 // della pipeline: la mappa sta qui, in un posto solo.
 
@@ -27,22 +27,25 @@ export interface Fase {
 export const FASI: readonly Fase[] = [
   { n: 1, num: "01", chiave: "1_acquisizione_documenti", titolo: "Acquisizione documenti", kicker: "Fase 1, acquisizione", testata: "Documenti di gara",
     sottotitolo: "Categorie separate perché la pipeline le tratta in modo diverso: il disciplinare guida i requisiti, gli elaborati l'analisi tecnica, i P7M richiedono verifica di firma." },
-  { n: 2, num: "02", chiave: "2_costruzione_grafo", titolo: "Estrazione requisiti", kicker: "Fase 2, requisiti", testata: "Requisiti estratti",
-    sottotitolo: "Ogni requisito porta con sé la provenienza puntuale. Da qui in avanti l'assistente conversazionale è attivo." },
-  { n: 3, num: "03", chiave: "3_analisi_strategica", titolo: "Analisi capitolato", kicker: "Fase 3, analisi", testata: "Analisi del capitolato speciale",
-    sottotitolo: "Lettura critica del capitolato: cosa vincola l'offerta, cosa la premia, dove il testo è ambiguo o contraddittorio." },
-  { n: 4, num: "04", chiave: "4_elaborazione_criteri", titolo: "Ricerca soluzioni", kicker: "Fase 4, gap e prove", testata: "Gap rilevati",
+  { n: 2, num: "02", chiave: "2_costruzione_grafo", titolo: "Analisi elaborati", kicker: "Fase 2, elaborati", testata: "Criteri ed elaborati",
+    sottotitolo: "Gli elaborati letti e collegati nel grafo ai criteri del disciplinare. Da qui l'assistente conversazionale è attivo." },
+  { n: 3, num: "03", chiave: "3_analisi_strategica", titolo: "Analisi strategica", kicker: "Fase 3, audit strategico", testata: "Audit strategico",
+    sottotitolo: "Quattro analisi sui dati della gara: budget sicurezza, prezzi rispetto al prezzario, viabilità del cantiere, margine per le migliorie." },
+  { n: 4, num: "04", chiave: "4_domande_professionista", titolo: "Domande al professionista", kicker: "Fase 4, gate", testata: "Domande e indicazioni del professionista",
+    sottotitolo: "Tutte le domande in un posto. Quando esegui la fase, risposte e indicazioni entrano nel contesto della gara." },
+  { n: 5, num: "05", chiave: "5_elaborazione_criteri", titolo: "Ricerca soluzioni", kicker: "Fase 5, gap e prove", testata: "Gap rilevati",
     sottotitolo: "Distanza fra ciò che la gara richiede e ciò che l'offerta dimostra oggi. Ogni gap è ancorato alle prove documentali raccolte." },
-  { n: 5, num: "05", chiave: "5_revisione_proposte", titolo: "Revisione proposte", kicker: "Fase 5, checkpoint umano", testata: "Revisione delle proposte tecniche",
+  { n: 6, num: "06", chiave: "6_revisione_proposte", titolo: "Revisione proposte", kicker: "Fase 6, checkpoint umano", testata: "Revisione delle proposte tecniche",
     sottotitolo: "Decisione proposta per proposta: approvate entrano nei deliverable, rimandate tornano agli agenti con la tua nota, scartate restano nello storico." },
-  { n: 6, num: "06", chiave: "6_stesura_offerta", titolo: "Deliverables", kicker: "Fase 6, deliverables", testata: "Deliverable richiesti",
+  { n: 7, num: "07", chiave: "7_stesura_offerta", titolo: "Deliverables", kicker: "Fase 7, deliverables", testata: "Deliverable richiesti",
     sottotitolo: "Elenco ricavato dal disciplinare di questa gara, non un modello fisso. Ogni deliverable ha agente e skill propri e può girare in parallelo." },
-  { n: 7, num: "07", chiave: "7_approvazione_finale", titolo: "Audit e consegna", kicker: "Fase 7, audit di consegna", testata: "Audit formale del plico",
-    sottotitolo: "Verifica di completezza e consegnabilità, non una seconda verifica delle prove, già svolta in Fase 4 e 5." },
+  { n: 8, num: "08", chiave: "8_approvazione_finale", titolo: "Audit e consegna", kicker: "Fase 8, audit di consegna", testata: "Audit formale del plico",
+    sottotitolo: "Verifica di completezza e consegnabilità, non una seconda verifica delle prove, già svolta in Fase 5 e 6." },
 ]
 
-/** Le fasi che si fermano su una decisione umana (gate di checkpoint). */
-export const GATE_UMANO: ReadonlySet<number> = new Set([3, 5, 7])
+/** Checkpoint senza agente: si chiudono approvando. La Fase 4 (domande al
+    professionista) si chiude eseguendola, cioè inviando le risposte. */
+export const GATE_UMANO: ReadonlySet<number> = new Set([6, 8])
 
 /** tono = token di colore di stato (DESIGN.md §2); etichetta = come si legge. */
 export type Tono = "run" | "attn" | "ok" | "crit" | "neu"
@@ -99,6 +102,15 @@ export function sbloccata(fasi: Fasi | null | undefined, n: number): boolean {
   return statoFase(fasi, n - 1) === "completata"
 }
 
+/** Si può aprire la vista della fase n? Come `sbloccata`, tranne la Fase 4:
+    le domande arrivano già dalla Fase 1 (sopralluogo, quesiti con scadenza)
+    e il professionista deve poter rispondere in bozza prima che l'analisi
+    strategica sia finita. Eseguirla resta legato a `sbloccata`. */
+export function consultabile(fasi: Fasi | null | undefined, n: number): boolean {
+  if (sbloccata(fasi, n)) return true
+  return n === 4 && statoFase(fasi, 1) === "completata"
+}
+
 /** Perché la fase n è chiusa, in una frase: null se è aperta. */
 export function motivoBlocco(fasi: Fasi | null | undefined, n: number): string | null {
   if (sbloccata(fasi, n)) return null
@@ -110,8 +122,8 @@ export function motivoBlocco(fasi: Fasi | null | undefined, n: number): string |
 
 /** Prima fase non completata: è quella su cui si apre la pagina gara. */
 export function faseCorrente(fasi: Fasi | null | undefined): number {
-  for (let n = 1; n <= 7; n++) if (statoFase(fasi, n) !== "completata") return n
-  return 7
+  for (const f of FASI) if (statoFase(fasi, f.n) !== "completata") return f.n
+  return FASI.length
 }
 
 /** Stato complessivo della gara. L'ordine di precedenza è deliberato: un
@@ -119,7 +131,7 @@ export function faseCorrente(fasi: Fasi | null | undefined): number {
     di un'esecuzione. */
 export function statoGara(fasi: Fasi | null | undefined): StatoGara {
   const stati: StatoFase[] = []
-  for (let n = 1; n <= 7; n++) stati.push(statoFase(fasi, n))
+  for (const f of FASI) stati.push(statoFase(fasi, f.n))
   if (stati.includes("errore")) return "errore"
   if (stati.includes("da_rivedere")) return "da_rivedere"
   if (stati.includes("in_esecuzione")) return "in_esecuzione"
@@ -127,10 +139,10 @@ export function statoGara(fasi: Fasi | null | undefined): StatoGara {
   return "in_coda"
 }
 
-/** Stato di ciascuna delle 7 fasi, per il binario nella card. */
+/** Stato di ciascuna fase, per il binario nella card. */
 export function segmenti(fasi: Fasi | null | undefined): StatoFase[] {
   const out: StatoFase[] = []
-  for (let n = 1; n <= 7; n++) out.push(statoFase(fasi, n))
+  for (const f of FASI) out.push(statoFase(fasi, f.n))
   return out
 }
 

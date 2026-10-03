@@ -2,12 +2,12 @@ import { TrashIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { BadgeStato, Chip } from "./BadgeStato"
 import { BinarioFasi } from "./BinarioFasi"
-import { URL_LEGACY } from "@/components/comuni/AppBar"
+import { Link } from "react-router"
 import { useArricchimento } from "@/hooks/useGare"
 import type { Gara } from "@/lib/api"
 import { plurale, quandoRelativo, scadenza as formattaScadenza } from "@/lib/formato"
 import { cn } from "@/lib/utils"
-import { STATO_GARA, corpoFase, fase, faseCorrente, segmenti, statoFase, statoGara } from "@/dominio/fasi"
+import { FASI, STATO_GARA, corpoFase, fase, faseCorrente, segmenti, statoFase, statoGara } from "@/dominio/fasi"
 
 /** Ultimo momento in cui è successo qualcosa su questa gara. */
 export function ultimoMovimento(g: Gara): string | null {
@@ -24,10 +24,10 @@ export function ultimoMovimento(g: Gara): string | null {
 /** L'avviso in fondo alla card: cosa richiede attenzione, in una riga. */
 export function avvisoGara(g: Gara, adesso = Date.now()): { testo: string; tono: "attn" | "crit" } | null {
   const fasi = g.fasi || {}
-  for (let n = 1; n <= 7; n++) {
+  for (let n = 1; n <= FASI.length; n++) {
     if (statoFase(fasi, n) === "errore") return { testo: `errore in Fase ${n}`, tono: "crit" }
   }
-  for (let n = 1; n <= 7; n++) {
+  for (let n = 1; n <= FASI.length; n++) {
     if (statoFase(fasi, n) === "da_rivedere") {
       const da = corpoFase(fasi, n)?.conclusa_il
       const gg = da ? Math.floor((adesso - Date.parse(da)) / 86400000) : 0
@@ -37,7 +37,7 @@ export function avvisoGara(g: Gara, adesso = Date.now()): { testo: string; tono:
   return null
 }
 
-export const urlGara = (slug: string, n: number) => `${URL_LEGACY}/gara.html?slug=${encodeURIComponent(slug)}#/fase/${n}`
+export const urlGara = (slug: string, n: number) => `/gara/${encodeURIComponent(slug)}/fase/${n}`
 
 const TESTO_TONO = { attn: "text-status-attn", crit: "text-status-crit", neu: "" } as const
 
@@ -70,13 +70,13 @@ export function CardGara({ gara, onElimina, inEliminazione }: { gara: Gara; onEl
       <h3 className="text-[13.5px] font-semibold leading-[1.35]">
         {/* Link "steso" sull'intera card: lo pseudo-elemento copre la card, i
             controlli interni stanno sopra con z-index. Un solo tab stop. */}
-        <a
-          href={urlGara(gara.slug, n)}
+        <Link
+          to={urlGara(gara.slug, n)}
           aria-label={`${nome}, ${meta.etichetta}, fase ${n} ${f.titolo}`}
           className="line-clamp-2 outline-none after:absolute after:inset-0 after:rounded-lg focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-ring"
         >
           {nome}
-        </a>
+        </Link>
       </h3>
 
       <div className="relative z-[1] flex flex-wrap gap-1.5">

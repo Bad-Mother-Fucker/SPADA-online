@@ -1,4 +1,5 @@
 import { StarFourIcon, ArrowSquareOutIcon, MonitorIcon, CheckIcon } from "@phosphor-icons/react"
+import { Link } from "react-router"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useStatoBackend, type StatoBackend } from "@/hooks/useStatoBackend"
 import { useTema } from "@/hooks/useTema"
@@ -86,17 +87,30 @@ function MenuAvatar() {
 
 /** Barra applicativa persistente (DESIGN.md §5): marchio, sezione, stato
     del backend, tema, operatore. */
-export function AppBar({ sezione = "Gare" }: { sezione?: string }) {
+export interface Briciola { a?: string; etichetta: string; mono?: boolean }
+
+export function AppBar({ sezione = "Gare", briciole, badge, larga }: { sezione?: string; briciole?: Briciola[]; badge?: React.ReactNode; larga?: boolean }) {
   return (
     <header className="sticky top-0 z-20 border-b bg-card">
-      <div className="mx-auto flex h-12 max-w-[1200px] items-center gap-3.5 px-6 max-md:px-4">
-        <a href="/" className="flex shrink-0 items-center gap-1.5 rounded-sm font-semibold tracking-[0.01em]">
+      <div className={cn("mx-auto flex h-12 items-center gap-3.5 px-6 max-md:px-4", larga ? "max-w-[1280px]" : "max-w-[1200px]")}>
+        <Link to="/" className="flex shrink-0 items-center gap-1.5 rounded-sm font-semibold tracking-[0.01em]">
           <StarFourIcon size={14} weight="fill" aria-hidden="true" />
           SPADA
-        </a>
-        <span className="text-muted-foreground">{sezione}</span>
+        </Link>
+        {briciole ? (
+          <nav aria-label="Percorso" className="flex min-w-0 items-center gap-2 text-muted-foreground">
+            {briciole.map((b, i) => (
+              <span key={i} className="flex min-w-0 items-center gap-2">
+                {i > 0 && <span aria-hidden="true">/</span>}
+                {b.a ? <Link to={b.a} className="rounded-sm hover:text-foreground">{b.etichetta}</Link> : <span className={cn("truncate text-foreground", b.mono && "font-mono text-xs")}>{b.etichetta}</span>}
+              </span>
+            ))}
+          </nav>
+        ) : (
+          <span className="text-muted-foreground">{sezione}</span>
+        )}
         <span className="flex-1" />
-        <BadgeBackend />
+        {badge ?? <BadgeBackend />}
         <ControlloTema />
         <MenuAvatar />
       </div>

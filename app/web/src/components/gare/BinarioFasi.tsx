@@ -9,7 +9,7 @@ const CLASSE: Record<StatoFase, string> = {
   in_coda: "bg-border-strong",
 }
 
-/** Il binario delle sette fasi: la firma visiva di SPADA (DESIGN.md §1).
+/** Il binario delle fasi: la firma visiva di SPADA (DESIGN.md §1).
     Puramente decorativo per lo screen reader: la legenda accanto dice
     fase e stato a parole. */
 export function BinarioFasi({ stati, className }: { stati: StatoFase[]; className?: string }) {

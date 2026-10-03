@@ -53,7 +53,8 @@ async function richiesta<T = unknown>(percorso: string, opzioni: Opzioni = {}): 
     if (signal?.aborted) throw e
     const scaduta = e instanceof DOMException && e.name === "TimeoutError"
     throw new ApiError(scaduta ? "Il servizio non ha risposto in tempo" : "Servizio non raggiungibile", {
-      percorso, dettaglio: e instanceof Error ? e.message : String(e), timeout: scaduta,
+      percorso, timeout: scaduta,
+      dettaglio: scaduta ? `Nessuna risposta entro ${Math.round(timeoutMs / 1000)} secondi.` : "Connessione al servizio non riuscita: il backend potrebbe essere spento o la rete assente.",
     })
   }
   if (!resp.ok) {
@@ -127,11 +128,17 @@ export interface StatoAuth {
 }
 
 export interface Documento {
-  nome: string
+  nome_file: string
+  percorso: string
   categoria: string
+  caricato_il: string
   dimensione?: number
-  caricato_il?: string
-  [k: string]: unknown
+  /** Opzionale: se il backend non lo riporta, l'assenza del campo non è un'assenza del file. */
+  presente?: boolean
+  /** Dove sta rispetto al contesto della gara: "fase" (lo legge la Fase 2),
+      "da_integrare", "in_coda", "in_corso", "integrato", "errore". */
+  contesto?: string | null
+  errore_integrazione?: string | null
 }
 
 const s = (slug: string) => encodeURIComponent(slug)
@@ -180,7 +187,7 @@ export const Api = {
       xhr.upload.onprogress = (e) => { if (e.lengthComputable && suProgresso) suProgresso(e.loaded / e.total) }
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          try { resolve(JSON.parse(xhr.responseText)) } catch { resolve({ nome: file.name, categoria }) }
+          try { resolve(JSON.parse(xhr.responseText)) } catch { resolve({ nome_file: file.name, percorso: "", categoria, caricato_il: new Date().toISOString() }) }
         } else {
           let dettaglio = ""
           try { dettaglio = JSON.parse(xhr.responseText)?.detail || "" } catch { /* corpo non JSON */ }
@@ -217,10 +224,17 @@ export const Api = {
   sistemaPipeline: (o?: Opzioni) => richiesta<{ versione: string; git_ref: string }>("/sistema/pipeline", o),
   importaPrezzario: (regione: string, anno: number) =>
     richiesta("/sistema/prezzari/importa", { method: "POST", body: JSON.stringify({ regione, anno }), timeoutMs: 600_000 }),
-  risposteBrief: (slug: string, o?: Opzioni) => richiesta<unknown>(`/gare/${s(slug)}/brief/risposte`, o),
-  salvaRisposteBrief: (slug: string, risposte: string[]) =>
-    richiesta(`/gare/${s(slug)}/brief/risposte`, { method: "PUT", body: JSON.stringify({ risposte }) }),
-  indicazioni: (slug: string, o?: Opzioni) => richiesta<unknown>(`/gare/${s(slug)}/strategia/indicazioni`, o),
-  salvaIndicazioni: (slug: string, dati: unknown) =>
-    richiesta(`/gare/${s(slug)}/strategia/indicazioni`, { method: "PUT", body: JSON.stringify(dati) }),
+  // Fase 4, registro unico delle domande. Salvare non invia: le risposte
+  // entrano nel contesto solo eseguendo la Fase 4.
+  domande: (slug: string, o?: Opzioni) => richiesta<unknown>(`/gare/${s(slug)}/domande`, o),
+  salvaDomande: (slug: string, risposte: Record<string, string>, indicazioni: unknown) =>
+    richiesta<unknown>(`/gare/${s(slug)}/domande`, { method: "PUT", body: JSON.stringify({ risposte, indicazioni }) }),
+  aggiungiInformazione: (slug: string, body: { titolo: string; testo: string; criterio: string | null }) =>
+    richiesta<unknown>(`/gare/${s(slug)}/domande/informazioni`, { method: "POST", body: JSON.stringify(body) }),
+  eliminaInformazione: (slug: string, id: string) =>
+    richiesta<unknown>(`/gare/${s(slug)}/domande/${s(id)}`, { method: "DELETE" }),
+  // Integrazioni fuori fase (dopo la Fase 2): nessuna fase rieseguita.
+  integraDocumento: (slug: string, percorso: string) =>
+    richiesta(`/gare/${s(slug)}/documenti/integra`, { method: "POST", body: JSON.stringify({ percorso }) }),
+  riallineaBrief: (slug: string) => richiesta(`/gare/${s(slug)}/brief/riallinea`, { method: "POST" }),
 }

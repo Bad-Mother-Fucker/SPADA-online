@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fastapi import FastAPI
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -89,10 +89,20 @@ class _FrontendStatico(StaticFiles):
 
 @app.get("/gara.html", include_in_schema=False)
 def _pagina_gara_precedente(slug: str = ""):
-    """La pagina gara è ancora quella precedente: i segnalibri e i link
-    salvati a /gara.html continuano a funzionare (il browser conserva il
-    frammento #/fase/N nel redirect)."""
-    return RedirectResponse(f"/legacy/gara.html?slug={slug}" if slug else "/legacy/gara.html", status_code=307)
+    """I segnalibri salvati a /gara.html?slug=… aprono la nuova pagina
+    gara; il browser conserva il frammento #/fase/N, che la pagina
+    converte nel suo percorso."""
+    return RedirectResponse(f"/gara/{slug}" if slug else "/", status_code=307)
+
+
+@app.get("/gara/{resto:path}", include_in_schema=False)
+def _pagina_gara(resto: str):
+    """La nuova interfaccia gestisce da sé i percorsi /gara/…: a un
+    ricaricamento FastAPI serve la pagina e lascia il resto al router."""
+    indice = WEB_DIST_DIR / "index.html"
+    if indice.exists():
+        return FileResponse(str(indice), headers={"Cache-Control": "no-cache"})
+    return RedirectResponse("/", status_code=307)
 
 
 @app.get("/legacy", include_in_schema=False)

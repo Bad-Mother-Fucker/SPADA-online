@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react"
+import { useNavigate } from "react-router"
 import { InfoIcon, WarningIcon } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -49,6 +50,7 @@ export function PannelloNuovaGara({ aperto, onApertoChange, slugPresi }: { apert
   const prezzari = usePrezzari(aperto)
   const crea = useCreaGara()
   const refErrore = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
 
   // L'errore del server compare in fondo al modulo: va portato in vista.
   useEffect(() => {
@@ -129,7 +131,7 @@ export function PannelloNuovaGara({ aperto, onApertoChange, slugPresi }: { apert
           onApertoChange(false)
           // Si atterra sulla Fase 1: la gara appena creata non ha altro da
           // mostrare che la zona di caricamento.
-          location.assign(urlGara(slug, 1))
+          navigate(urlGara(slug, 1))
         },
         onError: (e) => {
           const err = comeApiError(e, "/gare")
