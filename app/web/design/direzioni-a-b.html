@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPADA, due direzioni</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---------- pagina di confronto (chrome neutro) ---------- */
+* { box-sizing: border-box; }
+html { background: #e9e9e7; color: #222; font: 14px/1.5 system-ui, sans-serif; }
+body { margin: 0; padding: 24px 20px 48px; }
+.intro { max-width: 1480px; margin: 0 auto 20px; display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
+.intro h1 { font-size: 20px; margin: 0; font-weight: 600; }
+.intro p { margin: 0; color: #555; }
+.grid > div, .frame, .card, .lr > *, .cards { min-width: 0; }
+.grid { max-width: 1480px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 20px 24px; align-items: start; }
+.rowhead { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 8px; }
+.rowhead h2 { font-size: 17px; margin: 0 0 4px; font-weight: 600; }
+.rowhead p { margin: 0; color: #555; font-size: 13px; max-width: 70ch; }
+.rowhead .tok { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #444; margin-top: 6px; }
+.cap { font-size: 12px; color: #666; margin: -10px 0 6px 4px; }
+
+/* ---------- token comuni alle due direzioni ---------- */
+.frame {
+  font-family: var(--font); background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line-strong); border-radius: 12px; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 12px 32px rgba(0,0,0,.07);
+  font-size: 13px; line-height: 1.5;
+}
+.frame * { box-sizing: border-box; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.faint { color: var(--fg-3); }
+.spacer { flex: 1; }
+
+/* ======================= DIREZIONE A: acciaio e bronzo ======================= */
+.dir-a { --font: 'Geist', system-ui, sans-serif; --mono: 'Geist Mono', ui-monospace, monospace; --r-ctl: 6px; --r-box: 10px; --r-badge: 999px; }
+.dir-a[data-theme="light"] {
+  --bg: oklch(0.962 0.002 80); --surface: oklch(0.993 0.001 80); --surface-2: oklch(0.945 0.003 80);
+  --fg: oklch(0.21 0.005 80); --fg-2: oklch(0.44 0.006 80); --fg-3: oklch(0.58 0.006 80);
+  --line: oklch(0.21 0.005 80 / 0.10); --line-strong: oklch(0.21 0.005 80 / 0.18);
+  --field: oklch(1 0 0 / 0.75);
+  --primary: oklch(0.52 0.10 58); --primary-fg: oklch(0.99 0.01 80); --primary-soft: oklch(0.52 0.10 58 / 0.12);
+  --attn: var(--primary); --attn-soft: var(--primary-soft);
+  --ok: oklch(0.50 0.12 150); --ok-soft: oklch(0.50 0.12 150 / 0.12);
+  --info: oklch(0.50 0.12 250); --info-soft: oklch(0.50 0.12 250 / 0.12);
+  --crit: oklch(0.50 0.17 27); --crit-soft: oklch(0.50 0.17 27 / 0.12);
+  --warn: oklch(0.55 0.14 92); --warn-soft: oklch(0.55 0.14 92 / 0.14);
+  --neu: oklch(0.55 0.006 80); --neu-soft: oklch(0.21 0.005 80 / 0.06);
+  --shadow-1: 0 1px 2px oklch(0.21 0.005 80 / 0.05);
+}
+.dir-a[data-theme="dark"] {
+  --bg: oklch(0.165 0.004 80); --surface: oklch(0.205 0.004 80); --surface-2: oklch(0.245 0.004 80);
+  --fg: oklch(0.93 0.004 80); --fg-2: oklch(0.72 0.005 80); --fg-3: oklch(0.56 0.005 80);
+  --line: oklch(1 0 0 / 0.09); --line-strong: oklch(1 0 0 / 0.15);
+  --field: oklch(1 0 0 / 0.05);
+  --primary: oklch(0.78 0.11 72); --primary-fg: oklch(0.18 0.03 70); --primary-soft: oklch(0.78 0.11 72 / 0.16);
+  --attn: var(--primary); --attn-soft: var(--primary-soft);
+  --ok: oklch(0.75 0.13 150); --ok-soft: oklch(0.75 0.13 150 / 0.16);
+  --info: oklch(0.75 0.11 250); --info-soft: oklch(0.75 0.11 250 / 0.16);
+  --crit: oklch(0.72 0.16 25); --crit-soft: oklch(0.72 0.16 25 / 0.16);
+  --warn: oklch(0.80 0.14 92); --warn-soft: oklch(0.80 0.14 92 / 0.16);
+  --neu: oklch(0.65 0.005 80); --neu-soft: oklch(1 0 0 / 0.07);
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.3);
+}
+
+/* ======================= DIREZIONE B: inchiostro ======================= */
+.dir-b { --font: 'IBM Plex Sans', system-ui, sans-serif; --mono: 'IBM Plex Mono', ui-monospace, monospace; --r-ctl: 4px; --r-box: 8px; --r-badge: 4px; }
+.dir-b[data-theme="light"] {
+  --bg: oklch(0.975 0 0); --surface: oklch(0.995 0 0); --surface-2: oklch(0.955 0 0);
+  --fg: oklch(0.17 0 0); --fg-2: oklch(0.42 0 0); --fg-3: oklch(0.56 0 0);
+  --line: oklch(0 0 0 / 0.11); --line-strong: oklch(0 0 0 / 0.22);
+  --field: oklch(1 0 0 / 0.8);
+  --primary: oklch(0.17 0 0); --primary-fg: oklch(0.985 0 0); --primary-soft: oklch(0 0 0 / 0.06);
+  --brand: oklch(0.52 0.10 58);
+  --attn: oklch(0.56 0.15 68); --attn-soft: oklch(0.56 0.15 68 / 0.13);
+  --ok: oklch(0.50 0.13 150); --ok-soft: oklch(0.50 0.13 150 / 0.12);
+  --info: oklch(0.50 0.13 250); --info-soft: oklch(0.50 0.13 250 / 0.12);
+  --crit: oklch(0.50 0.18 27); --crit-soft: oklch(0.50 0.18 27 / 0.12);
+  --warn: var(--attn); --warn-soft: var(--attn-soft);
+  --neu: oklch(0.55 0 0); --neu-soft: oklch(0 0 0 / 0.06);
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.05);
+}
+.dir-b[data-theme="dark"] {
+  --bg: oklch(0.15 0 0); --surface: oklch(0.19 0 0); --surface-2: oklch(0.235 0 0);
+  --fg: oklch(0.94 0 0); --fg-2: oklch(0.72 0 0); --fg-3: oklch(0.55 0 0);
+  --line: oklch(1 0 0 / 0.10); --line-strong: oklch(1 0 0 / 0.17);
+  --field: oklch(1 0 0 / 0.05);
+  --primary: oklch(0.94 0 0); --primary-fg: oklch(0.15 0 0); --primary-soft: oklch(1 0 0 / 0.08);
+  --brand: oklch(0.78 0.11 72);
+  --attn: oklch(0.80 0.15 72); --attn-soft: oklch(0.80 0.15 72 / 0.16);
+  --ok: oklch(0.76 0.14 150); --ok-soft: oklch(0.76 0.14 150 / 0.16);
+  --info: oklch(0.76 0.12 250); --info-soft: oklch(0.76 0.12 250 / 0.16);
+  --crit: oklch(0.73 0.17 25); --crit-soft: oklch(0.73 0.17 25 / 0.16);
+  --warn: var(--attn); --warn-soft: var(--attn-soft);
+  --neu: oklch(0.62 0 0); --neu-soft: oklch(1 0 0 / 0.07);
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 0.3);
+}
+
+/* ---------- componenti (stesso markup, token diversi) ---------- */
+.appbar { display: flex; align-items: center; gap: 14px; padding: 10px 18px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.brand { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; letter-spacing: .02em; }
+.brand svg { width: 14px; height: 14px; }
+.dir-a .brand svg { fill: var(--primary); }
+.dir-b .brand svg { fill: var(--brand); }
+.crumb { color: var(--fg-3); }
+.avatar { width: 26px; height: 26px; border-radius: var(--r-badge); background: var(--surface-2); border: 1px solid var(--line); display: grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--fg-2); }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--r-ctl); overflow: hidden; }
+.seg button { font: inherit; font-size: 12px; padding: 3px 10px; border: 0; background: transparent; color: var(--fg-2); }
+.seg button.on { background: var(--primary); color: var(--primary-fg); }
+
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: var(--r-badge); font-size: 11.5px; font-weight: 500; line-height: 1.5; white-space: nowrap; }
+.badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.badge-ok { color: var(--ok); background: var(--ok-soft); }
+.badge-info { color: var(--info); background: var(--info-soft); }
+.badge-crit { color: var(--crit); background: var(--crit-soft); }
+.badge-warn { color: var(--warn); background: var(--warn-soft); }
+.badge-attn { color: var(--attn); background: var(--attn-soft); }
+.badge-neu { color: var(--neu); background: var(--neu-soft); }
+.dot.pulse { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .dot.pulse { animation: none; } }
+
+.page { padding: 20px 18px 18px; }
+.pagehead { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.pagehead h1 { font-size: 21px; font-weight: 600; margin: 0 0 2px; letter-spacing: -0.01em; }
+.pagehead p { margin: 0; color: var(--fg-2); }
+.pagehead p b { color: var(--attn); font-weight: 600; }
+
+.btn { font: inherit; font-size: 13px; font-weight: 500; padding: 7px 13px; border-radius: var(--r-ctl); border: 1px solid var(--line-strong); background: var(--surface); color: var(--fg); display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; box-shadow: var(--shadow-1); }
+.btn-primary { background: var(--primary); color: var(--primary-fg); border-color: transparent; }
+.btn svg { width: 12px; height: 12px; }
+.btn-sm { font-size: 12px; padding: 4px 10px; }
+
+.filters { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--r-badge); border: 1px solid var(--line); background: var(--surface); color: var(--fg-2); font-size: 12px; }
+.pill b { font-weight: 500; color: var(--fg-3); font-family: var(--mono); font-size: 11px; }
+.pill.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.pill.on b { color: inherit; opacity: .7; }
+.pill i { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.search { margin-left: auto; font: inherit; font-size: 12.5px; padding: 5px 10px; border-radius: var(--r-ctl); border: 1px solid var(--line-strong); background: var(--field); color: var(--fg); width: 200px; }
+.search::placeholder { color: var(--fg-3); }
+
+/* --- A: griglia di card --- */
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-box); padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 9px; box-shadow: var(--shadow-1); position: relative; }
+.card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.slug { min-width: 0; font-size: 11px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card h3 { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.35; letter-spacing: -0.005em; }
+.tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { font-size: 11px; padding: 1px 7px; border-radius: var(--r-ctl); background: var(--neu-soft); color: var(--fg-2); }
+.rail { display: flex; gap: 3px; height: 4px; }
+.rail i { flex: 1; border-radius: 2px; background: var(--line-strong); }
+.rail i.done { background: var(--fg-2); }
+.rail i.attn { background: var(--attn); }
+.rail i.info { background: var(--info); animation: pulse 1.6s ease-in-out infinite; }
+.rail i.crit { background: var(--crit); }
+.rail i.ok { background: var(--ok); }
+.rail-legend { display: flex; justify-content: space-between; font-size: 12px; color: var(--fg-2); }
+.rail-legend b { color: var(--fg); font-weight: 600; }
+.foot { display: flex; gap: 12px; font-size: 12px; color: var(--fg-3); border-top: 1px solid var(--line); padding-top: 9px; }
+.foot .attn-text { color: var(--attn); font-weight: 600; margin-left: auto; }
+.foot .crit-text { color: var(--crit); font-weight: 600; margin-left: auto; }
+
+/* --- B: registro a righe --- */
+.ledger { border: 1px solid var(--line); border-radius: var(--r-box); background: var(--surface); overflow: hidden; }
+.lh, .lr { display: grid; grid-template-columns: 150px 1fr 118px 86px 90px; gap: 14px; align-items: center; padding: 10px 14px; }
+.lh { font-size: 11px; color: var(--fg-3); text-transform: none; border-bottom: 1px solid var(--line); background: var(--surface-2); font-weight: 500; }
+.lr { border-bottom: 1px solid var(--line); position: relative; }
+.lr:last-child { border-bottom: 0; }
+.lr .st { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; font-size: 12.5px; }
+.lr .st i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+.lr::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+.lr-attn::before { background: var(--attn); } .lr-attn .st { color: var(--attn); }
+.lr-info::before { background: var(--info); } .lr-info .st { color: var(--info); }
+.lr-crit::before { background: var(--crit); } .lr-crit .st { color: var(--crit); }
+.lr-ok .st { color: var(--ok); }
+.lr-attn, .lr-crit { background: color-mix(in oklch, var(--attn-soft) 35%, transparent); }
+.lr-crit { background: color-mix(in oklch, var(--crit-soft) 35%, transparent); }
+.lr .name strong { display: block; font-weight: 600; font-size: 13px; line-height: 1.35; }
+.lr .name span { display: block; font-size: 11px; color: var(--fg-3); margin-top: 2px; }
+.lr .fase { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--fg-2); }
+.lr .fase .rail { height: 3px; }
+.lr .num { font-size: 12.5px; color: var(--fg-2); }
+.lr .faint { font-size: 12px; }
+
+/* --- striscia: testata gara con stepper --- */
+.strip { border-top: 1px solid var(--line); background: var(--surface); padding: 16px 18px; }
+.strip-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.strip-head .kicker { font-size: 11px; color: var(--fg-3); }
+.strip-head strong { font-weight: 600; font-size: 14px; }
+.stepper { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.stepper li { padding-top: 8px; font-size: 11px; color: var(--fg-3); position: relative; line-height: 1.3; }
+.stepper li .n { font-family: var(--mono); font-size: 10.5px; display: block; margin-bottom: 2px; }
+.stepper li::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; border-radius: 2px; background: var(--line-strong); }
+.stepper li.done { color: var(--fg-2); } .stepper li.done::before { background: var(--fg-2); }
+.stepper li.cur { color: var(--fg); font-weight: 600; } .stepper li.cur::before { background: var(--attn); }
+.stepper li.cur .n { color: var(--attn); }
+/* variante B: cerchi e linea */
+.dir-b .stepper li::before { display: none; }
+.dir-b .stepper li { padding-top: 0; padding-left: 20px; }
+.dir-b .stepper li .n { display: none; }
+.dir-b .stepper li::after { content: ""; position: absolute; left: 0; top: 2px; width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--line-strong); background: var(--surface); }
+.dir-b .stepper li.done::after { background: var(--fg); border-color: var(--fg); }
+.dir-b .stepper li.cur::after { border-color: var(--attn); border-width: 3px; }
+.dir-b .stepper li.cur { color: var(--attn); }
+
+/* --- kit componenti --- */
+.kit { border-top: 1px solid var(--line); padding: 14px 18px 16px; display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--fg-2); }
+.field input { font: inherit; font-family: var(--mono); font-size: 12.5px; padding: 6px 10px; border-radius: var(--r-ctl); border: 1px solid var(--line-strong); background: var(--field); color: var(--fg); width: 250px; }
+.field small { color: var(--fg-3); font-size: 11px; }
+.kit .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.kit .focus { outline: 2px solid var(--attn); outline-offset: 2px; }
+.sk { height: 10px; border-radius: 3px; background: linear-gradient(90deg, var(--line-strong), var(--surface-2), var(--line-strong)); }
+.card.skeleton { gap: 10px; }
+.card.skeleton .sk-pill { width: 110px; height: 18px; border-radius: 999px; }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>SPADA, due direzioni a confronto</h1>
+  <p>Stessi contenuti e stessi componenti. Cambiano colore, tipografia, forma dell'elenco e firma visiva. Ogni direzione in tema chiaro e scuro.</p>
+</div>
+
+<div class="grid">
+
+  <div class="rowhead">
+    <div>
+      <h2>A. Acciaio e bronzo</h2>
+      <p>Il bronzo di SPADA resta ed è il colore delle azioni e di ciò che richiede l'operatore. Base grigio neutro, card con il binario delle sette fasi come firma.</p>
+      <div class="tok">Geist + Geist Mono · bronzo oklch(0.52 0.10 58) · raggi 6 / 10 px · stati verde, blu, rosso, ambra</div>
+    </div>
+    <div></div>
+  </div>
+
+  <!-- ===================== A · CHIARO ===================== -->
+  <div>
+  <div class="cap">Tema chiaro</div>
+  <div class="frame dir-a" data-theme="light">
+    <div class="appbar">
+      <span class="brand"><svg viewBox="0 0 16 16"><path d="M8 1.5 L10 6 L14.5 8 L10 10 L8 14.5 L6 10 L1.5 8 L6 6 Z"/></svg>SPADA</span>
+      <span class="crumb">Gare</span><span class="spacer"></span>
+      <span class="badge badge-ok"><i class="dot"></i>Backend connesso</span>
+      <span class="seg"><button class="on">Chiaro</button><button>Scuro</button></span>
+      <span class="avatar">GC</span>
+    </div>
+    <div class="page">
+      <div class="pagehead">
+        <div><h1>Gare in lavorazione</h1><p>4 gare, <b>1 richiede la tua revisione</b>, 1 in errore</p></div>
+        <button class="btn btn-primary"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 1.5v9M1.5 6h9"/></svg>Nuova gara</button>
+      </div>
+      <div class="filters">
+        <span class="pill on">Tutte <b>4</b></span>
+        <span class="pill"><i style="background:var(--attn)"></i>Da rivedere <b>1</b></span>
+        <span class="pill"><i style="background:var(--info)"></i>In esecuzione <b>1</b></span>
+        <span class="pill"><i style="background:var(--crit)"></i>Errore <b>1</b></span>
+        <span class="pill"><i style="background:var(--ok)"></i>Completate <b>1</b></span>
+        <input class="search" placeholder="Cerca per nome o slug">
+      </div>
+      <div class="cards">
+        <article class="card">
+          <div class="card-top"><span class="badge badge-attn"><i class="dot"></i>Richiede la tua decisione</span><span class="slug mono">manutenzione-elevatori-asl-na3</span></div>
+          <h3>Servizio di manutenzione degli impianti elevatori, ASL Napoli 3 Sud</h3>
+          <div class="tags"><span class="chip">Campania 2026</span><span class="chip mono">opus</span><span class="chip">effort high</span></div>
+          <div class="rail"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="attn"></i><i></i><i></i></div>
+          <div class="rail-legend"><span><b>Fase 5</b> Revisione proposte</span><span class="faint">18 min fa</span></div>
+          <div class="foot"><span>12 elaborati</span><span>scade in 14 g</span><span class="attn-text">checkpoint fermo da 2 g</span></div>
+        </article>
+        <article class="card">
+          <div class="card-top"><span class="badge badge-info"><i class="dot pulse"></i>In esecuzione</span><span class="slug mono">riqualificazione-scuola-via-roma</span></div>
+          <h3>Riqualificazione energetica della scuola primaria di via Roma, Comune di Potenza</h3>
+          <div class="tags"><span class="chip">Basilicata 2025</span><span class="chip mono">opus</span><span class="chip">effort high</span></div>
+          <div class="rail"><i class="done"></i><i class="info"></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="rail-legend"><span><b>Fase 2</b> Estrazione requisiti</span><span class="faint">3 min fa</span></div>
+          <div class="foot"><span>4 elaborati</span><span>scade in 40 g</span></div>
+        </article>
+        <article class="card">
+          <div class="card-top"><span class="badge badge-crit"><i class="dot"></i>Errore</span><span class="slug mono">adeguamento-sismico-palestra</span></div>
+          <h3>Lavori di adeguamento sismico della palestra comunale, Comune di Cosenza</h3>
+          <div class="tags"><span class="chip">Calabria 2025</span><span class="chip badge-warn" style="color:var(--warn);background:var(--warn-soft)">senza prezzario</span><span class="chip mono">sonnet</span></div>
+          <div class="rail"><i class="done"></i><i class="done"></i><i class="crit"></i><i></i><i></i><i></i><i></i></div>
+          <div class="rail-legend"><span><b>Fase 3</b> Analisi capitolato</span><span class="faint">ieri</span></div>
+          <div class="foot"><span>6 elaborati</span><span>scade in 9 g</span><span class="crit-text">errore in Fase 3</span></div>
+        </article>
+        <article class="card">
+          <div class="card-top"><span class="badge badge-ok"><i class="dot"></i>Completata</span><span class="slug mono">verde-pubblico-rc-2026</span></div>
+          <h3>Manutenzione del verde pubblico 2026, Comune di Reggio Calabria</h3>
+          <div class="tags"><span class="chip">Calabria 2025</span><span class="chip mono">opus</span><span class="chip">effort medium</span></div>
+          <div class="rail"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="ok"></i></div>
+          <div class="rail-legend"><span><b>Fase 7</b> Audit e consegna</span><span class="faint">5 g fa</span></div>
+          <div class="foot"><span>14 elaborati</span><span>scaduta da 2 g</span></div>
+        </article>
+      </div>
+    </div>
+    <div class="strip">
+      <div class="strip-head"><span class="kicker">Pagina gara</span><strong>Servizio di manutenzione degli impianti elevatori, ASL Napoli 3 Sud</strong><span class="spacer"></span><span class="badge badge-attn"><i class="dot"></i>Fase 5 di 7</span></div>
+      <ol class="stepper">
+        <li class="done"><span class="n">01</span>Acquisizione documenti</li>
+        <li class="done"><span class="n">02</span>Estrazione requisiti</li>
+        <li class="done"><span class="n">03</span>Analisi capitolato</li>
+        <li class="done"><span class="n">04</span>Ricerca soluzioni</li>
+        <li class="cur"><span class="n">05</span>Revisione proposte</li>
+        <li><span class="n">06</span>Deliverables</li>
+        <li><span class="n">07</span>Audit e consegna</li>
+      </ol>
+    </div>
+    <div class="kit">
+      <button class="btn btn-primary">Crea e carica documenti</button>
+      <button class="btn">Annulla</button>
+      <label class="field">Slug<input class="focus" value="manutenzione-elevatori-asl-na3"><small>Derivato dal nome. Modificabile finché la gara non è avviata.</small></label>
+      <span class="badges"><span class="badge badge-neu">In coda</span><span class="badge badge-warn"><i class="dot"></i>Senza prezzario</span></span>
+    </div>
+  </div>
+  </div>
+
+  <!-- ===================== A · SCURO ===================== -->
+  <div>
+  <div class="cap">Tema scuro</div>
+  <div class="frame dir-a" data-theme="dark">
+    <div class="appbar">
+      <span class="brand"><svg viewBox="0 0 16 16"><path d="M8 1.5 L10 6 L14.5 8 L10 10 L8 14.5 L6 10 L1.5 8 L6 6 Z"/></svg>SPADA</span>
+      <span class="crumb">Gare</span><span class="spacer"></span>
+      <span class="badge badge-ok"><i class="dot"></i>Backend connesso</span>
+      <span class="seg"><button>Chiaro</button><button class="on">Scuro</button></span>
+      <span class="avatar">GC</span>
+    </div>
+    <div class="page">
+      <div class="pagehead">
+        <div><h1>Gare in lavorazione</h1><p>4 gare, <b>1 richiede la tua revisione</b>, 1 in errore</p></div>
+        <button class="btn btn-primary"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 1.5v9M1.5 6h9"/></svg>Nuova gara</button>
+      </div>
+      <div class="filters">
+        <span class="pill on">Tutte <b>4</b></span>
+        <span class="pill"><i style="background:var(--attn)"></i>Da rivedere <b>1</b></span>
+        <span class="pill"><i style="background:var(--info)"></i>In esecuzione <b>1</b></span>
+        <span class="pill"><i style="background:var(--crit)"></i>Errore <b>1</b></span>
+        <span class="pill"><i style="background:var(--ok)"></i>Completate <b>1</b></span>
+        <input class="search" placeholder="Cerca per nome o slug">
+      </div>
+      <div class="cards">
+        <article class="card">
+          <div class="card-top"><span class="badge badge-attn"><i class="dot"></i>Richiede la tua decisione</span><span class="slug mono">manutenzione-elevatori-asl-na3</span></div>
+          <h3>Servizio di manutenzione degli impianti elevatori, ASL Napoli 3 Sud</h3>
+          <div class="tags"><span class="chip">Campania 2026</span><span class="chip mono">opus</span><span class="chip">effort high</span></div>
+          <div class="rail"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="attn"></i><i></i><i></i></div>
+          <div class="rail-legend"><span><b>Fase 5</b> Revisione proposte</span><span class="faint">18 min fa</span></div>
+          <div class="foot"><span>12 elaborati</span><span>scade in 14 g</span><span class="attn-text">checkpoint fermo da 2 g</span></div>
+        </article>
+        <article class="card">
+          <div class="card-top"><span class="badge badge-info"><i class="dot pulse"></i>In esecuzione</span><span class="slug mono">riqualificazione-scuola-via-roma</span></div>
+          <h3>Riqualificazione energetica della scuola primaria di via Roma, Comune di Potenza</h3>
+          <div class="tags"><span class="chip">Basilicata 2025</span><span class="chip mono">opus</span><span class="chip">effort high</span></div>
+          <div class="rail"><i class="done"></i><i class="info"></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="rail-legend"><span><b>Fase 2</b> Estrazione requisiti</span><span class="faint">3 min fa</span></div>
+          <div class="foot"><span>4 elaborati</span><span>scade in 40 g</span></div>
+        </article>
+        <article class="card skeleton" aria-hidden="true">
+          <div class="card-top"><span class="sk sk-pill"></span><span class="sk" style="width:120px"></span></div>
+          <div class="sk" style="width:88%"></div><div class="sk" style="width:56%"></div>
+          <div class="rail"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="sk" style="width:40%"></div>
+        </article>
+        <article class="card">
+          <div class="card-top"><span class="badge badge-ok"><i class="dot"></i>Completata</span><span class="slug mono">verde-pubblico-rc-2026</span></div>
+          <h3>Manutenzione del verde pubblico 2026, Comune di Reggio Calabria</h3>
+          <div class="tags"><span class="chip">Calabria 2025</span><span class="chip mono">opus</span><span class="chip">effort medium</span></div>
+          <div class="rail"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="ok"></i></div>
+          <div class="rail-legend"><span><b>Fase 7</b> Audit e consegna</span><span class="faint">5 g fa</span></div>
+          <div class="foot"><span>14 elaborati</span><span>scaduta da 2 g</span></div>
+        </article>
+      </div>
+    </div>
+    <div class="strip">
+      <div class="strip-head"><span class="kicker">Pagina gara</span><strong>Servizio di manutenzione degli impianti elevatori, ASL Napoli 3 Sud</strong><span class="spacer"></span><span class="badge badge-attn"><i class="dot"></i>Fase 5 di 7</span></div>
+      <ol class="stepper">
+        <li class="done"><span class="n">01</span>Acquisizione documenti</li>
+        <li class="done"><span class="n">02</span>Estrazione requisiti</li>
+        <li class="done"><span class="n">03</span>Analisi capitolato</li>
+        <li class="done"><span class="n">04</span>Ricerca soluzioni</li>
+        <li class="cur"><span class="n">05</span>Revisione proposte</li>
+        <li><span class="n">06</span>Deliverables</li>
+        <li><span class="n">07</span>Audit e consegna</li>
+      </ol>
+    </div>
+    <div class="kit">
+      <button class="btn btn-primary">Crea e carica documenti</button>
+      <button class="btn">Annulla</button>
+      <label class="field">Slug<input class="focus" value="manutenzione-elevatori-asl-na3"><small>Derivato dal nome. Modificabile finché la gara non è avviata.</small></label>
+      <span class="badges"><span class="badge badge-neu">In coda</span><span class="badge badge-warn"><i class="dot"></i>Senza prezzario</span></span>
+    </div>
+  </div>
+  </div>
+
+  <div class="rowhead">
+    <div>
+      <h2>B. Inchiostro</h2>
+      <p>Carta e inchiostro, bottoni primari in inchiostro, bronzo solo nella stella. Il colore è riservato allo stato: l'elenco è un registro a righe, ogni riga porta il suo stato sul bordo.</p>
+      <div class="tok">IBM Plex Sans + Plex Mono · nessun accento di marchio · raggi 4 / 8 px · stati verde, blu, rosso, ambra</div>
+    </div>
+    <div></div>
+  </div>
+
+  <!-- ===================== B · CHIARO ===================== -->
+  <div>
+  <div class="cap">Tema chiaro</div>
+  <div class="frame dir-b" data-theme="light">
+    <div class="appbar">
+      <span class="brand"><svg viewBox="0 0 16 16"><path d="M8 1.5 L10 6 L14.5 8 L10 10 L8 14.5 L6 10 L1.5 8 L6 6 Z"/></svg>SPADA</span>
+      <span class="crumb">Gare</span><span class="spacer"></span>
+      <span class="badge badge-ok"><i class="dot"></i>Backend connesso</span>
+      <span class="seg"><button class="on">Chiaro</button><button>Scuro</button></span>
+      <span class="avatar">GC</span>
+    </div>
+    <div class="page">
+      <div class="pagehead">
+        <div><h1>Gare in lavorazione</h1><p>4 gare, <b>1 richiede la tua revisione</b>, 1 in errore</p></div>
+        <button class="btn btn-primary"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 1.5v9M1.5 6h9"/></svg>Nuova gara</button>
+      </div>
+      <div class="filters">
+        <span class="pill on">Tutte <b>4</b></span>
+        <span class="pill"><i style="background:var(--attn)"></i>Da rivedere <b>1</b></span>
+        <span class="pill"><i style="background:var(--info)"></i>In esecuzione <b>1</b></span>
+        <span class="pill"><i style="background:var(--crit)"></i>Errore <b>1</b></span>
+        <span class="pill"><i style="background:var(--ok)"></i>Completate <b>1</b></span>
+        <input class="search" placeholder="Cerca per nome o slug">
+      </div>
+      <div class="ledger">
+        <div class="lh"><span>Stato</span><span>Gara</span><span>Fase</span><span>Scadenza</span><span>Aggiornata</span></div>
+        <div class="lr lr-attn">
+          <span class="st"><i></i>Da rivedere</span>
+          <span class="name"><strong>Servizio di manutenzione degli impianti elevatori, ASL Napoli 3 Sud</strong><span class="mono">manutenzione-elevatori-asl-na3 · Campania 2026 · opus</span></span>
+          <span class="fase"><span class="rail"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="attn"></i><i></i><i></i></span>5 di 7, revisione</span>
+          <span class="num mono">14 g</span><span class="faint">18 min fa</span>
+        </div>
+        <div class="lr lr-info">
+          <span class="st"><i class="pulse"></i>In esecuzione</span>
+          <span class="name"><strong>Riqualificazione energetica della scuola primaria di via Roma, Comune di Potenza</strong><span class="mono">riqualificazione-scuola-via-roma · Basilicata 2025 · opus</span></span>
+          <span class="fase"><span class="rail"><i class="done"></i><i class="info"></i><i></i><i></i><i></i><i></i><i></i></span>2 di 7, requisiti</span>
+          <span class="num mono">40 g</span><span class="faint">3 min fa</span>
+        </div>
+        <div class="lr lr-crit">
+          <span class="st"><i></i>Errore in Fase 3</span>
+          <span class="name"><strong>Lavori di adeguamento sismico della palestra comunale, Comune di Cosenza</strong><span class="mono">adeguamento-sismico-palestra · Calabria 2025 · sonnet · senza prezzario</span></span>
+          <span class="fase"><span class="rail"><i class="done"></i><i class="done"></i><i class="crit"></i><i></i><i></i><i></i><i></i></span>3 di 7, analisi</span>
+          <span class="num mono">9 g</span><span class="faint">ieri</span>
+        </div>
+        <div class="lr lr-ok">
+          <span class="st"><i></i>Completata</span>
+          <span class="name"><strong>Manutenzione del verde pubblico 2026, Comune di Reggio Calabria</strong><span class="mono">verde-pubblico-rc-2026 · Calabria 2025 · opus</span></span>
+          <span class="fase"><span class="rail"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="ok"></i></span>7 di 7, consegnata</span>
+          <span class="num mono">scaduta</span><span class="faint">5 g fa</span>
+        </div>
+      </div>
+    </div>
+    <div class="strip">
+      <div class="strip-head"><span class="kicker">Pagina gara</span><strong>Servizio di manutenzione degli impianti elevatori, ASL Napoli 3 Sud</strong><span class="spacer"></span><span class="badge badge-attn"><i class="dot"></i>Fase 5 di 7</span></div>
+      <ol class="stepper">
+        <li class="done">Acquisizione documenti</li>
+        <li class="done">Estrazione requisiti</li>
+        <li class="done">Analisi capitolato</li>
+        <li class="done">Ricerca soluzioni</li>
+        <li class="cur">Revisione proposte</li>
+        <li>Deliverables</li>
+        <li>Audit e consegna</li>
+      </ol>
+    </div>
+    <div class="kit">
+      <button class="btn btn-primary">Crea e carica documenti</button>
+      <button class="btn">Annulla</button>
+      <label class="field">Slug<input class="focus" value="manutenzione-elevatori-asl-na3"><small>Derivato dal nome. Modificabile finché la gara non è avviata.</small></label>
+      <span class="badges"><span class="badge badge-neu">In coda</span><span class="badge badge-warn"><i class="dot"></i>Senza prezzario</span></span>
+    </div>
+  </div>
+  </div>
+
+  <!-- ===================== B · SCURO ===================== -->
+  <div>
+  <div class="cap">Tema scuro</div>
+  <div class="frame dir-b" data-theme="dark">
+    <div class="appbar">
+      <span class="brand"><svg viewBox="0 0 16 16"><path d="M8 1.5 L10 6 L14.5 8 L10 10 L8 14.5 L6 10 L1.5 8 L6 6 Z"/></svg>SPADA</span>
+      <span class="crumb">Gare</span><span class="spacer"></span>
+      <span class="badge badge-ok"><i class="dot"></i>Backend connesso</span>
+      <span class="seg"><button>Chiaro</button><button class="on">Scuro</button></span>
+      <span class="avatar">GC</span>
+    </div>
+    <div class="page">
+      <div class="pagehead">
+        <div><h1>Gare in lavorazione</h1><p>4 gare, <b>1 richiede la tua revisione</b>, 1 in errore</p></div>
+        <button class="btn btn-primary"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 1.5v9M1.5 6h9"/></svg>Nuova gara</button>
+      </div>
+      <div class="filters">
+        <span class="pill on">Tutte <b>4</b></span>
+        <span class="pill"><i style="background:var(--attn)"></i>Da rivedere <b>1</b></span>
+        <span class="pill"><i style="background:var(--info)"></i>In esecuzione <b>1</b></span>
+        <span class="pill"><i style="background:var(--crit)"></i>Errore <b>1</b></span>
+        <span class="pill"><i style="background:var(--ok)"></i>Completate <b>1</b></span>
+        <input class="search" placeholder="Cerca per nome o slug">
+      </div>
+      <div class="ledger">
+        <div class="lh"><span>Stato</span><span>Gara</span><span>Fase</span><span>Scadenza</span><span>Aggiornata</span></div>
+        <div class="lr lr-attn">
+          <span class="st"><i></i>Da rivedere</span>
+          <span class="name"><strong>Servizio di manutenzione degli impianti elevatori, ASL Napoli 3 Sud</strong><span class="mono">manutenzione-elevatori-asl-na3 · Campania 2026 · opus</span></span>
+          <span class="fase"><span class="rail"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="attn"></i><i></i><i></i></span>5 di 7, revisione</span>
+          <span class="num mono">14 g</span><span class="faint">18 min fa</span>
+        </div>
+        <div class="lr lr-info">
+          <span class="st"><i class="pulse"></i>In esecuzione</span>
+          <span class="name"><strong>Riqualificazione energetica della scuola primaria di via Roma, Comune di Potenza</strong><span class="mono">riqualificazione-scuola-via-roma · Basilicata 2025 · opus</span></span>
+          <span class="fase"><span class="rail"><i class="done"></i><i class="info"></i><i></i><i></i><i></i><i></i><i></i></span>2 di 7, requisiti</span>
+          <span class="num mono">40 g</span><span class="faint">3 min fa</span>
+        </div>
+        <div class="lr" aria-hidden="true">
+          <span class="sk" style="width:90px;height:12px"></span>
+          <span><span class="sk" style="width:80%"></span><span class="sk" style="width:45%;margin-top:6px"></span></span>
+          <span class="rail"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="sk" style="width:36px"></span><span class="sk" style="width:60px"></span>
+        </div>
+        <div class="lr lr-ok">
+          <span class="st"><i></i>Completata</span>
+          <span class="name"><strong>Manutenzione del verde pubblico 2026, Comune di Reggio Calabria</strong><span class="mono">verde-pubblico-rc-2026 · Calabria 2025 · opus</span></span>
+          <span class="fase"><span class="rail"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="ok"></i></span>7 di 7, consegnata</span>
+          <span class="num mono">scaduta</span><span class="faint">5 g fa</span>
+        </div>
+      </div>
+    </div>
+    <div class="strip">
+      <div class="strip-head"><span class="kicker">Pagina gara</span><strong>Servizio di manutenzione degli impianti elevatori, ASL Napoli 3 Sud</strong><span class="spacer"></span><span class="badge badge-attn"><i class="dot"></i>Fase 5 di 7</span></div>
+      <ol class="stepper">
+        <li class="done">Acquisizione documenti</li>
+        <li class="done">Estrazione requisiti</li>
+        <li class="done">Analisi capitolato</li>
+        <li class="done">Ricerca soluzioni</li>
+        <li class="cur">Revisione proposte</li>
+        <li>Deliverables</li>
+        <li>Audit e consegna</li>
+      </ol>
+    </div>
+    <div class="kit">
+      <button class="btn btn-primary">Crea e carica documenti</button>
+      <button class="btn">Annulla</button>
+      <label class="field">Slug<input class="focus" value="manutenzione-elevatori-asl-na3"><small>Derivato dal nome. Modificabile finché la gara non è avviata.</small></label>
+      <span class="badges"><span class="badge badge-neu">In coda</span><span class="badge badge-warn"><i class="dot"></i>Senza prezzario</span></span>
+    </div>
+  </div>
+  </div>
+
+</div>
+</body>
+</html>

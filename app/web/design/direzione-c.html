@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SPADA, piano di lavoro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; min-width: 0; }
+html { background: #e6e7e9; color: #222; font: 14px/1.5 'Geist', system-ui, sans-serif; }
+body { margin: 0; padding: 24px 20px 48px; }
+.intro { max-width: 1480px; margin: 0 auto 18px; }
+.intro h1 { font-size: 20px; margin: 0 0 4px; font-weight: 600; letter-spacing: -0.01em; }
+.intro p { margin: 0; color: #555; max-width: 110ch; }
+.intro .tok { font-family: 'Geist Mono', monospace; font-size: 12px; color: #444; margin-top: 6px; }
+.grid { max-width: 1480px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 22px 24px; align-items: start; }
+.cap { font-size: 12px; color: #666; margin: 0 0 6px 4px; }
+
+/* ---------- token della direzione C ---------- */
+.c { font-family: 'Geist', system-ui, sans-serif; --mono: 'Geist Mono', ui-monospace, monospace; --r-ctl: 6px; --r-box: 8px; --r-chip: 4px;
+     background: var(--bg); color: var(--fg); border: 1px solid var(--line-strong); border-radius: 10px; overflow: hidden; font-size: 13px; line-height: 1.5; position: relative;
+     box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 12px 32px rgba(0,0,0,.07); }
+.c[data-theme="light"] {
+  --bg: #f4f5f7; --surface: #fcfcfd; --surface-2: #eceef1; --fg: #18181b; --fg-2: #52525b; --fg-3: #85858f;
+  --line: rgba(24,24,27,.10); --line-strong: rgba(24,24,27,.17); --field: #ffffff;
+  --accent: oklch(0.49 0.15 262); --accent-fg: #ffffff; --accent-soft: oklch(0.49 0.15 262 / 0.10);
+  --attn: oklch(0.52 0.13 68); --attn-soft: oklch(0.62 0.14 70 / 0.13);
+  --ok: oklch(0.50 0.13 150); --ok-soft: oklch(0.50 0.13 150 / 0.11);
+  --crit: oklch(0.51 0.18 25); --crit-soft: oklch(0.51 0.18 25 / 0.11);
+  --neu: #71717a; --neu-soft: rgba(24,24,27,.06);
+  --scrim: rgba(24,24,27,.38); --shadow-pop: 0 8px 24px rgba(24,24,27,.10), 0 1px 2px rgba(24,24,27,.06);
+}
+.c[data-theme="dark"] {
+  --bg: #121214; --surface: #1a1a1e; --surface-2: #232329; --fg: #f1f1f3; --fg-2: #a1a1aa; --fg-3: #6e6e78;
+  --line: rgba(255,255,255,.09); --line-strong: rgba(255,255,255,.16); --field: rgba(255,255,255,.04);
+  --accent: oklch(0.74 0.12 262); --accent-fg: #0e1733; --accent-soft: oklch(0.74 0.12 262 / 0.16);
+  --attn: oklch(0.80 0.14 80); --attn-soft: oklch(0.80 0.14 80 / 0.15);
+  --ok: oklch(0.76 0.14 150); --ok-soft: oklch(0.76 0.14 150 / 0.15);
+  --crit: oklch(0.72 0.17 25); --crit-soft: oklch(0.72 0.17 25 / 0.15);
+  --neu: #8b8b95; --neu-soft: rgba(255,255,255,.07);
+  --scrim: rgba(0,0,0,.55); --shadow-pop: 0 12px 32px rgba(0,0,0,.45), 0 1px 2px rgba(0,0,0,.4);
+}
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.faint { color: var(--fg-3); }
+.spacer { flex: 1; }
+
+/* appbar */
+.appbar { display: flex; align-items: center; gap: 14px; padding: 9px 18px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.brand { flex: none; display: inline-flex; align-items: center; gap: 7px; font-weight: 600; letter-spacing: .01em; }
+.brand svg { width: 13px; height: 13px; flex: none; fill: var(--fg); }
+.crumbs { display: flex; gap: 8px; color: var(--fg-3); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.crumbs b { color: var(--fg); font-weight: 500; }
+.live { flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-2); }
+.live i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--r-ctl); overflow: hidden; }
+.seg button { font: inherit; font-size: 12px; padding: 3px 10px; border: 0; background: transparent; color: var(--fg-2); }
+.seg button.on { background: var(--fg); color: var(--bg); }
+.avatar { width: 26px; height: 26px; border-radius: var(--r-ctl); background: var(--surface-2); border: 1px solid var(--line); display: grid; place-items: center; font-size: 11px; font-weight: 600; color: var(--fg-2); }
+
+/* pagina */
+.page { padding: 20px 18px 18px; }
+.pagehead { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.pagehead h1 { font-size: 22px; font-weight: 600; margin: 0 0 2px; letter-spacing: -0.015em; }
+.pagehead p { margin: 0; color: var(--fg-2); }
+.btn { font: inherit; font-size: 13px; font-weight: 500; padding: 7px 12px; border-radius: var(--r-ctl); border: 1px solid var(--line-strong); background: var(--surface); color: var(--fg); display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.btn-primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.btn-sm { font-size: 12px; padding: 4px 9px; }
+.btn[disabled] { opacity: .5; }
+.btn svg { width: 12px; height: 12px; }
+
+/* tab di filtro + ricerca */
+.toolbar { display: flex; align-items: flex-end; gap: 16px; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+.tabs { display: flex; gap: 2px; }
+.tab { padding: 6px 10px 8px; font-size: 12.5px; color: var(--fg-2); border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; gap: 6px; align-items: center; }
+.tab b { font-weight: 500; font-family: var(--mono); font-size: 11px; color: var(--fg-3); }
+.tab.on { color: var(--fg); border-bottom-color: var(--fg); font-weight: 500; }
+.tab.on b { color: var(--fg-2); }
+.search { margin-left: auto; margin-bottom: 8px; font: inherit; font-size: 12.5px; padding: 5px 10px; border-radius: var(--r-ctl); border: 1px solid var(--line-strong); background: var(--field); color: var(--fg); width: 210px; }
+.search::placeholder { color: var(--fg-3); }
+
+/* coda di lavoro: gruppi e righe */
+.group { margin-bottom: 18px; }
+.group-h { display: flex; align-items: baseline; gap: 8px; margin: 0 0 6px 2px; }
+.group-h h2 { font-size: 13px; font-weight: 600; margin: 0; }
+.group-h span { font-size: 12px; color: var(--fg-3); }
+.rows { border: 1px solid var(--line); border-radius: var(--r-box); background: var(--surface); overflow: hidden; }
+.row { display: grid; grid-template-columns: 108px 1fr auto; grid-template-areas: "st title act" "st meta meta"; gap: 4px 14px; padding: 11px 14px 11px 16px; border-bottom: 1px solid var(--line); position: relative; align-items: start; }
+.row:last-child { border-bottom: 0; }
+.row::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: transparent; }
+.row .st { grid-area: st; font-size: 12.5px; font-weight: 500; padding-top: 1px; display: inline-flex; gap: 7px; align-items: center; }
+.row .st i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.row .title { grid-area: title; font-weight: 600; font-size: 13.5px; line-height: 1.35; margin: 0; }
+.row .act { grid-area: act; }
+.row .meta { grid-area: meta; display: flex; align-items: center; gap: 12px; font-size: 11.5px; color: var(--fg-3); flex-wrap: wrap; }
+.row .meta .ph { display: inline-flex; align-items: center; gap: 8px; color: var(--fg-2); margin-left: auto; }
+.row .meta .ph b { font-weight: 500; color: var(--fg); }
+.row .meta .due { font-family: var(--mono); color: var(--fg-2); }
+.row .meta .due.soon { color: var(--attn); font-weight: 500; }
+.row .meta .due.late { color: var(--crit); font-weight: 500; }
+.row-attn::before { background: var(--attn); } .row-attn .st { color: var(--attn); }
+.row-crit::before { background: var(--crit); } .row-crit .st { color: var(--crit); }
+.row-run::before { background: var(--accent); } .row-run .st { color: var(--accent); }
+.row-ok .st { color: var(--ok); }
+.row-queue .st { color: var(--neu); }
+.rail { display: inline-flex; gap: 2px; height: 4px; width: 70px; }
+.rail i { flex: 1; border-radius: 1px; background: var(--line-strong); }
+.rail i.done { background: var(--fg-2); }
+.rail i.attn { background: var(--attn); }
+.rail i.run { background: var(--accent); animation: pulse 1.6s ease-in-out infinite; }
+.rail i.crit { background: var(--crit); }
+.rail i.ok { background: var(--ok); }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .rail i.run, .st i.pulse { animation: none; } }
+.st i.pulse { animation: pulse 1.6s ease-in-out infinite; }
+.sk { height: 10px; border-radius: 3px; background: linear-gradient(90deg, var(--line-strong), var(--surface-2), var(--line-strong)); display: inline-block; }
+.empty { padding: 22px 16px; color: var(--fg-3); font-size: 12.5px; display: flex; gap: 12px; align-items: center; }
+.empty b { color: var(--fg-2); font-weight: 500; }
+
+/* pannello laterale "Nuova gara" */
+.scrim { position: absolute; inset: 0; background: var(--scrim); }
+.sheet { position: absolute; top: 0; right: 0; bottom: 0; width: 400px; background: var(--surface); border-left: 1px solid var(--line-strong); box-shadow: var(--shadow-pop); display: flex; flex-direction: column; }
+.sheet header { padding: 18px 20px 12px; border-bottom: 1px solid var(--line); }
+.sheet header h2 { margin: 0 0 3px; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.sheet header p { margin: 0; color: var(--fg-2); font-size: 12.5px; }
+.sheet .body { padding: 14px 20px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
+.sheet footer { padding: 12px 20px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 8px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.field > span:first-child { color: var(--fg); font-weight: 500; display: flex; justify-content: space-between; }
+.field > span:first-child small { color: var(--fg-3); font-weight: 400; font-family: var(--mono); font-size: 11px; }
+.field input, .field select { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: var(--r-ctl); border: 1px solid var(--line-strong); background: var(--field); color: var(--fg); width: 100%; }
+.field .hint { color: var(--fg-3); font-size: 11.5px; }
+.field .hint.warn { color: var(--attn); }
+.ig { display: flex; align-items: stretch; border: 1px solid var(--line-strong); border-radius: var(--r-ctl); background: var(--field); overflow: hidden; }
+.ig span { padding: 6px 0 6px 10px; color: var(--fg-3); font-family: var(--mono); font-size: 12.5px; }
+.ig input { border: 0; background: transparent; padding-left: 2px; font-family: var(--mono); font-size: 12.5px; }
+.two { display: grid; grid-template-columns: 1fr 110px; gap: 10px; }
+.choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.choice label { border: 1px solid var(--line-strong); border-radius: var(--r-ctl); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--fg-2); }
+.choice label b { color: var(--fg); font-weight: 500; font-family: var(--mono); font-size: 12.5px; display: flex; align-items: center; gap: 7px; }
+.choice label b i { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line-strong); }
+.choice label.on { border-color: var(--fg); }
+.choice label.on b i { border: 4px solid var(--accent); }
+.focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* pagina gara */
+.ghead { padding: 18px 18px 0; }
+.ghead .top { display: flex; align-items: flex-start; gap: 14px; }
+.ghead h1 { font-size: 18px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.012em; line-height: 1.3; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { font-size: 11.5px; padding: 1px 7px; border-radius: var(--r-chip); background: var(--neu-soft); color: var(--fg-2); }
+.chip.attn { background: var(--attn-soft); color: var(--attn); font-weight: 500; }
+.stepper { list-style: none; margin: 16px 0 0; padding: 0 0 14px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; border-bottom: 1px solid var(--line); }
+.stepper li { font-size: 11.5px; color: var(--fg-3); line-height: 1.3; display: flex; flex-direction: column; gap: 6px; }
+.stepper li .n { font-family: var(--mono); font-size: 11px; display: flex; align-items: center; gap: 6px; }
+.stepper li .n::before { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--line-strong); }
+.stepper li.done { color: var(--fg-2); } .stepper li.done .n::before { background: var(--fg-2); border-color: var(--fg-2); }
+.stepper li.cur { color: var(--fg); font-weight: 500; } .stepper li.cur .n { color: var(--attn); } .stepper li.cur .n::before { border: 3px solid var(--attn); }
+.view { padding: 16px 18px 18px; }
+.viewhead { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.viewhead h2 { margin: 0 0 2px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.viewhead p { margin: 0; color: var(--fg-2); font-size: 12.5px; max-width: 60ch; }
+.prop { border: 1px solid var(--line); border-radius: var(--r-box); background: var(--surface); padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 10px 16px; margin-bottom: 8px; }
+.prop .id { font-family: var(--mono); font-size: 11.5px; color: var(--fg-3); }
+.prop h3 { margin: 2px 0 4px; font-size: 13.5px; font-weight: 600; }
+.prop p { margin: 0; color: var(--fg-2); font-size: 12.5px; max-width: 62ch; }
+.prop .dec { display: inline-flex; gap: 6px; align-self: start; }
+.prop .dec .btn.on-ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.prop .link { color: var(--accent); font-size: 12px; font-weight: 500; }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>SPADA, direzione C: piano di lavoro</h1>
+  <p>Ripensata da zero col protocollo di taste-skill v2. L'elenco gare è una coda di lavoro raggruppata per ciò che l'operatore deve fare, non una galleria di card. Un solo accento, il cobalto, per le azioni e per ciò che il sistema sta facendo; l'ambra dice che tocca a te. Nessun vetro, nessuna sfumatura, bordi sottili.</p>
+  <div class="tok">Geist + Geist Mono, base zinc neutra, accento oklch(0.49 0.15 262), raggi 4 / 6 / 8 px, dial 5 / 4 / 5</div>
+</div>
+
+<div class="grid">
+
+  <!-- ===================== 1, ELENCO, CHIARO ===================== -->
+  <div>
+  <div class="cap">Elenco gare, tema chiaro</div>
+  <div class="c" data-theme="light">
+    <div class="appbar">
+      <span class="brand"><svg viewBox="0 0 16 16"><path d="M8 1.5 L10 6 L14.5 8 L10 10 L8 14.5 L6 10 L1.5 8 L6 6 Z"/></svg>SPADA</span>
+      <span class="crumbs"><b>Gare</b></span><span class="spacer"></span>
+      <span class="live"><i></i>Backend connesso</span>
+      <span class="seg"><button class="on">Chiaro</button><button>Scuro</button></span>
+      <span class="avatar">GC</span>
+    </div>
+    <div class="page">
+      <div class="pagehead">
+        <div><h1>Gare in lavorazione</h1><p>4 gare. Due aspettano te, una sta girando, una è consegnata.</p></div>
+        <button class="btn btn-primary"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 1.5v9M1.5 6h9"/></svg>Nuova gara</button>
+      </div>
+      <div class="toolbar">
+        <div class="tabs"><span class="tab on">Tutte <b>4</b></span><span class="tab">Da rivedere <b>1</b></span><span class="tab">In esecuzione <b>1</b></span><span class="tab">Errore <b>1</b></span><span class="tab">Completate <b>1</b></span></div>
+        <input class="search" placeholder="Cerca per nome o slug">
+      </div>
+
+      <section class="group">
+        <div class="group-h"><h2>Da fare adesso</h2><span>2</span></div>
+        <div class="rows">
+          <a class="row row-attn">
+            <span class="st">Da rivedere</span>
+            <h3 class="title">Servizio di manutenzione degli impianti elevatori, ASL Napoli 3 Sud</h3>
+            <span class="act"><button class="btn btn-sm">Rivedi le proposte</button></span>
+            <span class="meta"><span class="mono">manutenzione-elevatori-asl-na3</span><span>Campania 2026</span><span class="mono">opus</span>
+              <span class="ph"><span class="rail"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="attn"></i><i></i><i></i></span><b>Fase 5</b>Revisione proposte</span>
+              <span class="due">14 g</span><span>18 min fa</span></span>
+          </a>
+          <a class="row row-crit">
+            <span class="st">Errore</span>
+            <h3 class="title">Lavori di adeguamento sismico della palestra comunale, Comune di Cosenza</h3>
+            <span class="act"><button class="btn btn-sm">Vedi l'errore</button></span>
+            <span class="meta"><span class="mono">adeguamento-sismico-palestra</span><span>Calabria 2025, senza prezzario</span><span class="mono">sonnet</span>
+              <span class="ph"><span class="rail"><i class="done"></i><i class="done"></i><i class="crit"></i><i></i><i></i><i></i><i></i></span><b>Fase 3</b>Analisi capitolato</span>
+              <span class="due soon">6 g</span><span>ieri</span></span>
+          </a>
+        </div>
+      </section>
+
+      <section class="group">
+        <div class="group-h"><h2>In lavorazione</h2><span>1</span></div>
+        <div class="rows">
+          <a class="row row-run">
+            <span class="st"><i class="pulse"></i>In esecuzione</span>
+            <h3 class="title">Riqualificazione energetica della scuola primaria di via Roma, Comune di Potenza</h3>
+            <span class="act"><button class="btn btn-sm">Segui</button></span>
+            <span class="meta"><span class="mono">riqualificazione-scuola-via-roma</span><span>Basilicata 2025</span><span class="mono">opus</span>
+              <span class="ph"><span class="rail"><i class="done"></i><i class="run"></i><i></i><i></i><i></i><i></i><i></i></span><b>Fase 2</b>Estrazione requisiti, agente in corso</span>
+              <span class="due">40 g</span><span>3 min fa</span></span>
+          </a>
+        </div>
+      </section>
+
+      <section class="group">
+        <div class="group-h"><h2>Concluse</h2><span>1</span></div>
+        <div class="rows">
+          <a class="row row-ok">
+            <span class="st">Completata</span>
+            <h3 class="title">Manutenzione del verde pubblico 2026, Comune di Reggio Calabria</h3>
+            <span class="act"><button class="btn btn-sm">Apri il plico</button></span>
+            <span class="meta"><span class="mono">verde-pubblico-rc-2026</span><span>Calabria 2025</span><span class="mono">opus</span>
+              <span class="ph"><span class="rail"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="ok"></i></span><b>Fase 7</b>Audit e consegna</span>
+              <span class="due late">scaduta</span><span>5 g fa</span></span>
+          </a>
+        </div>
+      </section>
+    </div>
+  </div>
+  </div>
+
+  <!-- ===================== 2, ELENCO, SCURO (con skeleton e vuoto) ===================== -->
+  <div>
+  <div class="cap">Elenco gare, tema scuro, con una riga in caricamento e un gruppo vuoto</div>
+  <div class="c" data-theme="dark">
+    <div class="appbar">
+      <span class="brand"><svg viewBox="0 0 16 16"><path d="M8 1.5 L10 6 L14.5 8 L10 10 L8 14.5 L6 10 L1.5 8 L6 6 Z"/></svg>SPADA</span>
+      <span class="crumbs"><b>Gare</b></span><span class="spacer"></span>
+      <span class="live"><i></i>Backend connesso</span>
+      <span class="seg"><button>Chiaro</button><button class="on">Scuro</button></span>
+      <span class="avatar">GC</span>
+    </div>
+    <div class="page">
+      <div class="pagehead">
+        <div><h1>Gare in lavorazione</h1><p>3 gare. Una aspetta te, due stanno girando.</p></div>
+        <button class="btn btn-primary"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 1.5v9M1.5 6h9"/></svg>Nuova gara</button>
+      </div>
+      <div class="toolbar">
+        <div class="tabs"><span class="tab on">Tutte <b>3</b></span><span class="tab">Da rivedere <b>1</b></span><span class="tab">In esecuzione <b>2</b></span><span class="tab">Errore <b>0</b></span><span class="tab">Completate <b>0</b></span></div>
+        <input class="search" placeholder="Cerca per nome o slug">
+      </div>
+
+      <section class="group">
+        <div class="group-h"><h2>Da fare adesso</h2><span>1</span></div>
+        <div class="rows">
+          <a class="row row-attn">
+            <span class="st">Da rivedere</span>
+            <h3 class="title">Servizio di manutenzione degli impianti elevatori, ASL Napoli 3 Sud</h3>
+            <span class="act"><button class="btn btn-sm">Rivedi le proposte</button></span>
+            <span class="meta"><span class="mono">manutenzione-elevatori-asl-na3</span><span>Campania 2026</span><span class="mono">opus</span>
+              <span class="ph"><span class="rail"><i class="done"></i><i class="done"></i><i class="done"></i><i class="done"></i><i class="attn"></i><i></i><i></i></span><b>Fase 5</b>Revisione proposte</span>
+              <span class="due">14 g</span><span>18 min fa</span></span>
+          </a>
+        </div>
+      </section>
+
+      <section class="group">
+        <div class="group-h"><h2>In lavorazione</h2><span>2</span></div>
+        <div class="rows">
+          <a class="row row-run">
+            <span class="st"><i class="pulse"></i>In esecuzione</span>
+            <h3 class="title">Riqualificazione energetica della scuola primaria di via Roma, Comune di Potenza</h3>
+            <span class="act"><button class="btn btn-sm">Segui</button></span>
+            <span class="meta"><span class="mono">riqualificazione-scuola-via-roma</span><span>Basilicata 2025</span><span class="mono">opus</span>
+              <span class="ph"><span class="rail"><i class="done"></i><i class="run"></i><i></i><i></i><i></i><i></i><i></i></span><b>Fase 2</b>Estrazione requisiti, agente in corso</span>
+              <span class="due">40 g</span><span>3 min fa</span></span>
+          </a>
+          <a class="row row-queue" aria-busy="true">
+            <span class="st">In creazione</span>
+            <h3 class="title">Fornitura e posa di arredi scolastici, Istituto comprensivo di Matera</h3>
+            <span class="act"><span class="sk" style="width:62px;height:24px"></span></span>
+            <span class="meta"><span class="mono">arredi-scolastici-matera</span><span class="sk" style="width:90px"></span><span class="ph"><span class="rail"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="sk" style="width:120px"></span></span><span class="sk" style="width:30px"></span><span class="sk" style="width:48px"></span></span>
+          </a>
+        </div>
+      </section>
+
+      <section class="group">
+        <div class="group-h"><h2>Concluse</h2><span>0</span></div>
+        <div class="rows"><div class="empty"><b>Nessuna gara consegnata.</b> Una gara arriva qui dopo l'audit della Fase 7.</div></div>
+      </section>
+    </div>
+  </div>
+  </div>
+
+  <!-- ===================== 3, NUOVA GARA, PANNELLO LATERALE ===================== -->
+  <div>
+  <div class="cap">Nuova gara: pannello laterale sull'elenco, tema chiaro</div>
+  <div class="c" data-theme="light" style="min-height:740px">
+    <div class="appbar">
+      <span class="brand"><svg viewBox="0 0 16 16"><path d="M8 1.5 L10 6 L14.5 8 L10 10 L8 14.5 L6 10 L1.5 8 L6 6 Z"/></svg>SPADA</span>
+      <span class="crumbs"><b>Gare</b></span><span class="spacer"></span>
+      <span class="live"><i></i>Backend connesso</span>
+      <span class="seg"><button class="on">Chiaro</button><button>Scuro</button></span>
+      <span class="avatar">GC</span>
+    </div>
+    <div class="page">
+      <div class="pagehead">
+        <div><h1>Gare in lavorazione</h1><p>4 gare. Due aspettano te, una sta girando, una è consegnata.</p></div>
+        <button class="btn btn-primary">Nuova gara</button>
+      </div>
+      <div class="toolbar">
+        <div class="tabs"><span class="tab on">Tutte <b>4</b></span><span class="tab">Da rivedere <b>1</b></span><span class="tab">In esecuzione <b>1</b></span><span class="tab">Errore <b>1</b></span><span class="tab">Completate <b>1</b></span></div>
+      </div>
+      <section class="group">
+        <div class="group-h"><h2>Da fare adesso</h2><span>2</span></div>
+        <div class="rows">
+          <a class="row row-attn"><span class="st">Da rivedere</span><h3 class="title">Servizio di manutenzione degli impianti elevatori, ASL Napoli 3 Sud</h3><span class="meta"><span class="mono">manutenzione-elevatori-asl-na3</span><span>Campania 2026</span></span></a>
+          <a class="row row-crit"><span class="st">Errore</span><h3 class="title">Lavori di adeguamento sismico della palestra comunale, Comune di Cosenza</h3><span class="meta"><span class="mono">adeguamento-sismico-palestra</span><span>Calabria 2025</span></span></a>
+        </div>
+      </section>
+      <section class="group">
+        <div class="group-h"><h2>In lavorazione</h2><span>1</span></div>
+        <div class="rows">
+          <a class="row row-run"><span class="st">In esecuzione</span><h3 class="title">Riqualificazione energetica della scuola primaria di via Roma</h3><span class="meta"><span class="mono">riqualificazione-scuola-via-roma</span></span></a>
+        </div>
+      </section>
+    </div>
+    <div class="scrim"></div>
+    <aside class="sheet" role="dialog" aria-modal="true">
+      <header><h2>Nuova gara</h2><p>La pipeline parte dopo il caricamento dei documenti. Qui definisci identificativi e parametri del modello.</p></header>
+      <div class="body">
+        <label class="field"><span>Nome esteso della gara <small>52 / 180</small></span><input class="focus" value="Servizio di pulizia degli uffici giudiziari"><span class="hint">Come compare nell'oggetto del disciplinare. Viene riportato negli elaborati.</span></label>
+        <label class="field"><span>Slug</span><span class="ig"><span>/gare/</span><input value="servizio-pulizia-uffici-giudiziari"></span><span class="hint">Derivato dal nome. Modificabile finché la gara non è avviata.</span></label>
+        <div class="two">
+          <label class="field"><span>Regione del prezzario</span><select><option>Campania</option></select></label>
+          <label class="field"><span>Anno</span><select><option>2026</option></select></label>
+        </div>
+        <span class="hint warn" style="font-size:11.5px;margin-top:-6px">Prezzario Campania 2026 presente, 31.755 voci.</span>
+        <div class="field"><span>Modello</span>
+          <div class="choice">
+            <label class="on"><b><i></i>opus</b>Analisi più profonda, costo maggiore.</label>
+            <label><b><i></i>sonnet</b>Più veloce, per gare semplici.</label>
+          </div>
+        </div>
+        <div class="field"><span>Effort</span><span class="seg" style="width:max-content"><button>low</button><button>medium</button><button class="on">high</button></span><span class="hint">Più passaggi di verifica per ogni agente. Modificabile a ogni riesecuzione.</span></div>
+      </div>
+      <footer><button class="btn">Annulla</button><button class="btn btn-primary">Crea e carica documenti</button></footer>
+    </aside>
+  </div>
+  </div>
+
+  <!-- ===================== 4, PAGINA GARA, FASE 5, SCURO ===================== -->
+  <div>
+  <div class="cap">Pagina gara, Fase 5 checkpoint, tema scuro</div>
+  <div class="c" data-theme="dark">
+    <div class="appbar">
+      <span class="brand"><svg viewBox="0 0 16 16"><path d="M8 1.5 L10 6 L14.5 8 L10 10 L8 14.5 L6 10 L1.5 8 L6 6 Z"/></svg>SPADA</span>
+      <span class="crumbs"><span>Gare</span><span>/</span><span class="mono">manutenzione-elevatori-asl-na3</span><span>/</span><b>Fase 5</b></span><span class="spacer"></span>
+      <span class="live"><i></i>In tempo reale</span>
+      <span class="seg"><button>Chiaro</button><button class="on">Scuro</button></span>
+      <span class="avatar">GC</span>
+    </div>
+    <div class="ghead">
+      <div class="top">
+        <div style="flex:1">
+          <h1>Servizio di manutenzione degli impianti elevatori, ASL Napoli 3 Sud</h1>
+          <div class="chips"><span class="chip attn">Richiede la tua decisione</span><span class="chip">Campania 2026</span><span class="chip mono">opus, effort high</span><span class="chip">scade in 14 g</span><span class="chip">12 elaborati</span></div>
+        </div>
+        <button class="btn">Brief di gara</button>
+        <button class="btn">Grafo</button>
+        <button class="btn">Attività</button>
+      </div>
+      <ol class="stepper">
+        <li class="done"><span class="n">1</span>Acquisizione documenti</li>
+        <li class="done"><span class="n">2</span>Estrazione requisiti</li>
+        <li class="done"><span class="n">3</span>Analisi capitolato</li>
+        <li class="done"><span class="n">4</span>Ricerca soluzioni</li>
+        <li class="cur"><span class="n">5</span>Revisione proposte</li>
+        <li><span class="n">6</span>Deliverables</li>
+        <li><span class="n">7</span>Audit e consegna</li>
+      </ol>
+    </div>
+    <div class="view">
+      <div class="viewhead">
+        <div><h2>Revisione delle proposte tecniche</h2><p>Decidi proposta per proposta. Le approvate entrano nei deliverable, le rimandate tornano agli agenti con la tua nota.</p></div>
+        <button class="btn btn-primary" disabled>Approva la fase, 1 di 3 decise</button>
+      </div>
+      <div class="prop">
+        <div><span class="id">P-C2-01, criterio C2</span><h3>Manutenzione predittiva con sensori di vibrazione sugli argani</h3><p>Copre il gap G-04 sulla riduzione dei fermi macchina. Prova documentale: report di manutenzione 2024, allegato 7.</p><a class="link">Leggi la proposta completa</a></div>
+        <div class="dec"><button class="btn btn-sm on-ok">Approvata</button><button class="btn btn-sm">Rimanda</button><button class="btn btn-sm">Scarta</button></div>
+      </div>
+      <div class="prop">
+        <div><span class="id">P-C2-02, criterio C2</span><h3>Reperibilità 24 ore con tempo di intervento entro 60 minuti</h3><p>Il disciplinare premia i tempi sotto i 90 minuti. La proposta cita il presidio di Pomigliano ma manca la prova del secondo turno.</p><a class="link">Leggi la proposta completa</a></div>
+        <div class="dec"><button class="btn btn-sm">Approva</button><button class="btn btn-sm">Rimanda</button><button class="btn btn-sm">Scarta</button></div>
+      </div>
+      <div class="prop">
+        <div><span class="id">P-C3-01, criterio C3</span><h3>Piano di formazione del personale sui nuovi quadri di manovra</h3><p>Risponde al requisito R-17. Nessun gap associato: proposta migliorativa.</p><a class="link">Leggi la proposta completa</a></div>
+        <div class="dec"><button class="btn btn-sm">Approva</button><button class="btn btn-sm">Rimanda</button><button class="btn btn-sm">Scarta</button></div>
+      </div>
+    </div>
+  </div>
+  </div>
+
+</div>
+</body>
+</html>
