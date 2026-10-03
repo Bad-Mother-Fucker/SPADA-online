@@ -218,18 +218,26 @@ set -e
 CONCLUSO_IL="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # ── Verifica: handoff e memoria.md devono essere stati aggiornati ────
-ESITO="completato"; ERRORE="null"
+ESITO="completato"; ERRORE=""
 if [ $ESITO_CODICE -ne 0 ]; then
-  ESITO="errore"; ERRORE="\"claude -p e' uscito con codice $ESITO_CODICE\""
+  ESITO="errore"; ERRORE="claude -p e' uscito con codice $ESITO_CODICE."
 elif [ ! -f "_state/handoff/${NOME_FASE}.json" ]; then
-  ESITO="errore"; ERRORE="\"_state/handoff/${NOME_FASE}.json non e' stato scritto: catena verso la fase successiva rotta.\""
+  ESITO="errore"; ERRORE="_state/handoff/${NOME_FASE}.json non e' stato scritto: catena verso la fase successiva rotta."
 fi
+# La causa vera (stderr della CLI, risultato con errore) sta nello
+# stream: si allega al motivo, che run_log.json e l'interfaccia mostrano.
+if [ "$ESITO" = "errore" ]; then
+  DIAGNOSI="$(diagnosi_stream "_state/run_${RUN_ID}.stream.jsonl" || true)"
+  [ -z "$DIAGNOSI" ] || ERRORE="$ERRORE $DIAGNOSI"
+fi
+# claude e' uscito: chi e' ancora in agenti_attivi non lo e' davvero.
+chiudi_agenti_rimasti "$ESITO" || true
 
-python3 - "$FASE" "$RUN_ID" "$CONCLUSO_IL" "$ESITO" "$ERRORE" <<'PY'
+python3 - "$FASE" "$RUN_ID" "$CONCLUSO_IL" "$ESITO" "$ERRORE" "$AVVIATO_IL" <<'PY'
 import json, sys
-fase, run_id, concluso_il, esito, errore_raw = sys.argv[1:6]
+fase, run_id, concluso_il, esito, errore, avviato_il = sys.argv[1:7]
 fase = int(fase)
-errore = json.loads(errore_raw)
+errore = errore or None
 
 with open("_state/run_log.json") as f:
     log = json.load(f)
@@ -249,12 +257,29 @@ fasi["fasi"][chiave]["stato"] = "completata" if esito == "completato" else "erro
 fasi["fasi"][chiave]["conclusa_il"] = concluso_il
 if fase in (3, 5, 7):
     fasi["fasi"][chiave]["richiede_approvazione"] = True
+
+# Sintesi a fine run: l'hook Stop la riscrive a ogni turno
+# dell'orchestratore ("N agenti al lavoro"); qui si chiude con il
+# consuntivo degli agenti di questo run (confronto sui primi 19
+# caratteri: gli hook scrivono microsecondi e offset, lo script no).
+try:
+    with open("_state/attivita.json") as f:
+        conclusi = [a for a in json.load(f).get("agenti_conclusi", [])
+                    if (a.get("concluso_il") or "")[:19] >= avviato_il[:19]]
+except (OSError, ValueError):
+    conclusi = []
+if conclusi:
+    interrotti = sum(1 for a in conclusi if a.get("stato") == "interrotto")
+    sintesi = f"{len(conclusi)} agenti conclusi in questo run"
+    sintesi += f", {interrotti} interrotti." if interrotti else "."
+    fasi["fasi"][chiave]["sintesi"] = sintesi
 with open("_state/fasi.json", "w") as f:
     json.dump(fasi, f, ensure_ascii=False, indent=2)
 PY
 
 if [ "$ESITO" = "errore" ]; then
-  warn "Fase $FASE conclusa con errore — vedi _state/run_${RUN_ID}.stream.jsonl"
+  warn "Fase $FASE conclusa con errore: $ERRORE"
+  warn "Stream completo: _state/run_${RUN_ID}.stream.jsonl"
   exit 1
 fi
 

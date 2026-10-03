@@ -71,3 +71,80 @@ nota_percorsi() {
 Risoluzione dei percorsi della pipeline: i riferimenti a \`.claude/agents/\`, \`.claude/skills/\`, \`.claude/commands/\`, \`.claude/templates/\`, \`~/.claude/...\`, \`_pipeline/comandi/\`, \`scripts/\` e \`references/\` che trovi in agenti, skill e comandi si risolvono in \`$SPADA_CLAUDE_DIR/\` (rispettivamente \`agents/\`, \`skills/\`, \`commands/\`, \`templates/\`, \`scripts/\`, \`references/\`), non nella directory della gara e non in ~/.claude. Esempi: \`references/graph-schema.md\` → \`$SPADA_CLAUDE_DIR/references/graph-schema.md\`; \`node scripts/graph/graph_lint.js\` → \`node "$SPADA_CLAUDE_DIR/scripts/graph/graph_lint.js"\` (lanciato con la gara come directory corrente). Tutto ciò che sta sotto \`input/\`, \`output/\`, \`02_graph/\`, \`_state/\`, \`manifest.json\` e \`vincoli_offerta_tecnica.md\` è invece nella directory della gara.
 NOTA
 }
+
+# ── Diagnosi di un run fallito ─────────────────────────────────────
+# Lo stream di `claude -p` (stdout e stderr nello stesso file) contiene
+# la causa vera di un fallimento in due forme che nessuno leggerebbe in
+# un file da megabyte: le righe NON json (stderr della CLI, es.
+# "Background tasks still running after 600s; terminating") e l'ultimo
+# evento `result` con is_error. Stampa una riga da allegare al motivo
+# in run_log.json; vuota se non c'e' nulla di utile. Non fallisce mai.
+diagnosi_stream() {
+  python3 - "$1" <<'PY'
+import json, sys
+stderr, risultato = [], None
+try:
+    with open(sys.argv[1], encoding="utf-8", errors="replace") as f:
+        for riga in f:
+            s = riga.strip()
+            if not s:
+                continue
+            if not s.startswith("{"):
+                stderr.append(" ".join(s.split())[:300])
+                continue
+            if '"type":"result"' not in s and '"type": "result"' not in s:
+                continue
+            try:
+                e = json.loads(s)
+            except Exception:
+                continue
+            if e.get("type") == "result" and e.get("is_error"):
+                risultato = " ".join(str(e.get("result") or e.get("subtype") or "").split())[:300]
+except OSError:
+    pass
+parti = []
+if risultato:
+    parti.append("claude ha riportato: " + risultato)
+if stderr:
+    parti.append("stderr di claude: " + " | ".join(stderr[-3:]))
+print(" ".join(parti))
+PY
+}
+
+# ── Agenti rimasti "attivi" dopo l'uscita di claude ────────────────
+# _state/attivita.json lo tengono gli hook (PreToolUse/SubagentStop)
+# dentro la sessione. Quando claude e' uscito nessun subagente e' piu'
+# vivo: chi e' ancora in agenti_attivi (SubagentStop mai arrivato, o
+# subagente ucciso insieme al processo) si chiude qui, "interrotto" se
+# il run e' fallito, "completato" altrimenti. Cwd = radice della gara.
+chiudi_agenti_rimasti() {
+  python3 - "$1" <<'PY'
+import json, os, sys, tempfile
+from datetime import datetime, timezone
+esito = sys.argv[1]
+p = "_state/attivita.json"
+try:
+    with open(p, encoding="utf-8") as f:
+        d = json.load(f)
+except (OSError, ValueError):
+    sys.exit(0)
+if not isinstance(d, dict):
+    sys.exit(0)
+d.setdefault("agenti_attivi", [])
+d.setdefault("agenti_conclusi", [])
+if not d["agenti_attivi"]:
+    sys.exit(0)
+ora = datetime.now(timezone.utc).isoformat()
+for a in d["agenti_attivi"]:
+    a["concluso_il"] = ora
+    a["stato"] = "completato" if esito == "completato" else "interrotto"
+    d["agenti_conclusi"].append(a)
+d["agenti_attivi"] = []
+d["agenti_conclusi"] = d["agenti_conclusi"][-200:]
+d["aggiornato_il"] = ora
+fd, tmp = tempfile.mkstemp(dir="_state", prefix=".attivita-")
+with os.fdopen(fd, "w", encoding="utf-8") as f:
+    json.dump(d, f, ensure_ascii=False, indent=2)
+os.replace(tmp, p)
+PY
+}

@@ -5,10 +5,18 @@ in modo incrementale (Sprint 3.4).
 Registrato per tre eventi (vedi _pipeline/settings.json):
   PreToolUse (matcher "Task|Agent") -> un subagente parte
   SubagentStop                 -> un subagente finisce
-  Stop                         -> la sessione di fase termina: rigenera
-                                   la sintesi in linguaggio naturale in
-                                   _state/fasi.json (Sprint 3.5) e
-                                   svuota agenti_attivi
+  Stop                         -> l'orchestratore chiude un turno:
+                                   rigenera la sintesi in linguaggio
+                                   naturale in _state/fasi.json (Sprint
+                                   3.5). NON svuota agenti_attivi: in
+                                   headless l'orchestratore chiude il
+                                   turno anche con subagenti ancora in
+                                   background (vedi CLAUDE_CODE_PRINT_BG_
+                                   WAIT_CEILING_MS in spada_claude.sh).
+                                   Chi resta "attivo" quando claude esce
+                                   lo chiude spada_fase.sh / spada_
+                                   deliverable.sh (chiudi_agenti_rimasti
+                                   in spada_comune.sh).
 
 Scrive relativo a `cwd` del payload (la working directory della gara,
 non un percorso di pipeline) — coerente con com'e' invocato ogni
@@ -49,12 +57,21 @@ def load_payload():
 
 
 def load_attivita():
+    data = None
     if ATTIVITA_PATH.exists():
         try:
-            return json.loads(ATTIVITA_PATH.read_text(encoding="utf-8"))
+            data = json.loads(ATTIVITA_PATH.read_text(encoding="utf-8"))
         except Exception:
-            pass
-    return {"agenti_attivi": [], "agenti_conclusi": [], "aggiornato_il": now()}
+            data = None
+    if not isinstance(data, dict):
+        data = {"aggiornato_il": now()}
+    # new_gara.sh creava il file senza agenti_conclusi: SubagentStop e
+    # Stop morivano di KeyError (inghiottito in main) e nessun agente
+    # usciva mai da agenti_attivi. Le chiavi si garantiscono qui, non
+    # solo nel template.
+    data.setdefault("agenti_attivi", [])
+    data.setdefault("agenti_conclusi", [])
+    return data
 
 
 def save_attivita(data):
@@ -136,7 +153,8 @@ def handle_stop(payload, data):
     if chiave:
         fasi["fasi"][chiave]["sintesi"] = sintesi_naturale(data)
         fasi_path.write_text(json.dumps(fasi, ensure_ascii=False, indent=2), encoding="utf-8")
-    data["agenti_attivi"] = []
+    # agenti_attivi resta com'e': i subagenti in background sopravvivono
+    # alla fine del turno dell'orchestratore (vedi docstring).
 
 
 def main():

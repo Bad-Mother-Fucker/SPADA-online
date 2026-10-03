@@ -77,6 +77,17 @@ const Viste = (() => {
   const TONO_SEV = { alta: "crit", media: "warn", bassa: "ok" };
   const ETICHETTA_SEV = { alta: "Severità alta", media: "Severità media", bassa: "Severità bassa" };
 
+  /** Perché l'ultimo run di una fase è fallito, da run_log.json: è l'unico
+      posto in cui la pipeline scrive la causa (spada_fase.sh la allega
+      dallo stream di claude). I run normalizzati arrivano dal più recente;
+      se l'ultimo è in corso (riesecuzione) non c'è nulla da spiegare. */
+  function erroreUltimoRun(stato, n) {
+    const runs = stato.runLog?.dati || [];
+    const ultimo = runs.find((r) => Number(r.fase) === n);
+    if (!ultimo || ultimo.esito === "completato" || ultimo.esito === "in_corso") return null;
+    return ultimo.errore || `Esito «${ultimo.esito}» senza motivo registrato.`;
+  }
+
   /** Le azioni disponibili su una fase, derivate dal suo stato reale.
       Sono le stesse in tutte le viste di fase: l'operatore non deve
       chiedersi dove sia finito il bottone di avvio. */
@@ -148,6 +159,14 @@ const Viste = (() => {
           `Fase ${n} · ${meta.etichetta.toLowerCase()}`),
         corpo.sintesi
           ? h("p", { style: { margin: "0 0 var(--s-4)", fontSize: "var(--fs-xs)", color: "var(--ink-2)" } }, corpo.sintesi)
+          : null,
+        st === "errore" && erroreUltimoRun(stato, n)
+          ? h("div", { class: "note note--crit", role: "alert", style: { marginBottom: "var(--s-4)" } },
+              I.avviso(14),
+              h("div", { style: { flex: 1 } },
+                h("strong", { style: { display: "block", fontSize: "var(--fs-sm)", color: "var(--ink-1)", marginBottom: "2px" } },
+                  "Perché è fallita"),
+                h("span", { style: { fontSize: "var(--fs-xs)", color: "var(--ink-2)" } }, erroreUltimoRun(stato, n))))
           : null,
         h("dl", { class: "dl dl--kv", style: { marginBottom: "var(--s-4)" } },
           corpo.iniziata_il ? [h("dt", null, "Avviata"), h("dd", null, UI.quandoBreve(corpo.iniziata_il))] : [],
@@ -1736,13 +1755,23 @@ const Viste = (() => {
               h("th", { class: "t-right" }, "Esito"))),
             h("tbody", null, filtrate.map((r) => {
               const tono = r.esito === "completato" ? "ok" : r.esito === "in_corso" ? "info" : "crit";
-              return h("tr", null,
-                h("td", { class: "t-mono" }, UI.quandoBreve(r.avviato_il)),
-                h("td", null, `${r.fase} · ${Dominio.fase(Number(r.fase))?.titolo || ""}`),
-                h("td", { class: "t-muted" }, `${r.modello || "—"}${r.effort ? " · " + r.effort : ""}`),
-                h("td", { class: "t-num" }, r.durata),
-                h("td", { class: "t-right" },
-                  h("span", { class: `badge badge--sm badge--${tono}` }, r.esito)));
+              const fallito = r.esito !== "completato" && r.esito !== "in_corso";
+              return [
+                h("tr", null,
+                  h("td", { class: "t-mono" }, UI.quandoBreve(r.avviato_il)),
+                  h("td", null, `${r.fase} · ${Dominio.fase(Number(r.fase))?.titolo || ""}`),
+                  h("td", { class: "t-muted" }, `${r.modello || "—"}${r.effort ? " · " + r.effort : ""}`),
+                  h("td", { class: "t-num" }, r.durata),
+                  h("td", { class: "t-right" },
+                    h("span", { class: `badge badge--sm badge--${tono}` }, r.esito))),
+                // La causa sta nel run_log, non nel badge: senza questa riga
+                // l'unico modo di leggerla era il JSON grezzo in fondo.
+                fallito
+                  ? h("tr", null,
+                      h("td", { colspan: "5", style: { paddingTop: 0, fontSize: "var(--fs-xs)", color: "var(--crit)", whiteSpace: "normal" } },
+                        r.errore || "Nessun motivo registrato nel run_log."))
+                  : null,
+              ];
             }))));
       },
     });
@@ -1787,7 +1816,7 @@ const Viste = (() => {
     const perso = stato.sse === "perso";
     const righe = [
       ...attivi.map((a) => ({ ...a, st: "in_corso" })),
-      ...conclusi.map((a) => ({ ...a, st: "completato" })),
+      ...conclusi.map((a) => ({ ...a, st: a.stato === "interrotto" ? "errore" : "completato" })),
     ];
 
     return h("div", { class: "card" },
@@ -1816,7 +1845,7 @@ const Viste = (() => {
             h("div", { class: "agentrow__name" }, a.agente || "agente"),
             h("div", { class: "agentrow__desc" }, a.descrizione || "")),
           h("span", { class: "agentrow__st" },
-            perso ? "stato non aggiornato" : a.st === "in_corso" ? "in corso" : "concluso")))),
+            perso ? "stato non aggiornato" : a.st === "in_corso" ? "in corso" : a.st === "errore" ? "interrotto" : "concluso")))),
       perso
         ? h("p", { style: { margin: "var(--s-3) 0 0", fontSize: "var(--fs-micro)", color: "var(--ink-4)" } },
             "Le righe restano visibili ma desaturate e con bordo tratteggiato: si distingue «fermo» da «non più aggiornato».")

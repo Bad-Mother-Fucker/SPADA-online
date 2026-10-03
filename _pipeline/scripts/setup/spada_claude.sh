@@ -43,6 +43,14 @@ export ENABLE_CLAUDEAI_MCP_SERVERS=false
 # (CLAUDE_CODE_SYNC_SKILLS=0 non lo impedisce, verificato). Restano fuori
 # dal codice grazie a skills/ come cartella vera (link_pipeline.sh).
 
+# In modalità headless `claude -p` aspetta i subagenti rimasti in
+# background al massimo 10 minuti dopo l'ultimo turno dell'orchestratore,
+# poi li termina ed esce con codice 0 ("Background tasks still running
+# after 600s; terminating" nello stream). Le fasi lanciano subagenti che
+# durano molto di più (graph-builder: round da 20-30 minuti), e il
+# troncamento lascia la fase senza handoff: nessun tetto.
+export CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0
+
 # stdin chiuso: senza un terminale `claude -p` aspetterebbe 3 secondi
 # un eventuale input in pipe prima di partire.
 exec claude --setting-sources user --strict-mcp-config --mcp-config "$MCP_CONFIG" "$@" </dev/null

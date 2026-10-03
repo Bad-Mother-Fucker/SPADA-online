@@ -111,7 +111,7 @@ TEMPLATE_VINCOLI="$(cd "$(dirname "$_SELF")/../.." && pwd)/templates/vincoli_off
 [ -f "$TEMPLATE_VINCOLI" ] && cp "$TEMPLATE_VINCOLI" "$GARA_PATH/vincoli_offerta_tecnica.md"
 
 cat > "$GARA_PATH/_state/attivita.json" <<JSON
-{ "agenti_attivi": [], "aggiornato_il": "$NOW_ISO" }
+{ "agenti_attivi": [], "agenti_conclusi": [], "aggiornato_il": "$NOW_ISO" }
 JSON
 
 cat > "$GARA_PATH/_state/memoria.md" <<MD

@@ -169,6 +169,9 @@ const inCorso = new Set();
 function assicuraDati(v) {
   const serve = [];
   if (v.tipo === "fase") {
+    // Il pannello laterale spiega perché l'ultimo run è fallito: la causa
+    // sta in run_log.json, non in fasi.json che arriva dallo stream.
+    serve.push("runLog");
     if (v.n === 1) serve.push("documenti");
     if (v.n === 2) serve.push("criteri");
     if (v.n === 3) { serve.push("analisi"); caricaIndicazioni(); }

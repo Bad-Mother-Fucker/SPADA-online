@@ -190,17 +190,24 @@ set -e
 CONCLUSO_IL="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # ── Verifica minima: il deliverable deve aver scritto qualcosa ──────
-ESITO="completato"; ERRORE="null"
+ESITO="completato"; ERRORE=""
 if [ $ESITO_CODICE -ne 0 ]; then
-  ESITO="errore"; ERRORE="\"claude -p e' uscito con codice $ESITO_CODICE\""
+  ESITO="errore"; ERRORE="claude -p e' uscito con codice $ESITO_CODICE."
 elif [ -z "$(ls -A "$OUTPUT_DIR" 2>/dev/null)" ]; then
-  ESITO="errore"; ERRORE="\"$OUTPUT_DIR/ e' vuota: il deliverable non ha prodotto output.\""
+  ESITO="errore"; ERRORE="$OUTPUT_DIR/ e' vuota: il deliverable non ha prodotto output."
 fi
+# Come in spada_fase.sh: la causa vera sta nello stream, si allega al
+# motivo registrato; gli agenti rimasti "attivi" si chiudono.
+if [ "$ESITO" = "errore" ]; then
+  DIAGNOSI="$(diagnosi_stream "_state/run_${RUN_ID}.stream.jsonl" || true)"
+  [ -z "$DIAGNOSI" ] || ERRORE="$ERRORE $DIAGNOSI"
+fi
+chiudi_agenti_rimasti "$ESITO" || true
 
 python3 - "$RUN_ID" "$CONCLUSO_IL" "$ESITO" "$ERRORE" "$DELIVERABLE_ID" "$AGENTE" "$OUTPUT_DIR" <<'PY'
 import json, sys
-run_id, concluso_il, esito, errore_raw, deliverable_id, agente, output_dir = sys.argv[1:8]
-errore = json.loads(errore_raw)
+run_id, concluso_il, esito, errore, deliverable_id, agente, output_dir = sys.argv[1:8]
+errore = errore or None
 
 with open("_state/run_log.json") as f:
     log = json.load(f)
@@ -254,7 +261,8 @@ with open("_state/fasi.json", "w") as f:
 PY
 
 if [ "$ESITO" = "errore" ]; then
-  warn "Deliverable $DELIVERABLE_ID concluso con errore — vedi _state/run_${RUN_ID}.stream.jsonl"
+  warn "Deliverable $DELIVERABLE_ID concluso con errore: $ERRORE"
+  warn "Stream completo: _state/run_${RUN_ID}.stream.jsonl"
   exit 1
 fi
 
