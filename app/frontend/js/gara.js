@@ -60,7 +60,11 @@ const stato = {
   indicazioni: { dati: null, bozza: null, modificata: false, caricando: false, salvataggio: false, errore: null },
   // Gara brief: risposte alle domande aperte (stesse meccaniche).
   risposteBrief: { dati: null, bozza: null, modificata: false, caricando: false, salvataggio: false, errore: null },
-  assistente: { aperto: false, messaggi: [], pensa: false, bozza: "", errore: null },
+  assistente: {
+    aperto: false, messaggi: [], pensa: false, bozza: "", errore: null,
+    // Tre dimensioni preimpostate; "piccola" è quella originale.
+    dimensione: (() => { try { return localStorage.getItem("spada.assistente.dimensione") || "piccola"; } catch { return "piccola"; } })(),
+  },
   upload: { inCorso: [], rifiutati: [] },
 };
 
@@ -173,7 +177,9 @@ function assicuraDati(v) {
     // sta in run_log.json, non in fasi.json che arriva dallo stream.
     serve.push("runLog");
     if (v.n === 1) serve.push("documenti");
-    if (v.n === 2) serve.push("criteri");
+    // La copertura dei criteri si ricava da gap e proposte (Fasi 4-5):
+    // finché non esistono, i registri tornano vuoti e la vista lo dice.
+    if (v.n === 2) serve.push("criteri", "gap", "proposte");
     if (v.n === 3) { serve.push("analisi"); caricaIndicazioni(); }
     if (v.n === 4) serve.push("gap", "proposteOperatore");
     if (v.n === 5) serve.push("proposte", "gap", "grafo");
@@ -373,33 +379,31 @@ async function caricaContenutoDeliverable(id) {
 // Parser dei registri
 // ===========================================================================
 
+/** Matrice dei criteri della Fase 1, nel formato fissato da
+    extract-criteria-from-disciplinary/output_schema.md: ID, Criterio,
+    Punteggio max, Subcriteri, Metodo attribuzione, Note. Si leggono solo
+    colonne che lo schema prevede: la copertura non è tra queste, la
+    ricava la vista dal registro dei gap e da quello delle proposte
+    (Viste.coperturaCriterio). Le righe senza ID sono il totale. */
 function parseCriteri(testo) {
-  const t = Md.tabellaCon(testo, [["id", "codice", "criterio"]]);
+  const t = Md.tabellaCon(testo, [["id", "codice"]]);
   if (!t) return [];
   const righe = Md.righeMappate(t, {
-    id: ["id", "codice", "criterio", "crit", "rif"],
-    testo: ["descrizione", "requisito", "oggetto", "titolo", "contenuto", "criterio"],
-    fonte: ["fonte", "riferimento", "documento", "provenienza", "origine", "sezione"],
-    tipo: ["tipo", "natura", "categoria"],
-    copertura: ["copertura", "stato", "evidenza", "coperto"],
-    punti: ["punti", "punteggio", "peso"],
+    id: ["id", "codice"],
+    testo: ["criterio", "descrizione", "titolo"],
+    metodo: ["metodo attribuzione", "metodo", "attribuzione"],
+    punti: ["punteggio max", "punteggio", "punti"],
   });
+  // La fonte non è una colonna: la matrice la dichiara una volta in testa
+  // («**Fonte:** disciplinare, par. …») e vale per tutti i criteri.
+  const fonte = Md.ripulisci((/\*\*Fonte:\*\*\s*(.+)/.exec(testo) || [])[1] || "");
   return righe.map((r) => ({
     id: r.id,
     testo: r.testo && r.testo !== r.id ? r.testo : (r._celle[1] || ""),
-    fonte: r.fonte,
-    tipo: /premi|migliorat/i.test(r.tipo) ? "premiante" : /vincol|obblig/i.test(r.tipo) ? "vincolante" : (r.tipo || ""),
-    copertura: coperturaDa(r.copertura),
+    fonte,
+    metodo: /tabell/i.test(r.metodo) ? "tabellare" : /discrez/i.test(r.metodo) ? "discrezionale" : "",
     punti: r.punti,
-  })).filter((r) => r.id || r.testo);
-}
-
-function coperturaDa(s) {
-  const n = String(s || "").toLowerCase();
-  if (/critic|conflitt|contrar/.test(n)) return "criticita";
-  if (/scopert|assent|mancant|no\b|nessun/.test(n)) return "scoperto";
-  if (/copert|ok|s[iì]\b|present|verificat/.test(n)) return "coperto";
-  return "";
+  })).filter((r) => r.id);
 }
 
 /** Gara brief e audit strategico si mostrano per intero: sezioni,
@@ -940,7 +944,13 @@ function apriStream() {
     // Un cambio di stato delle fasi può aver prodotto nuovi elaborati: si
     // rilegge l'output e si invalidano i registri della vista corrente.
     if (JSON.stringify(stato.fasi) !== prima) {
-      aggiornaOutput().then(() => {
+      // Anche il manifest cambia a fine fase (criteri_stato in Fase 4,
+      // deliverables in Fase 3): senza rileggerlo la copertura dei
+      // criteri resterebbe quella dell'apertura della pagina.
+      const manifest = Api.dettaglioGara(SLUG)
+        .then((d) => { stato.manifest = d.manifest || stato.manifest; })
+        .catch(() => { /* resta il manifest precedente */ });
+      Promise.all([aggiornaOutput(), manifest]).then(() => {
         invalidaRegistri();
         assicuraDati(stato.vista);
         disegnaVista();
@@ -1004,6 +1014,13 @@ async function aggiornaOutput() {
 // Assistente di gara — sola lettura, contesto l'intera gara
 // ===========================================================================
 
+/** Dimensioni del pannello: id, etichetta del controllo, descrizione. */
+const DIMENSIONI_ASSISTENTE = [
+  ["piccola", "S", "Piccola: pannello compatto"],
+  ["media", "M", "Media: più spazio per le risposte"],
+  ["grande", "L", "Grande: quasi tutta la finestra"],
+];
+
 const SUGGERIMENTI = [
   "Quali penali sono previste?",
   "Cosa pesa di più nel punteggio tecnico?",
@@ -1039,11 +1056,16 @@ function disegnaAssistente() {
 
   if (!pronto || !a.aperto) { pannello.hidden = true; return; }
   pannello.hidden = false;
+  pannello.dataset.size = a.dimensione || "piccola";
 
   const messaggi = a.messaggi.length
     ? a.messaggi.map((m) => h("div", { class: `chat__msg${m.mio ? " chat__msg--me" : ""}` },
         h("div", { class: "chat__who" }, m.mio ? "Tu" : "Assistente"),
-        h("div", { class: "chat__text" }, m.testo),
+        // Le risposte arrivano in markdown: grassetti, elenchi, tabelle e
+        // interruzioni di riga vanno resi, non mostrati come asterischi.
+        m.mio
+          ? h("div", { class: "chat__text" }, m.testo)
+          : h("div", { class: "chat__text chat__text--md" }, Md.rendiBlocchi(Md.blocchi(m.testo), { aCapo: true })),
         m.fonte ? h("div", { class: "chat__source" }, m.fonte) : null))
     : [h("p", { style: { margin: 0, fontSize: "var(--fs-xs)", color: "var(--ink-3)" } },
         "Nessuna domanda ancora. L'assistente legge documenti ed elaborati già prodotti da questa gara.")];
@@ -1054,6 +1076,16 @@ function disegnaAssistente() {
         h("h2", null, "Assistente di gara"),
         h("span", { class: "badge badge--sm badge--info" }, "sola lettura"),
         h("span", { class: "spacer" }),
+        h("div", { class: "seg seg--mini", role: "group", "aria-label": "Dimensione del pannello" },
+          DIMENSIONI_ASSISTENTE.map(([id, label, titolo]) => h("button", {
+            type: "button", class: "seg__btn", title: titolo,
+            "aria-pressed": String((a.dimensione || "piccola") === id),
+            onClick: () => {
+              stato.assistente.dimensione = id;
+              try { localStorage.setItem("spada.assistente.dimensione", id); } catch { /* solo per questa sessione */ }
+              disegnaAssistente();
+            },
+          }, label))),
         h("button", {
           type: "button", class: "icon-btn", "aria-label": "Chiudi assistente",
           onClick: () => { stato.assistente.aperto = false; disegnaAssistente(); document.getElementById("fab-assistente").focus(); },

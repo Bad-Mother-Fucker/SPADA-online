@@ -269,7 +269,7 @@ const Md = (() => {
 
   /** Un blocco → un nodo. I separatori si omettono: dove servono, la
       separazione la fanno già le card della vista. */
-  function rendiBlocco(b) {
+  function rendiBlocco(b, opz = {}) {
     const { h, I } = UI;
     switch (b.tipo) {
       case "titolo":
@@ -286,7 +286,7 @@ const Md = (() => {
         const tono = tonoCitazione(b.testo);
         return h("div", { class: `note note--${tono} md__note` },
           tono === "info" ? I.info(14) : I.triangolo(14),
-          h("div", { class: "md__note-body" }, rendiBlocchi(b.figli)));
+          h("div", { class: "md__note-body" }, rendiBlocchi(b.figli, opz)));
       }
       case "lista": {
         const tag = b.ordinata ? "ol" : "ul";
@@ -318,7 +318,8 @@ const Md = (() => {
         const aRighe = b.righe.length > 1 && b.righe.every((r) => /^\*\*[^*]+:\*\*/.test(r));
         const figli = [];
         b.righe.forEach((r, k) => {
-          if (k) figli.push(aRighe ? h("br") : " ");
+          // Nelle risposte della chat (aCapo) ogni riga resta una riga.
+          if (k) figli.push(aRighe || opz.aCapo ? h("br") : " ");
           figli.push(...inline(r));
         });
         return h("p", { class: aRighe ? "md__meta" : null }, figli);
@@ -328,8 +329,10 @@ const Md = (() => {
     }
   }
 
-  function rendiBlocchi(lista) {
-    return (lista || []).map(rendiBlocco).filter(Boolean);
+  /** opz.aCapo: le righe di un paragrafo vanno a capo (chat), invece di
+      scorrere come prosa (documenti). */
+  function rendiBlocchi(lista, opz = {}) {
+    return (lista || []).map((b) => rendiBlocco(b, opz)).filter(Boolean);
   }
 
   /** Il documento diviso per sezioni di secondo livello, ciascuna con le
