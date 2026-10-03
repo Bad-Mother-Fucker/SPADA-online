@@ -4,8 +4,15 @@
 app/
 ├── backend/     FastAPI (Sprint 4)
 ├── worker/      consumer coda FIFO, un job alla volta (Sprint 4)
-└── frontend/    interfaccia statica, servita dallo stesso FastAPI
+├── web/         interfaccia nuova: Vite + React + shadcn/ui, compilata in
+│                web/dist e servita da FastAPI su "/" (redesign, in corso)
+└── frontend/    interfaccia precedente, statica, servita su "/legacy"
+                 finché la nuova non l'ha sostituita schermata per schermata
 ```
+
+Durante il redesign l'elenco gare è nella nuova interfaccia; la pagina gara
+è ancora quella precedente, raggiunta dalle card come `/legacy/gara.html`.
+Le regole del design stanno in `DESIGN.md` nella radice.
 
 ## Backend
 
@@ -19,7 +26,9 @@ export SPADA_HOME=~/spada   # gare/, _data/, _claude/, _pipeline
 ```
 
 L'interfaccia è su `/` (stessa origine dell'API, niente CORS); lo
-stato del servizio su `/salute`.
+stato del servizio su `/salute`. In sviluppo la nuova interfaccia gira
+anche da sola con `cd app/web && npm run dev` su http://localhost:5173,
+con proxy verso il backend su :8000.
 
 Schema applicativo (`gare`, `job`, `documenti`, `approvazioni`,
 `conversazioni`) applicato automaticamente all'avvio in

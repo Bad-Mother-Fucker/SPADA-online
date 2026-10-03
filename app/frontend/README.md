@@ -1,4 +1,10 @@
-# `app/frontend/` — SPADA Online
+# `app/frontend/` — SPADA Online, interfaccia precedente
+
+> In sostituzione. Dal redesign (branch `redesign-ui`) questa cartella è
+> servita da FastAPI sotto `/legacy`; l'elenco gare è già in `app/web`
+> (`/legacy/index.html` rimanda alla nuova home) e la pagina gara segue.
+> Nessuna nuova funzionalità qui, solo correzioni urgenti.
+
 
 Statico, senza build step. In locale lo serve lo stesso FastAPI del backend
 (`app.mount("/", ...)` in `backend/main.py`) su http://localhost:8000:

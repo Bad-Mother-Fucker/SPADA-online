@@ -111,8 +111,10 @@ titoli.
 
 ## 4. Forma, spazio, superfici
 
-**Raggi, una sola scala.** 4px chip e badge, 6px controlli (bottoni, campi,
-schede), 8px contenitori (card, pannelli, menu), 12px finestre. Mai
+**Raggi, una sola scala.** 4px chip e badge, 8px controlli nella taglia
+normale (bottoni, campi) e contenitori (card, pannelli, menu), 6px
+controlli nelle taglie piccole, 12px finestre. Sono i token `--radius-sm`,
+`--radius-md`, `--radius-lg`, `--radius-xl` che shadcn applica da solo. Mai
 pillole, tranne il pallino di stato. Raggio interno = raggio esterno meno
 il padding, quando un contenitore ne contiene un altro.
 

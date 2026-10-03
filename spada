@@ -170,6 +170,11 @@ ENV
   # npm ci: installa esattamente il lockfile, senza riscriverlo.
   (cd "$REPO_DIR/_pipeline" && npm ci --silent --no-audit --no-fund)
 
+  info "Interfaccia web (app/web): dipendenze e build"
+  # La build finisce in app/web/dist, servita da FastAPI su "/". Va rifatta
+  # a ogni aggiornamento del codice: è il motivo per cui sta nel setup.
+  (cd "$REPO_DIR/app/web" && npm ci --silent --no-audit --no-fund && npm run build --silent 2>&1 | tail -n 3 | sed 's/^/  /')
+
   info "Collego la pipeline alla configurazione Claude dedicata ($SPADA_CLAUDE_DIR)"
   ambiente_processi
   SPADA_PYTHON="$VENV/bin/python" bash "$SPADA_PIPELINE_DIR/scripts/setup/link_pipeline.sh" "$SPADA_PIPELINE_DIR" | sed 's/^/  /'
@@ -245,6 +250,7 @@ cmd_avvia() {
   fi
 
   login_attivo || avviso "Claude non è autenticato per SPADA: l'app si apre, ma le fasi falliranno finché non esegui './spada login'."
+  [ -f "$REPO_DIR/app/web/dist/index.html" ] || avviso "Interfaccia web non compilata: viene servita quella precedente. Esegui './spada setup'."
 
   info "Avvio il server (127.0.0.1:$PORTA)"
   (

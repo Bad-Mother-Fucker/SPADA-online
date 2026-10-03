@@ -101,6 +101,12 @@
   --ease-move: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-std: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-press: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+  /* Animazioni (DESIGN.md §6) */
+  --animate-pulsa: pulsa 1.6s ease-in-out infinite;
+  --animate-apparizione: apparizione var(--d-base) var(--e-std) both;
+  @keyframes pulsa { 50% { opacity: 0.35; } }
+  @keyframes apparizione { from { opacity: 0; } to { opacity: 1; } }
 }
 
 /* ------------------------------ TEMA CHIARO ------------------------------ */
@@ -261,4 +267,42 @@
 @media (prefers-reduced-motion: reduce) {
   :root { --d-fast: 0ms; --d-base: 120ms; --d-enter: 120ms; --d-move: 120ms; --d-exit: 100ms; }
   *, *::before, *::after { animation-play-state: paused !important; scroll-behavior: auto !important; }
+}
+
+/* ------------------- MOTION DEI COMPONENTI (DESIGN.md §6) ------------------
+   I componenti shadcn animano con tw-animate-css e durate proprie; qui le
+   durate e gli easing vengono riportati ai token. Non in un layer, così
+   vincono sulle utility generate. */
+[data-slot="sheet-content"], [data-slot="dialog-content"], [data-slot="alert-dialog-content"] {
+  animation-duration: var(--d-enter) !important;
+  animation-timing-function: var(--e-enter) !important;
+}
+[data-slot="sheet-content"] { animation-timing-function: var(--e-move) !important; }
+[data-slot="sheet-overlay"], [data-slot="dialog-overlay"], [data-slot="alert-dialog-overlay"] {
+  animation-duration: var(--d-enter) !important;
+  animation-timing-function: var(--e-std) !important;
+  background-color: var(--scrim) !important;
+  backdrop-filter: none !important;
+}
+[data-slot="dropdown-menu-content"], [data-slot="select-content"], [data-slot="tooltip-content"], [data-slot="popover-content"] {
+  animation-duration: var(--d-base) !important;
+  animation-timing-function: var(--e-enter) !important;
+}
+[data-slot$="-content"][data-state="closed"], [data-slot$="-overlay"][data-state="closed"] {
+  animation-duration: var(--d-exit) !important;
+  animation-timing-function: var(--e-std) !important;
+}
+/* Finestre e menu entrano da 0.96, mai da 0 (DESIGN.md §6). */
+[data-slot="dialog-content"], [data-slot="alert-dialog-content"], [data-slot="dropdown-menu-content"], [data-slot="select-content"] {
+  --tw-enter-scale: 0.96;
+}
+/* Il toast rispetta le stesse durate. */
+[data-sonner-toaster] { --toast-duration: var(--d-enter); }
+[data-sonner-toast] { font-family: var(--font-sans); }
+/* Errore di modulo: una scossa breve, feedback e non decorazione. */
+@keyframes scossa { 10%, 90% { transform: translateX(-1px); } 20%, 80% { transform: translateX(2px); } 30%, 50%, 70% { transform: translateX(-3px); } 40%, 60% { transform: translateX(3px); } }
+.animate-scossa { animation: scossa 320ms var(--e-std) both; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-scossa { animation: none; }
+  [data-slot$="-content"], [data-slot$="-overlay"] { animation-duration: 120ms !important; --tw-enter-scale: 1; --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; }
 }

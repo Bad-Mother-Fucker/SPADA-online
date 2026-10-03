@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fastapi import FastAPI
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -26,7 +27,12 @@ log = logging.getLogger("spada.api")
 
 app = FastAPI(title="SPADA API", version="0.1.0")
 
-FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
+# Due interfacce durante il redesign: la nuova (React, compilata da Vite in
+# app/web/dist) su "/", la precedente (statica, app/frontend) su "/legacy"
+# finché la nuova non l'ha sostituita schermata per schermata.
+APP_DIR = Path(__file__).resolve().parents[1]
+FRONTEND_DIR = APP_DIR / "frontend"
+WEB_DIST_DIR = APP_DIR / "web" / "dist"
 
 # In locale frontend e API hanno la stessa origine: CORS non serve. Resta
 # attivabile (SPADA_FRONTEND_ORIGIN) solo per servire il frontend da un
@@ -81,6 +87,30 @@ class _FrontendStatico(StaticFiles):
         return risposta
 
 
-# Montato per ultimo: le rotte API (/gare, /sistema, /salute) hanno la
-# precedenza, tutto il resto è il frontend (index.html su "/").
-app.mount("/", _FrontendStatico(directory=str(FRONTEND_DIR), html=True), name="frontend")
+@app.get("/gara.html", include_in_schema=False)
+def _pagina_gara_precedente(slug: str = ""):
+    """La pagina gara è ancora quella precedente: i segnalibri e i link
+    salvati a /gara.html continuano a funzionare (il browser conserva il
+    frammento #/fase/N nel redirect)."""
+    return RedirectResponse(f"/legacy/gara.html?slug={slug}" if slug else "/legacy/gara.html", status_code=307)
+
+
+@app.get("/legacy", include_in_schema=False)
+@app.get("/legacy/", include_in_schema=False)
+@app.get("/legacy/index.html", include_in_schema=False)
+def _elenco_precedente():
+    """L'elenco gare è già nella nuova interfaccia: i link «Gare» della
+    pagina gara precedente (relativi a index.html) tornano alla nuova home."""
+    return RedirectResponse("/", status_code=307)
+
+
+# Montati per ultimi: le rotte API (/gare, /sistema, /salute) hanno la
+# precedenza. La pagina gara precedente vive sotto /legacy con i suoi
+# asset relativi; "/" serve la build della nuova interfaccia, oppure, se
+# manca (setup non rieseguito), ancora quella precedente.
+app.mount("/legacy", _FrontendStatico(directory=str(FRONTEND_DIR), html=True), name="legacy")
+if (WEB_DIST_DIR / "index.html").exists():
+    app.mount("/", _FrontendStatico(directory=str(WEB_DIST_DIR), html=True), name="frontend")
+else:
+    log.warning("Interfaccia nuova non compilata (%s): servo quella precedente. Esegui ./spada setup.", WEB_DIST_DIR)
+    app.mount("/", _FrontendStatico(directory=str(FRONTEND_DIR), html=True), name="frontend")

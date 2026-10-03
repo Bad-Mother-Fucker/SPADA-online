@@ -384,27 +384,39 @@ const Viste = (() => {
           "L'azione per questa fase è nel pannello a destra.")),
       render: (righe) => {
         const mostrate = stato.espansi.requisiti ? righe : righe.slice(0, 6);
+        const copertura = coperturaCriteri(stato);
+        const cop = righe.map((r) => copertura(r.id));
         const conteggi = {
           totale: righe.length,
-          vincolanti: righe.filter((r) => r.tipo === "vincolante").length,
-          premianti: righe.filter((r) => r.tipo === "premiante").length,
-          scoperti: righe.filter((r) => r.copertura !== "coperto").length,
+          discrezionali: righe.filter((r) => r.metodo === "discrezionale").length,
+          tabellari: righe.filter((r) => r.metodo === "tabellare").length,
+          valutati: cop.filter((c) => c.stato !== "da_valutare").length,
+          aperti: cop.filter((c) => c.stato === "scoperto").length,
         };
+        const badgeCopertura =
+          !conteggi.valutati
+            ? h("span", {
+                class: "badge badge--lg badge--plain",
+                title: "La copertura nasce in Fase 4 (registro dei gap) e in Fase 5 (proposte).",
+              }, "Copertura: si valuta dalla Fase 4")
+            : conteggi.aperti
+              ? h("span", { class: "badge badge--lg badge--crit" }, `Con gap senza proposta ${conteggi.aperti}`)
+              : conteggi.valutati < conteggi.totale
+                ? h("span", { class: "badge badge--lg badge--info" }, `Coperti ${conteggi.valutati} · da valutare ${conteggi.totale - conteggi.valutati}`)
+                : h("span", { class: "badge badge--lg badge--ok" }, "Tutti coperti");
         return h("section", { class: "card split__main" },
           h("div", { class: "row row--between", style: { marginBottom: "var(--s-4)" } },
             h("div", { class: "filterbar__group" },
               h("span", { class: "badge badge--lg badge--plain" }, `Tutti ${conteggi.totale}`),
-              h("span", { class: "badge badge--lg" }, `Vincolanti ${conteggi.vincolanti}`),
-              h("span", { class: "badge badge--lg" }, `Premianti ${conteggi.premianti}`),
-              conteggi.scoperti
-                ? h("span", { class: "badge badge--lg badge--crit" }, `Senza copertura ${conteggi.scoperti}`)
-                : h("span", { class: "badge badge--lg badge--ok" }, "Tutti coperti")),
+              conteggi.discrezionali ? h("span", { class: "badge badge--lg" }, `Discrezionali ${conteggi.discrezionali}`) : null,
+              conteggi.tabellari ? h("span", { class: "badge badge--lg" }, `Tabellari ${conteggi.tabellari}`) : null,
+              badgeCopertura),
             h("button", {
               type: "button", class: "btn btn--sm btn--accent",
               onClick: () => Gara.vai({ tipo: "grafo", filtro: "requisito" }),
             }, I.grafo(11), "Apri nel Grafo, filtrato su «requisito»")),
 
-          h("div", { class: "stack" }, mostrate.map(rigaRequisito)),
+          h("div", { class: "stack" }, mostrate.map((r) => rigaRequisito(r, copertura(r.id)))),
 
           righe.length > 6
             ? h("button", {
@@ -445,23 +457,54 @@ const Viste = (() => {
     return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
   }
 
-  function rigaRequisito(r) {
-    const tonoCop = r.copertura === "coperto" ? "ok" : r.copertura === "criticita" ? "crit" : "warn";
-    const etichettaCop = { coperto: "Coperto", criticita: "Con criticità", scoperto: "Senza copertura" }[r.copertura] || "Copertura non indicata";
-    const classe = r.copertura === "criticita" ? " req--criticita" : r.copertura === "scoperto" ? " req--scoperto" : "";
+  /** Copertura di un criterio, ricavata dai registri che la producono:
+      · gap_register.md (Fase 4, evidence-auditor): un gap per riga, con il
+        criterio e la proposta collegata («—» se non ne ha ancora una);
+      · proposal_register.md (Fase 5): le proposte approvate per criterio;
+      · manifest.json → criteri_stato: il criterio è stato analizzato.
+      Un criterio analizzato senza gap è coperto; con gap tutti collegati
+      a una proposta è coperto; con almeno un gap senza proposta no. */
+  function coperturaCriteri(stato) {
+    const gap = stato.registri.gap?.stato === "ok" ? stato.registri.gap.dati : [];
+    const proposte = stato.registri.proposte?.stato === "ok" ? stato.registri.proposte.dati : [];
+    const criteriStato = stato.manifest?.criteri_stato || {};
+    // «C1» non deve prendere «C10»; vale sia la colonna Criterio (C1,
+    // C1.2) sia l'ID (G-C1-001, P-C1-001) quando la colonna manca.
+    const di = (id, criterio, codice) => {
+      const re = new RegExp(`(^|[^A-Za-z0-9])${id}(?![0-9])`, "i");
+      return criterio ? new RegExp(`^${id}(?![0-9])`, "i").test(criterio.trim()) : re.test(codice || "");
+    };
+    return (id) => {
+      const suoi = gap.filter((g) => di(id, g.requisito, g.id));
+      const approvate = proposte.filter((p) => di(id, p.criterio, p.id)).length;
+      const analizzato = !!criteriStato[id]?.analizzato || suoi.length > 0;
+      if (!analizzato) return { stato: "da_valutare", etichetta: "Da valutare in Fase 4", dettaglio: "" };
+      const senza = suoi.filter((g) => !g.proposta).length;
+      const dettaglio = approvate ? UI.plurale(approvate, "proposta approvata", "proposte approvate") : "";
+      if (senza) return { stato: "scoperto", etichetta: `${senza}/${suoi.length} gap senza proposta`, dettaglio };
+      return {
+        stato: "coperto",
+        etichetta: !suoi.length ? "Nessun gap"
+          : suoi.length === 1 ? "1 gap, con proposta" : `${suoi.length} gap, tutti con proposta`,
+        dettaglio,
+      };
+    };
+  }
+
+  function rigaRequisito(r, c) {
+    const tono = { coperto: "ok", scoperto: "warn" }[c.stato] || "plain";
+    const classe = c.stato === "scoperto" ? " req--scoperto" : "";
     return h("article", { class: `req${classe}` },
       h("span", { class: "req__id" }, r.id || "—"),
       h("div", { class: "req__body" },
         h("div", { class: "req__text" }, r.testo || "(testo non riportato nel registro)"),
-        r.fonte
+        r.punti || c.dettaglio
           ? h("div", { class: "req__prov" },
-              h("span", { class: "req__source" }, I.pagina(9), r.fonte))
+              [r.punti ? `${r.punti} punti` : "", c.dettaglio].filter(Boolean).join(" · "))
           : null),
       h("div", { class: "req__badges" },
-        r.tipo ? h("span", {
-          class: `badge badge--sm${r.tipo === "premiante" ? " badge--info" : " badge--plain"}`,
-        }, r.tipo) : null,
-        h("span", { class: `badge badge--sm badge--${tonoCop}` }, etichettaCop)));
+        r.metodo ? h("span", { class: `badge badge--sm${r.metodo === "tabellare" ? " badge--info" : " badge--plain"}` }, r.metodo) : null,
+        h("span", { class: `badge badge--sm badge--${tono}` }, c.etichetta)));
   }
 
   // ===================================================================
