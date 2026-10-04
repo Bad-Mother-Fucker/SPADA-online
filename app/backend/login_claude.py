@@ -7,6 +7,7 @@ accesso; se il ritorno automatico non funziona, la pagina mostra un
 codice che si incolla nell'interfaccia e che qui si scrive sullo stdin
 del processo («Paste code here if prompted»). Un solo login alla volta.
 """
+import json
 import os
 import re
 import subprocess
@@ -128,4 +129,16 @@ def stato() -> dict:
     base = auth.stato_autenticazione()
     dettaglio = auth._stato_login() if base.get("metodo") != "oauth_token" else {}
     return {**base, "account": dettaglio.get("email"), "abbonamento": dettaglio.get("subscriptionType"),
-            "login": vista}
+            "nome": _nome_account() if base.get("disponibile") else None, "login": vista}
+
+
+def _nome_account() -> str | None:
+    """Nome dell'account collegato, dal profilo che Claude Code salva nella
+    configurazione dedicata (oauthAccount.fullName / displayName). Solo a
+    login attivo: dopo un logout il profilo resta nel file, ma non vale."""
+    try:
+        conf = json.loads((CLAUDE_DIR / ".claude.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    acc = conf.get("oauthAccount") or {}
+    return (acc.get("fullName") or acc.get("displayName") or "").strip() or None

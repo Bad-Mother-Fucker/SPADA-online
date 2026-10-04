@@ -1,4 +1,4 @@
-import { StarFourIcon, ArrowSquareOutIcon, MonitorIcon, CheckIcon, SignInIcon, SignOutIcon } from "@phosphor-icons/react"
+import { StarFourIcon, ArrowSquareOutIcon, MonitorIcon, CheckIcon, SignInIcon, SignOutIcon, UserIcon } from "@phosphor-icons/react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { Link } from "react-router"
@@ -62,6 +62,16 @@ function ControlloTema() {
   )
 }
 
+/** Iniziali dell'account collegato: dal nome («Michele De Sena» → MD),
+    altrimenti dalla parte locale dell'email («mario.rossi@…» → MR). */
+export function iniziali(nome?: string | null, email?: string | null): string | null {
+  const parole = (s: string) => s.split(/[\s._\-+]+/).map((p) => p.replace(/[^\p{L}]/gu, "")).filter(Boolean)
+  const p = nome ? parole(nome) : email ? parole(email.split("@")[0]) : []
+  if (!p.length) return null
+  const lettere = p.length === 1 ? p[0].slice(0, 2) : p[0][0] + p[p.length - 1][0]
+  return lettere.toUpperCase()
+}
+
 function MenuAvatar() {
   const { tema, scegli } = useTema()
   const qc = useQueryClient()
@@ -76,18 +86,18 @@ function MenuAvatar() {
     <>
     <DropdownMenu>
       <DropdownMenuTrigger
-        aria-label={collegato ? "Menu dell'operatore" : "Menu dell'operatore: Claude non collegato"}
+        aria-label={collegato ? `Menu dell'operatore${claude?.nome || claude?.account ? `: ${claude?.nome || claude?.account}` : ""}` : "Menu dell'operatore: Claude non collegato"}
         title={claude && !collegato ? "Claude non è collegato: le fasi non possono partire" : undefined}
         className="relative grid size-7 place-items-center rounded-md border bg-muted text-micro font-semibold text-foreground-2 transition-colors duration-(--d-fast) hover:border-border-strong"
       >
-        GC
+        {collegato && iniziali(claude?.nome, claude?.account) ? iniziali(claude?.nome, claude?.account) : <UserIcon size={14} aria-hidden="true" />}
         {claude && !collegato && <i className="absolute -top-0.5 -right-0.5 size-2 rounded-full border border-card bg-status-crit" aria-hidden="true" />}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-64">
         <DropdownMenuLabel>Claude per SPADA</DropdownMenuLabel>
         <p className="px-2 pb-1.5 text-xs text-muted-foreground">
           {!claude ? "Verifica in corso…"
-            : collegato ? (claude.account ? `Collegato come ${claude.account}${claude.abbonamento ? ` (${claude.abbonamento})` : ""}` : conToken ? "Collegato con token OAuth" : "Collegato")
+            : collegato ? (claude.account ? `Collegato come ${claude.nome ? `${claude.nome}, ` : ""}${claude.account}${claude.abbonamento ? ` (${claude.abbonamento})` : ""}` : conToken ? "Collegato con token OAuth" : "Collegato")
             : "Non collegato: le fasi non possono partire."}
         </p>
         {!conToken && (collegato ? (

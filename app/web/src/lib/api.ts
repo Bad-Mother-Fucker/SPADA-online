@@ -131,6 +131,8 @@ export interface StatoAuth {
 export interface StatoLoginClaude extends StatoAuth {
   metodo?: "oauth_token" | "login_config_dedicata"
   account?: string | null
+  /** Nome dell'account collegato (profilo Claude), se noto. */
+  nome?: string | null
   abbonamento?: string | null
   login: { fase: "inattivo" | "in_attesa" | "concluso" | "fallito"; url: string | null; codice_inviato: boolean; messaggio: string }
 }
