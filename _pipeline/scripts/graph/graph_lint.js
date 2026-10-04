@@ -120,7 +120,7 @@ for (const f of criterionFiles) {
   if (m) linkTargets.add(m[1]);
 }
 // Pagine speciali
-for (const special of ['scope', 'economic_framework', 'index']) {
+for (const special of ['scope', 'economic_framework', 'index', 'professionista']) {
   if (fs.existsSync(path.join(GRAPH_DIR, `${special}.md`))) {
     linkTargets.add(special);
   }

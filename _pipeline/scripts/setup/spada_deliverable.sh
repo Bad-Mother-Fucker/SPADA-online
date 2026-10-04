@@ -138,14 +138,14 @@ stato[deliverable_id] = {
 with open("_state/deliverables.json", "w") as f:
     json.dump(stato, f, ensure_ascii=False, indent=2)
 
-# Fase 6 nel suo insieme e' "in_esecuzione" finche' almeno un
+# Fase 7 nel suo insieme e' "in_esecuzione" finche' almeno un
 # deliverable e' in corso o da eseguire, indipendentemente da quanti
 # altri sono gia' completati.
 with open("_state/fasi.json") as f:
     fasi = json.load(f)
 fasi["fase_corrente"] = 6
-fasi["fasi"]["6_stesura_offerta"]["stato"] = "in_esecuzione"
-fasi["fasi"]["6_stesura_offerta"]["sintesi"] = f"Deliverable in esecuzione: {deliverable_id} ({agente})."
+fasi["fasi"]["7_stesura_offerta"]["stato"] = "in_esecuzione"
+fasi["fasi"]["7_stesura_offerta"]["sintesi"] = f"Deliverable in esecuzione: {deliverable_id} ({agente})."
 with open("_state/fasi.json", "w") as f:
     json.dump(fasi, f, ensure_ascii=False, indent=2)
 PY
@@ -231,7 +231,7 @@ stato[deliverable_id] = {
 with open("_state/deliverables.json", "w") as f:
     json.dump(stato, f, ensure_ascii=False, indent=2)
 
-# Fase 6 nel suo insieme e' "completata" solo quando OGNI deliverable
+# Fase 7 nel suo insieme e' "completata" solo quando OGNI deliverable
 # elencato in manifest.json lo e'; "errore" solo se nessuno e' ancora
 # da eseguire/in corso e almeno uno e' fallito; altrimenti resta
 # "in_esecuzione" (ce ne sono ancora da lanciare o falliti da rilanciare).
@@ -253,9 +253,9 @@ else:
 
 with open("_state/fasi.json") as f:
     fasi = json.load(f)
-fasi["fasi"]["6_stesura_offerta"]["stato"] = fase6_stato
-fasi["fasi"]["6_stesura_offerta"]["sintesi"] = sintesi
-fasi["fasi"]["6_stesura_offerta"]["conclusa_il"] = concluso_il
+fasi["fasi"]["7_stesura_offerta"]["stato"] = fase6_stato
+fasi["fasi"]["7_stesura_offerta"]["sintesi"] = sintesi
+fasi["fasi"]["7_stesura_offerta"]["conclusa_il"] = concluso_il
 with open("_state/fasi.json", "w") as f:
     json.dump(fasi, f, ensure_ascii=False, indent=2)
 PY

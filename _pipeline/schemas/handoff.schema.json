@@ -7,7 +7,7 @@
   "required": ["fase", "generato_il", "entita_chiave", "riferimenti"],
   "additionalProperties": true,
   "properties": {
-    "fase": { "type": "integer", "minimum": 1, "maximum": 7 },
+    "fase": { "type": "integer", "minimum": 1, "maximum": 8 },
     "generato_il": { "type": "string", "format": "date-time" },
     "entita_chiave": {
       "type": "array",

@@ -32,16 +32,21 @@ nome_fase() {
     1) echo "1_acquisizione_documenti" ;;
     2) echo "2_costruzione_grafo" ;;
     3) echo "3_analisi_strategica" ;;
-    4) echo "4_elaborazione_criteri" ;;
-    5) echo "5_revisione_proposte" ;;
-    6) echo "6_stesura_offerta" ;;
-    7) echo "7_approvazione_finale" ;;
+    4) echo "4_domande_professionista" ;;
+    5) echo "5_elaborazione_criteri" ;;
+    6) echo "6_revisione_proposte" ;;
+    7) echo "7_stesura_offerta" ;;
+    8) echo "8_approvazione_finale" ;;
   esac
 }
 
-# Fasi con gate umano (3, 5, 7) e fasi senza agente (5, 7).
-fase_con_gate_umano() { case "$1" in 3|5|7) return 0 ;; *) return 1 ;; esac; }
-fase_senza_agente()   { case "$1" in 5|7) return 0 ;; *) return 1 ;; esac; }
+# Checkpoint umani senza agente (6, 8): si chiudono con --approva.
+# La Fase 4 (domande al professionista) è un gate di natura diversa: ha
+# un agente, e si chiude eseguendola, cioè inviando le risposte.
+fase_con_gate_umano() { case "$1" in 6|8) return 0 ;; *) return 1 ;; esac; }
+fase_senza_agente()   { case "$1" in 6|8) return 0 ;; *) return 1 ;; esac; }
+
+DOMANDE_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/domande/domande.py"
 
 # Gli id modello scritti nei manifest della VM (claude-sonnet-5,
 # claude-opus-5) diventano alias della CLI, che puntano sempre

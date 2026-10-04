@@ -44,48 +44,24 @@ Output standard:
 - `output/03_criteria/criteria_checklist.md`
 - `output/03_criteria/criteria/criterion_Cx.md` per ogni criterio
 
-### Step 3 — Produzione gara brief
+### Step 3 — Prima stesura del gara brief e domande
 
-Dopo l'estrazione dei criteri, produci `output/03_criteria/gara_brief.md`
-seguendo il template `.claude/templates/gara_brief_template.md` (pipeline condivisa).
+Dopo l'estrazione dei criteri, scrivi la prima stesura di
+`output/03_criteria/gara_brief.md` seguendo il template
+`.claude/templates/gara_brief_template.md` (pipeline condivisa): tutte
+le sezioni fisse, popolate con cio' che il disciplinare permette di
+scrivere, le altre con la riga «Da completare». Il brief si arricchisce
+nelle fasi successive (brief-writer). Il dettaglio delle sezioni e'
+nell'agente `disciplinare-analyst`, sezione «Produzione del gara brief».
 
-Il gara brief si costruisce interamente dalle informazioni del
-disciplinare — nessun elaborato richiesto.
+Gli stessi deliverables delle schede criterio vanno registrati anche in
+`manifest.json → deliverables`.
 
-**Sezione "Struttura del punteggio":**
-Tabella con tutti i criteri, punti max, peso percentuale sul totale.
-Identifica i criteri con peso > 20% come alta priorita'.
-
-**Sezione "Criteri in dettaglio":**
-Una scheda per criterio: **Sommario** (cosa valuta, come si
-attribuisce il punteggio, elementi premianti) e tabella
-**Deliverables richiesti** (documento da produrre, vincolo di
-formato, articolo del disciplinare). Ogni scheda chiude con
-`**Stato analisi:** non ancora analizzato` — il segnaposto che
-la pipeline della Fase 2 aggiorna (evidence-auditor a fine audit,
-feedback-processor a feedback elaborato).
-Gli stessi deliverables vanno registrati anche in
-`manifest.json → deliverables` (una voce per documento
-richiesto, per criterio — vedi agente disciplinare-analyst).
-
-**Sezione "Dove si concentra il potenziale":**
-Criteri con elementi premianti ampi o subcriteri non rigidi —
-dove il sistema puo' fare la differenza. Basarsi sui
-`fuori_scope_risks` vuoti e `modification_limits` permissivi.
-
-**Sezione "Vincoli principali":**
-`modification_limits` non vuoti, criteri con punteggio
-predeterminato, esclusioni esplicite del disciplinare.
-
-**Sezione "Elaborati citati nel disciplinare":**
-Estrai dal testo del disciplinare tutti i riferimenti a
-documenti di progetto (es. "relazione tecnica", "computo metrico",
-"planimetrie", "PSC"). Questa e' la prima lista di cosa serve
-prima ancora di aprire gli elaborati — una pre-checklist.
-
-**Sezione "Domande aperte per il professionista":**
-Aspetti tecnici ambigui o criteri che richiedono valutazione
-immediata per impostare la strategia. Massimo 5 domande.
+Il brief non contiene domande: quelle che il disciplinare fa nascere
+(adempimenti con scadenza, requisiti per i criteri tabellari, quesiti
+alla stazione appaltante) si registrano con
+`python3 "$CLAUDE_CONFIG_DIR/scripts/domande/domande.py" aggiungi --origine fase_1 ...`
+e il professionista le risponde nella Fase 4.
 
 ### Step 4 — Presentazione risultati
 
@@ -101,7 +77,7 @@ File prodotti:
 
 Prossimi passi:
   1. Apri l'artifact HTML e condividilo con il professionista
-     (si apre nel browser, funziona offline, ha i campi per le risposte)
+     (si apre nel browser, funziona offline)
   2. Carica gli elaborati in input/elaborati/
   3. Avvia la Fase 1 completa con: start_bid_analysis
 ```
@@ -109,7 +85,7 @@ Prossimi passi:
 ## Note operative
 
 Il gara brief e' il documento da condividere con il professionista
-e l'operatore per il Gate A (strategia) anche prima del grafo.
-Permette di raccogliere le prime indicazioni strategiche sul
-peso dei criteri e sulle aree di opportunita' senza dover
-aspettare l'ingestione degli elaborati.
+e l'operatore fin dalla Fase 1: scadenze, punteggio e vincoli di
+formato non aspettano l'ingestione degli elaborati. Le domande, invece,
+si raccolgono tutte nel registro e si rispondono nella Fase 4, quando
+anche elaborati e audit strategico hanno detto la loro.

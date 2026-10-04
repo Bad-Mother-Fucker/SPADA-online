@@ -30,8 +30,11 @@ CREATE TABLE IF NOT EXISTS job (
   concluso_il   TEXT,
   run_id        TEXT,
   errore        TEXT,
-  deliverable_id TEXT  -- Sprint 10.3: se valorizzato, il job esegue UN deliverable
+  deliverable_id TEXT, -- Sprint 10.3: se valorizzato, il job esegue UN deliverable
                        -- (spada_deliverable.sh) invece della fase atomica (spada_fase.sh)
+  operazione    TEXT,  -- integrazione fuori fase (spada_integra.sh): 'integra_documento'
+                       -- (argomento = percorso sotto la gara) o 'riallinea_brief'
+  argomento     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_job_stato ON job (stato, creato_il);
 CREATE INDEX IF NOT EXISTS idx_job_gara ON job (gara_slug);
@@ -51,7 +54,7 @@ CREATE TABLE IF NOT EXISTS approvazioni (
   gara_slug     TEXT NOT NULL REFERENCES gare(slug) ON DELETE CASCADE,
   fase          INTEGER NOT NULL,
   tipo          TEXT NOT NULL CHECK (tipo IN ('direttive', 'proposta', 'offerta')),
-  riferimento   TEXT,               -- es. "P-C1-001", null per le direttive di fase 3
+  riferimento   TEXT,               -- es. "P-C1-001", null per le direttive
   decisione     TEXT CHECK (decisione IN ('approvata', 'da_modificare', 'scartata', NULL)),
   nota          TEXT,
   creato_il     TEXT NOT NULL

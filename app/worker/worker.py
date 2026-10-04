@@ -118,7 +118,16 @@ def esegui_job(job):
         log.error("Job %s: autenticazione Claude non disponibile: %s", job_id, e)
         return
 
-    if deliverable_id:
+    operazione = job["operazione"] if "operazione" in job.keys() else None
+    if operazione:
+        # Integrazione fuori fase: documento caricato dopo la Fase 2 o
+        # riallineamento del brief. Non tocca lo stato delle fasi.
+        spada_integra = PIPELINE_DIR / "scripts" / "setup" / "spada_integra.sh"
+        if operazione == "integra_documento":
+            argv = ["bash", str(spada_integra), slug, "documento", job["argomento"] or ""]
+        else:
+            argv = ["bash", str(spada_integra), slug, "brief"]
+    elif deliverable_id:
         # Sprint 10.3: un deliverable si esegue da solo, indipendente
         # dagli altri deliverable della stessa gara e dalle altre fasi.
         spada_deliverable = PIPELINE_DIR / "scripts" / "setup" / "spada_deliverable.sh"

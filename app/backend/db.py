@@ -18,6 +18,10 @@ def _applica_migrazioni(con: sqlite3.Connection):
     colonne_job = {r[1] for r in con.execute("PRAGMA table_info(job)")}
     if "deliverable_id" not in colonne_job:
         con.execute("ALTER TABLE job ADD COLUMN deliverable_id TEXT")
+    if "operazione" not in colonne_job:
+        con.execute("ALTER TABLE job ADD COLUMN operazione TEXT")
+    if "argomento" not in colonne_job:
+        con.execute("ALTER TABLE job ADD COLUMN argomento TEXT")
 
 
 def init_db():

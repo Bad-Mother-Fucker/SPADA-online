@@ -1,7 +1,9 @@
-# Fase 6 — Stesura dell'offerta
+# Fase 7 — Stesura dell'offerta
 
-Dipende da: `_state/handoff/5_revisione_proposte.json` (proposte
-approvate) e `_state/handoff/3_analisi_strategica.json` (priorità).
+Dipende da: `_state/handoff/6_revisione_proposte.json` (proposte
+approvate) e `_state/handoff/4_domande_professionista.json` (priorità e
+indicazioni del professionista, testo integrale in
+`output/07_questions/risposte_professionista.md`).
 
 ## Prerequisiti
 
@@ -20,7 +22,7 @@ Non inventa contenuti, non aggiunge proposte non approvate.
 
 ## A fine fase
 
-Scrivi `_state/handoff/6_stesura_offerta.json`:
+Scrivi `_state/handoff/7_stesura_offerta.json`:
 - `entita_chiave`: struttura offerta prodotta (criteri coperti, facciate usate)
 - `riferimenti`: file in `output/10_offer/`
 - `alert`: deliverable richiesti (da `manifest.json → deliverables`) non coperti dalla bozza

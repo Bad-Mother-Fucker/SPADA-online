@@ -13,7 +13,7 @@ class CreaGaraRequest(BaseModel):
 
 
 class ApprovazioneRequest(BaseModel):
-    fase: int = Field(ge=1, le=7)
+    fase: int = Field(ge=1, le=8)
     tipo: Literal["direttive", "proposta", "offerta"]
     riferimento: Optional[str] = None
     decisione: Optional[Literal["approvata", "da_modificare", "scartata"]] = None
@@ -31,10 +31,10 @@ class PrioritaCriterio(BaseModel):
     indicazione: str = ""
 
 
-class IndicazioniStrategicheRequest(BaseModel):
-    """Checkpoint della Fase 3: i campi della sezione «Indicazioni
-    strategiche del professionista» di strategy_audit.md."""
-    risposte: list[str] = []
+class IndicazioniStrategiche(BaseModel):
+    """Indicazioni strategiche del professionista (Fase 4): guidano la
+    ricerca soluzioni (cornice delle proposte) e la stesura dell'offerta
+    (priorità → budget di facciate)."""
     tono: Literal["", "conservativo", "bilanciato", "audace"] = ""
     priorita: list[PrioritaCriterio] = []
     vincoli: list[str] = []
@@ -42,10 +42,25 @@ class IndicazioniStrategicheRequest(BaseModel):
     note: str = ""
 
 
-class RisposteBriefRequest(BaseModel):
-    """Risposte alle «Domande aperte per il professionista» del gara
-    brief, nell'ordine delle domande ("" = senza risposta)."""
-    risposte: list[str] = []
+class BozzaDomandeRequest(BaseModel):
+    """Bozza della Fase 4: risposte per id di domanda ("" = senza
+    risposta) e indicazioni strategiche. Salvarla non la invia."""
+    risposte: dict[str, str] = {}
+    indicazioni: Optional[IndicazioniStrategiche] = None
+
+
+class InformazioneProfessionistaRequest(BaseModel):
+    """Un'informazione data dal professionista di sua iniziativa: entra
+    nel contesto con il prossimo invio della Fase 4."""
+    titolo: str = Field(min_length=1, max_length=200)
+    testo: str = Field(min_length=1)
+    criterio: Optional[str] = Field(default=None, pattern=r"^C[0-9]+(\.[0-9]+)?$")
+
+
+class IntegraDocumentoRequest(BaseModel):
+    """Documento già caricato (percorso sotto la gara, es.
+    input/elaborati/X.pdf) da integrare nel contesto dopo la Fase 2."""
+    percorso: str
 
 
 class AssistenteRequest(BaseModel):

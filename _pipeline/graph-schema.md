@@ -184,6 +184,29 @@ confidence: TBD
 ---
 ```
 
+### Tipo: `professionista` — Pagina speciale
+File: `02_graph/professionista.md`
+Scritta da `answers-integrator` a ogni esecuzione della Fase 4 (invio
+delle risposte), riscritta per intero. Raccoglie i fatti dichiarati dal
+professionista, ciascuno con la sua fonte `D-nnn` del registro delle
+domande (`output/07_questions/domande.json`). Le pagine criterio
+riportano gli stessi fatti, per criterio, nel campo di frontmatter
+`informazioni_professionista`.
+
+```yaml
+---
+type: professionista
+gara: "[nome gara]"
+date: YYYY-MM-DD
+ai-first: true
+ultimo_invio: YYYY-MM-DD
+tono: bilanciato
+priorita: { C1: ALTA, C2: MEDIA }
+fonte: output/07_questions/risposte_professionista.md
+confidence: dichiarato
+---
+```
+
 ### Tipo: `proposal` — Nodo proposta approvata
 File: `02_graph/proposals/P-[criterio]-[num]_[titolo-breve].md`
 Creato da `feedback-processor` dopo elaborazione feedback.

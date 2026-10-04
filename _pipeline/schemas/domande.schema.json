@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spada-online/_pipeline/schemas/domande.schema.json",
+  "title": "Registro delle domande al professionista",
+  "description": "output/07_questions/domande.json. Scritto SOLO da _pipeline/scripts/domande/domande.py (agenti) e dal backend (bozze del professionista). Le risposte entrano nel contesto della gara solo all'esecuzione della Fase 4.",
+  "type": "object",
+  "required": ["versione", "domande", "indicazioni", "invii"],
+  "properties": {
+    "versione": { "const": 1 },
+    "domande": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "origine", "categoria", "testo", "stato", "creata_il", "risposta"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^D-[0-9]{3,}$" },
+          "origine": { "enum": ["fase_1", "fase_2", "fase_3", "integrazione", "professionista"] },
+          "categoria": { "enum": ["amministrativa", "quesito_sa", "tecnica", "strategica", "informazione"] },
+          "criterio": { "type": ["string", "null"], "pattern": "^C[0-9]+(\\.[0-9]+)?$" },
+          "testo": { "type": "string", "minLength": 1 },
+          "perche": { "type": "string" },
+          "fonte": { "type": "string" },
+          "stato": { "enum": ["aperta", "superata"] },
+          "superata_da": { "type": ["string", "null"] },
+          "motivo_superata": { "type": "string" },
+          "creata_il": { "type": "string", "format": "date-time" },
+          "risposta": { "type": "string" },
+          "risposta_il": { "type": ["string", "null"], "format": "date-time" },
+          "inviata_il": { "type": ["string", "null"], "format": "date-time", "description": "Ultimo invio con la Fase 4 che ha incluso questa risposta." }
+        }
+      }
+    },
+    "indicazioni": {
+      "type": "object",
+      "properties": {
+        "tono": { "enum": ["", "conservativo", "bilanciato", "audace"] },
+        "priorita": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^C[0-9]+$" },
+              "livello": { "enum": ["", "ALTA", "MEDIA", "BASSA"] },
+              "indicazione": { "type": "string" }
+            }
+          }
+        },
+        "vincoli": { "type": "array", "items": { "type": "string" } },
+        "opportunita": { "type": "array", "items": { "type": "string" } },
+        "note": { "type": "string" },
+        "aggiornate_il": { "type": ["string", "null"] },
+        "inviate_il": { "type": ["string", "null"] }
+      }
+    },
+    "invii": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "inviato_il": { "type": "string" },
+          "run_id": { "type": "string" },
+          "domande": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

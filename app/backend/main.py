@@ -52,6 +52,10 @@ if os.environ.get("SPADA_FRONTEND_ORIGIN"):
 def _startup():
     init_db()
     log.info("Database inizializzato/verificato.")
+    # Gare create con le sette fasi → otto fasi con la Fase 4 «Domande al
+    # professionista». Una volta sola per gara (versione_fasi in fasi.json).
+    from migrazioni import migra_gare
+    migra_gare()
 
 
 app.include_router(gare.router)

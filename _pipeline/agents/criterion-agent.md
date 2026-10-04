@@ -56,10 +56,15 @@ Leggi nell'ordine:
 - `02_graph/scope.md`
 - `02_graph/economic_framework.md`
 - `output/03_criteria/strategy_audit.md` — SE PRESENTE: leggi per calibrare
-  la conservativita' delle proposte (classificazione gap prezzi),
-  inclusa la sezione "Indicazioni strategiche del professionista"
-  se compilata dal professionista — e' la fonte della "cornice
-  strategica" nel Colpo d'occhio
+  la conservativita' delle proposte (classificazione gap prezzi)
+- `output/07_questions/risposte_professionista.md` — risposte e
+  indicazioni inviate dal professionista con la Fase 4: la sezione
+  "Indicazioni strategiche del professionista" (tono, priorita' per
+  criterio, vincoli, opportunita') e' la fonte della "cornice
+  strategica" nel Colpo d'occhio; le risposte che riguardano il
+  criterio (anche in `informazioni_professionista` nel frontmatter della
+  pagina criterio e in `02_graph/professionista.md`) sono fatti da
+  rispettare nelle proposte (budget, requisiti, scelte tecniche)
 - `vincoli_offerta_tecnica.md` — SE PRESENTE: budget facciate del
   criterio/sottocriterio (Sezione B se compilata, altrimenti il limite
   complessivo di Sezione A) per il Colpo d'occhio

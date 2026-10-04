@@ -91,15 +91,17 @@ JSON
 cat > "$GARA_PATH/_state/fasi.json" <<JSON
 {
   "\$schema": "../../_pipeline/schemas/fasi.schema.json",
+  "versione_fasi": 2,
   "fase_corrente": 1,
   "fasi": {
     "1_acquisizione_documenti":       { "stato": "da_eseguire", "sintesi": "" },
     "2_costruzione_grafo":            { "stato": "da_eseguire", "sintesi": "" },
     "3_analisi_strategica":           { "stato": "da_eseguire", "sintesi": "" },
-    "4_elaborazione_criteri":         { "stato": "da_eseguire", "sintesi": "" },
-    "5_revisione_proposte":           { "stato": "da_eseguire", "sintesi": "" },
-    "6_stesura_offerta":              { "stato": "da_eseguire", "sintesi": "" },
-    "7_approvazione_finale":          { "stato": "da_eseguire", "sintesi": "" }
+    "4_domande_professionista":       { "stato": "da_eseguire", "sintesi": "" },
+    "5_elaborazione_criteri":         { "stato": "da_eseguire", "sintesi": "" },
+    "6_revisione_proposte":           { "stato": "da_eseguire", "sintesi": "" },
+    "7_stesura_offerta":              { "stato": "da_eseguire", "sintesi": "" },
+    "8_approvazione_finale":          { "stato": "da_eseguire", "sintesi": "" }
   }
 }
 JSON

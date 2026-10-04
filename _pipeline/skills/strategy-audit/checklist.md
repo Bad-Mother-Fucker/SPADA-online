@@ -44,8 +44,10 @@
 - [ ] Classificazione assegnata: AMPIO / MODERATO / LIMITATO / ASSENTE /
       NON CALCOLABILE
 
-## Domande chiave
-- [ ] Tra 4 e 6 domande generate
+## Domande chiave (registro della Fase 4)
+- [ ] Tra 4 e 6 domande registrate con `domande.py aggiungi --origine fase_3 --categoria strategica`
+- [ ] Nessuna domanda e nessuna sezione «Indicazioni strategiche» dentro `strategy_audit.md`
+- [ ] Nessun duplicato di domande gia' aperte delle Fasi 1-2
 - [ ] Se Analisi 2 e' NON RAPPRESENTATIVO: la domanda sul completamento
       dell'estrazione e' presente (obbligatoria)
 - [ ] Ogni domanda e' aperta (non retorica, non implica la risposta)
@@ -53,7 +55,7 @@
 - [ ] Almeno una domanda trasversale sulle priorita'
 
 ## Output
-- [ ] `output/03_criteria/strategy_audit.md` creato con il template completo
+- [ ] `output/03_criteria/strategy_audit.md` creato con il template completo (si chiude con il Riepilogo)
 - [ ] Riepilogo tabella alla fine del file
 - [ ] Nessun valore inventato — tutti i dati hanno fonte citata
 - [ ] Nessuna raccomandazione strategica nel testo

@@ -32,10 +32,12 @@ Al termine ci sono **due** STOP obbligatori in sequenza, nel formato
 esatto di CLAUDE.md §3 Fase 1:
 
 1. **Feedback sull'audit strategico** — riporta parola per parola la
-   tabella "Riepilogo" e le "Domande chiave" da
-   `output/03_criteria/strategy_audit.md`, e attende la risposta del
-   professionista. Le risposte vanno scritte nella sezione
-   "Indicazioni strategiche del professionista" dello stesso file.
+   tabella "Riepilogo" da `output/03_criteria/strategy_audit.md` e le
+   domande aperte del registro unico
+   (`python3 scripts/domande/domande.py elenco --aperte`), e attende la
+   risposta del professionista. Nell'app le risposte e le indicazioni
+   strategiche si danno e si inviano nella Fase 4 «Domande al
+   professionista».
 2. **Scelta criteri** — solo dopo il feedback strategico, presenta il
    menu (Analizza C1 / C1 e C3 / tutti / scelta manuale) e attende.
 

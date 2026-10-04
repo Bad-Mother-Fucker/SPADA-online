@@ -16,13 +16,14 @@ from deliverables import elenca_deliverables, trova_deliverable
 from grafo import estrai_grafo, leggi_corpo, leggi_frontmatter
 from interventi import InterventoGiaInCorso, invoca_intervento
 from models import (
-    ApprovazioneRequest, AssistenteRequest, CreaGaraRequest,
-    IndicazioniStrategicheRequest, InterventoRequest, ProposaOperatoreRequest,
-    RisposteBriefRequest,
+    ApprovazioneRequest, AssistenteRequest, BozzaDomandeRequest, CreaGaraRequest,
+    IntegraDocumentoRequest, InformazioneProfessionistaRequest, InterventoRequest,
+    ProposaOperatoreRequest,
 )
-import brief
-import strategia
 from paths import PIPELINE_DIR, SlugNonValido, gara_dir, percorso_sotto_gara, valida_slug
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "_pipeline" / "scripts" / "domande"))
+import domande as registro_domande  # noqa: E402
 from prezzario import edizioni_installate, regione_canonica, stato_prezzario
 
 router = APIRouter(prefix="/gare", tags=["gare"])
@@ -173,43 +174,113 @@ def carica_documento(slug: str, categoria: str, file: UploadFile):
             (slug, nome_file, str(dest.relative_to(gara_dir(slug))), categoria, now()),
         )
 
-    # Ingestione incrementale (Sprint 8): un upload a gara avviata non
-    # rilancia nulla da solo — l'interfaccia deve poter chiedere
-    # esplicitamente quale fase già completata rieseguire tenendo conto
-    # del nuovo documento. Qui si limita a segnalare quali fasi sono
-    # già completate (candidate a una riesecuzione informata).
+    # Un upload a gara avviata non rilancia nulla da solo. Dopo la Fase 2
+    # il documento si integra nel contesto (grafo, brief, domande) con
+    # POST /documenti/integra, senza rieseguire le fasi; prima della Fase
+    # 2 ci pensa la Fase 2 stessa, che censisce tutto input/.
     fasi = _leggi_json(gara_dir(slug) / "_state" / "fasi.json", {}).get("fasi", {})
     fasi_completate = sorted(
         int(k.split("_")[0]) for k, v in fasi.items() if v.get("stato") == "completata"
     )
+    integrabile = _corpo_fase(fasi, 2).get("stato") == "completata"
     return {
         "caricato": nome_file,
         "categoria": categoria,
+        "percorso": str(dest.relative_to(gara_dir(slug))),
         "fasi_completate_da_valutare": fasi_completate,
+        "integrabile": integrabile,
         "messaggio": (
-            f"Documento caricato. Le fasi {fasi_completate} risultano già completate: "
-            "valuta se rieseguirle per tenere conto del nuovo documento."
-            if fasi_completate else
-            "Documento caricato. Nessuna fase ancora completata da rivalutare."
+            "Documento caricato. Il grafo esiste già: integralo nel contesto (grafo, brief, domande) "
+            "senza rieseguire le fasi."
+            if integrabile else
+            "Documento caricato. Entrerà nel contesto con la Fase 2 (analisi degli elaborati)."
         ),
     }
 
 
+def _stato_contesto(d: Path, slug: str, righe) -> dict:
+    """Per ogni percorso: se il documento è già nel contesto della gara.
+    - "fase": l'ha (o lo avrà) letto la Fase 2, perché c'era quando è partita;
+    - "da_integrare": caricato dopo l'avvio della Fase 2, non ancora integrato;
+    - "in_coda" / "in_corso" / "integrato" / "errore": integrazione fuori fase."""
+    fasi = _leggi_json(d / "_state" / "fasi.json", {}).get("fasi", {})
+    f2 = _corpo_fase(fasi, 2)
+    avvio_f2 = f2.get("iniziata_il") or ""
+    integrazioni = _leggi_json(d / "_state" / "integrazioni.json", {})
+    with get_conn() as con:
+        job = {r["argomento"]: r["stato"] for r in con.execute(
+            "SELECT argomento, stato FROM job WHERE gara_slug=? AND operazione='integra_documento' "
+            "AND stato IN ('in_coda','in_esecuzione') ORDER BY id", (slug,)).fetchall()}
+    out = {}
+    for r in righe:
+        percorso = r["percorso"]
+        if percorso in job:
+            out[percorso] = "in_corso" if job[percorso] == "in_esecuzione" else "in_coda"
+        elif percorso in integrazioni:
+            out[percorso] = "integrato" if integrazioni[percorso].get("esito") == "completato" else "errore"
+        elif f2.get("stato") == "completata" and avvio_f2 and r["caricato_il"] > avvio_f2:
+            out[percorso] = "da_integrare"
+        else:
+            out[percorso] = "fase"
+    return out
+
+
 @router.get("/{slug}/documenti")
 def elenco_documenti(slug: str):
-    _gara_o_404(slug)
+    d = _gara_o_404(slug)
     with get_conn() as con:
         righe = con.execute(
             "SELECT nome_file, percorso, categoria, caricato_il FROM documenti "
             "WHERE gara_slug=? ORDER BY caricato_il DESC",
             (slug,),
         ).fetchall()
-    return [dict(r) for r in righe]
+    contesto = _stato_contesto(d, slug, righe)
+    integrazioni = _leggi_json(d / "_state" / "integrazioni.json", {})
+    return [{**dict(r), "contesto": contesto.get(r["percorso"]),
+             "errore_integrazione": (integrazioni.get(r["percorso"]) or {}).get("errore")} for r in righe]
+
+
+@router.post("/{slug}/documenti/integra", status_code=202)
+def integra_documento(slug: str, body: IntegraDocumentoRequest):
+    """Integra nel contesto un documento caricato dopo la Fase 2: grafo,
+    brief e registro delle domande, senza rieseguire le fasi
+    (spada_integra.sh, eseguito dal worker come ogni altro job)."""
+    d = _gara_o_404(slug)
+    fasi = _leggi_json(d / "_state" / "fasi.json", {}).get("fasi", {})
+    if _corpo_fase(fasi, 2).get("stato") != "completata":
+        raise HTTPException(409, "Prima della Fase 2 non serve: il documento entra nel contesto con la Fase 2.")
+    percorso = body.percorso.strip().lstrip("/")
+    if not percorso.startswith("input/") or ".." in Path(percorso).parts:
+        raise HTTPException(400, "Il percorso deve essere un file sotto input/.")
+    if not (d / percorso).is_file():
+        raise HTTPException(404, f"Documento non trovato: {percorso}")
+    with get_conn() as con:
+        if con.execute("SELECT 1 FROM job WHERE gara_slug=? AND operazione='integra_documento' AND argomento=? "
+                       "AND stato IN ('in_coda','in_esecuzione')", (slug, percorso)).fetchone():
+            raise HTTPException(409, "L'integrazione di questo documento è già in coda.")
+    return _accoda_job(slug, 2, "esegui", operazione="integra_documento", argomento=percorso)
+
+
+@router.post("/{slug}/brief/riallinea", status_code=202)
+def riallinea_brief(slug: str):
+    """Riporta il gara brief alle sezioni fisse del template corrente con
+    quanto prodotto dalle fasi già eseguite, e registra le domande di
+    quelle fasi (gare nate prima del registro unico delle domande)."""
+    d = _gara_o_404(slug)
+    fasi = _leggi_json(d / "_state" / "fasi.json", {}).get("fasi", {})
+    if _corpo_fase(fasi, 2).get("stato") != "completata":
+        raise HTTPException(409, "Il riallineamento serve dopo la Fase 2: prima, il brief lo scrive la Fase 1.")
+    with get_conn() as con:
+        if con.execute("SELECT 1 FROM job WHERE gara_slug=? AND operazione='riallinea_brief' "
+                       "AND stato IN ('in_coda','in_esecuzione')", (slug,)).fetchone():
+            raise HTTPException(409, "Il riallineamento del brief è già in coda.")
+    return _accoda_job(slug, 2, "esegui", operazione="riallinea_brief")
 
 
 NOMI_FASI_UI = {
-    1: "Acquisizione documenti", 2: "Estrazione requisiti", 3: "Analisi capitolato",
-    4: "Ricerca soluzioni", 5: "Revisione proposte", 6: "Deliverables", 7: "Audit e consegna",
+    1: "Acquisizione documenti", 2: "Analisi elaborati", 3: "Analisi strategica",
+    4: "Domande al professionista", 5: "Ricerca soluzioni", 6: "Revisione proposte",
+    7: "Deliverables", 8: "Audit e consegna",
 }
 
 
@@ -220,9 +291,10 @@ def _corpo_fase(fasi: dict, n: int) -> dict:
 def _verifica_sequenza(d: Path, fase: int, tipo: str):
     """Ogni fase sblocca la successiva (stessa regola di
     Dominio.sbloccata nel frontend): si esegue la fase n solo con la n-1
-    completata e, se è un checkpoint, approvata. Il checkpoint della 3 si
-    approva dopo che la fase ha girato; quelli di 5 e 7 (senza agente)
-    dopo la fase precedente."""
+    completata e, se è un checkpoint, approvata. I checkpoint di 6 e 8
+    (senza agente) si approvano dopo la fase precedente. La Fase 4 si
+    esegue (= invio delle risposte) solo con le indicazioni strategiche
+    compilate: tono e una priorità per criterio."""
     fasi = _leggi_json(d / "_state" / "fasi.json", {}).get("fasi", {})
 
     def chiusa(n):
@@ -230,16 +302,9 @@ def _verifica_sequenza(d: Path, fase: int, tipo: str):
         return c.get("stato") == "completata" and not c.get("richiede_approvazione")
 
     if tipo == "approva":
-        if fase not in (3, 5, 7):
+        if fase not in (6, 8):
             raise HTTPException(400, f"La Fase {fase} non ha un checkpoint da approvare.")
-        if fase == 3 and _corpo_fase(fasi, 3).get("stato") != "completata":
-            raise HTTPException(409, "Esegui prima la Fase 3: il checkpoint si approva sul suo risultato.")
-        if fase == 3:
-            ind = strategia.leggi(d)
-            if not ind.get("compilata"):
-                manca = ", ".join(ind.get("mancanti", [])[:4]) or "la sezione"
-                raise HTTPException(409, f"Compila le indicazioni strategiche prima di approvare (manca: {manca}).")
-        if fase in (5, 7) and not chiusa(fase - 1):
+        if not chiusa(fase - 1):
             raise HTTPException(409, f"Il checkpoint della Fase {fase} si sblocca al completamento della Fase {fase - 1} ({NOMI_FASI_UI[fase - 1]}).")
         return
     if fase > 1 and not chiusa(fase - 1):
@@ -247,17 +312,25 @@ def _verifica_sequenza(d: Path, fase: int, tipo: str):
         motivo = ("quando approvi il checkpoint" if prec.get("richiede_approvazione")
                   else "al completamento")
         raise HTTPException(409, f"La Fase {fase} si sblocca {motivo} della Fase {fase - 1} ({NOMI_FASI_UI[fase - 1]}).")
+    if fase == 4:
+        mancanti = registro_domande.mancanti_per_invio(d)
+        if mancanti:
+            raise HTTPException(409, "Per inviare le risposte servono le indicazioni strategiche (manca: "
+                                     f"{', '.join(mancanti[:5])}{'…' if len(mancanti) > 5 else ''}).")
 
 
-def _accoda_job(slug: str, fase: int, tipo: str, deliverable_id: str | None = None):
+def _accoda_job(slug: str, fase: int, tipo: str, deliverable_id: str | None = None,
+                operazione: str | None = None, argomento: str | None = None):
     d = _gara_o_404(slug)
-    if not (1 <= fase <= 7):
-        raise HTTPException(400, "fase deve essere 1-7")
-    _verifica_sequenza(d, fase, tipo)
+    if not (1 <= fase <= 8):
+        raise HTTPException(400, "fase deve essere 1-8")
+    if operazione is None:
+        _verifica_sequenza(d, fase, tipo)
     with get_conn() as con:
         cur = con.execute(
-            "INSERT INTO job (gara_slug, fase, tipo, stato, creato_il, deliverable_id) VALUES (?,?,?,?,?,?)",
-            (slug, fase, tipo, "in_coda", now(), deliverable_id),
+            "INSERT INTO job (gara_slug, fase, tipo, stato, creato_il, deliverable_id, operazione, argomento) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (slug, fase, tipo, "in_coda", now(), deliverable_id, operazione, argomento),
         )
         job_id = cur.lastrowid
     return {"job_id": job_id, "stato": "in_coda"}
@@ -275,51 +348,75 @@ def riesegui_fase(slug: str, fase: int):
 
 @router.post("/{slug}/fasi/{fase}/approva", status_code=202)
 def approva_fase(slug: str, fase: int):
-    esito = _accoda_job(slug, fase, "approva")
-    if fase == 3:
-        # Le indicazioni approvate arrivano alle fasi successive tramite
-        # memoria.md e l'handoff della Fase 3 (spada_fase.sh li mette nel prompt).
-        d = gara_dir(slug)
-        strategia.registra_per_le_fasi_successive(d, strategia.leggi(d))
-    return esito
+    return _accoda_job(slug, fase, "approva")
 
 
-# ── Checkpoint Fase 3 — indicazioni strategiche del professionista ──
 def _nessuna_fase_in_corso(slug: str):
     with get_conn() as con:
         if con.execute("SELECT 1 FROM job WHERE gara_slug=? AND stato='in_esecuzione'", (slug,)).fetchone():
             raise HTTPException(409, "Una fase è in esecuzione su questa gara: riprova a esecuzione conclusa.")
 
 
-# ── Gara brief — risposte alle domande aperte ───────────────────────
-@router.get("/{slug}/brief/risposte")
-def leggi_risposte_brief(slug: str):
-    return brief.leggi(_gara_o_404(slug))
-
-
-@router.put("/{slug}/brief/risposte")
-def salva_risposte_brief(slug: str, body: RisposteBriefRequest):
-    d = _gara_o_404(slug)
-    _nessuna_fase_in_corso(slug)
+# ── Fase 4 — registro unico delle domande al professionista ─────────
+# Le domande le registrano le Fasi 1-3 e le integrazioni
+# (_pipeline/scripts/domande/domande.py); qui il professionista risponde
+# e dà le indicazioni strategiche. Salvare NON invia: le risposte entrano
+# nel contesto (memoria, grafo, brief) solo eseguendo la Fase 4.
+def _stato_domande(d: Path) -> dict:
     try:
-        return brief.scrivi(d, body.risposte)
+        dati = registro_domande.carica(d)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(500, str(e))
+    criteri = registro_domande.criteri(d)
+    # Una priorità per ogni criterio attivo, anche se la bozza non c'è ancora.
+    per_id = {p["id"]: p for p in dati["indicazioni"].get("priorita", [])}
+    dati["indicazioni"]["priorita"] = [
+        per_id.get(c["id"], {"id": c["id"], "livello": "", "indicazione": ""}) for c in criteri]
+    return {
+        **dati,
+        "criteri": criteri,
+        "mancanti": registro_domande.mancanti_per_invio(d, dati),
+        "da_inviare": [x["id"] for x in registro_domande.da_inviare(dati)],
+        "etichette": {"categorie": registro_domande.ETICHETTA_CATEGORIA, "origini": registro_domande.ETICHETTA_ORIGINE},
+    }
 
 
-@router.get("/{slug}/strategia/indicazioni")
-def leggi_indicazioni(slug: str):
-    return strategia.leggi(_gara_o_404(slug))
+@router.get("/{slug}/domande")
+def leggi_domande(slug: str):
+    return _stato_domande(_gara_o_404(slug))
 
 
-@router.put("/{slug}/strategia/indicazioni")
-def salva_indicazioni(slug: str, body: IndicazioniStrategicheRequest):
+@router.put("/{slug}/domande")
+def salva_domande(slug: str, body: BozzaDomandeRequest):
     d = _gara_o_404(slug)
     _nessuna_fase_in_corso(slug)
     try:
-        return strategia.scrivi(d, body.model_dump())
-    except strategia.IndicazioniNonValide as e:
+        registro_domande.salva_bozza(d, body.risposte, body.indicazioni.model_dump() if body.indicazioni else None)
+    except registro_domande.DatiNonValidi as e:
         raise HTTPException(400, str(e))
+    return _stato_domande(d)
+
+
+@router.post("/{slug}/domande/informazioni", status_code=201)
+def aggiungi_informazione(slug: str, body: InformazioneProfessionistaRequest):
+    d = _gara_o_404(slug)
+    _nessuna_fase_in_corso(slug)
+    try:
+        registro_domande.aggiungi_informazione(d, body.titolo, body.testo, body.criterio or None)
+    except (registro_domande.DatiNonValidi, ValueError) as e:
+        raise HTTPException(400, str(e))
+    return _stato_domande(d)
+
+
+@router.delete("/{slug}/domande/{id_domanda}")
+def elimina_informazione(slug: str, id_domanda: str):
+    d = _gara_o_404(slug)
+    _nessuna_fase_in_corso(slug)
+    try:
+        registro_domande.elimina(d, id_domanda)
+    except registro_domande.DatiNonValidi as e:
+        raise HTTPException(400, str(e))
+    return _stato_domande(d)
 
 
 # ── Sprint 10.3 — deliverables come workspace separati ──────────────
@@ -340,13 +437,13 @@ def _deliverable_o_404(slug: str, deliverable_id: str):
 @router.post("/{slug}/deliverables/{deliverable_id}/esegui", status_code=202)
 def esegui_deliverable(slug: str, deliverable_id: str):
     _deliverable_o_404(slug, deliverable_id)
-    return _accoda_job(slug, 6, "esegui", deliverable_id=deliverable_id)
+    return _accoda_job(slug, 7, "esegui", deliverable_id=deliverable_id)
 
 
 @router.post("/{slug}/deliverables/{deliverable_id}/riesegui", status_code=202)
 def riesegui_deliverable(slug: str, deliverable_id: str):
     _deliverable_o_404(slug, deliverable_id)
-    return _accoda_job(slug, 6, "riesegui", deliverable_id=deliverable_id)
+    return _accoda_job(slug, 7, "riesegui", deliverable_id=deliverable_id)
 
 
 PROPOSTA_ID_RE = re.compile(r"^P-C[0-9]+-[0-9]+$")

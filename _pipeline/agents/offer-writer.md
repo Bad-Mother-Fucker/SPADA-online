@@ -75,7 +75,7 @@ margini, righe per facciata). I valori di formato cambiano per ogni gara.
 | `output/03_criteria/criteria_matrix.md` | criteri attivi, subcriteri, punteggi massimi |
 | `output/06_registers/proposal_register.md` | lista proposte approvate con ID e criterio |
 | `02_graph/proposals/` | nodi proposta con evidenze documentali, punteggi, note professionista |
-| `output/03_criteria/strategy_audit.md` | sezione "Indicazioni strategiche" per priorita' per criterio |
+| `output/07_questions/risposte_professionista.md` | sezione "Indicazioni strategiche del professionista" per priorita' per criterio (inviate con la Fase 4) |
 | `vincoli_offerta_tecnica.md` | budget facciate, criteri esclusi, elementi speciali |
 
 ## Opzionali
@@ -96,8 +96,8 @@ completo della proposta e le evidenze collegate.
 Usa `feedback_professionista` come flag: se contiene "DA REVISIONARE"
 o simili, marca la sezione corrispondente nell'offerta.
 
-Le priorita' per criterio vengono da `strategy_audit.md` →
-"Indicazioni strategiche" → "Priorita' per criterio".
+Le priorita' per criterio vengono da `risposte_professionista.md` →
+"Indicazioni strategiche del professionista" → "Priorita' per criterio".
 
 ---
 
@@ -153,7 +153,7 @@ peso_sub = punteggio_sub / punteggio_totale_criterio
 facciate_base_sub = floor(limite_totale * peso_sub)
 ```
 
-Correttivi da `strategy_audit.md` "Indicazioni strategiche":
+Correttivi da `risposte_professionista.md` "Indicazioni strategiche del professionista":
 - Priorita' ALTA dichiarata: +1 facciata
 - Subcriterio con poche proposte approvate: −1 facciata
 

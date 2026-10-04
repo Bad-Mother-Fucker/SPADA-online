@@ -1,9 +1,14 @@
 #!/bin/bash
 # spada_fase.sh — esegue UNA fase di UNA gara come invocazione a se'
 # stante di Claude Code headless (Sprint 3.1). Nessun processo appeso
-# in attesa di approvazioni umane: le fasi con intervento umano (3, 5,
-# 7) si fermano da sole e si sbloccano con --approva dopo che
-# l'intervento e' avvenuto fuori banda (file, o Sprint 4/6 API/UI).
+# in attesa di approvazioni umane. Due tipi di intervento umano:
+#   - Fase 4 (domande al professionista): il professionista risponde
+#     dall'interfaccia quando vuole; eseguire la fase = inviare le
+#     risposte, che solo allora entrano nel contesto (memoria, grafo,
+#     brief). Ha un agente, come le fasi ordinarie.
+#   - Fasi 6 e 8 (checkpoint senza agente): si sbloccano con --approva
+#     dopo che l'intervento e' avvenuto (decisioni sulle proposte,
+#     approvazione del plico).
 #
 # Uso:
 #   spada-fase <slug> <numero_fase>              — esegue la fase
@@ -11,7 +16,7 @@
 #                                                    l'output precedente,
 #                                                    marca le fasi a
 #                                                    valle "da_rivedere"
-#   spada-fase <slug> <numero_fase> --approva     — solo per fasi 3/5/7:
+#   spada-fase <slug> <numero_fase> --approva     — solo per fasi 6/8:
 #                                                    marca "completata"
 #                                                    senza invocare claude
 #
@@ -29,7 +34,7 @@ error() { echo -e "${RED}✗${NC}  $1" >&2; exit 1; }
 
 SLUG="${1:-}"; FASE="${2:-}"; FLAG="${3:-}"
 [ -n "$SLUG" ] && [ -n "$FASE" ] || error "Uso: spada-fase <slug> <numero_fase> [--riesegui|--approva]"
-case "$FASE" in 1|2|3|4|5|6|7) ;; *) error "Numero fase non valido: $FASE (deve essere 1-7)" ;; esac
+case "$FASE" in 1|2|3|4|5|6|7|8) ;; *) error "Numero fase non valido: $FASE (deve essere 1-8)" ;; esac
 
 GARE_DIR="${SPADA_GARE_DIR:-$HOME/spada/gare}"
 # Default: risali da questo script (scripts/setup/spada_fase.sh) alla
@@ -84,7 +89,7 @@ fi
 
 # ── --approva: solo gate umani, nessuna invocazione claude ───────────
 if [ "$FLAG" = "--approva" ]; then
-  fase_con_gate_umano "$FASE" || error "--approva si usa solo sulle fasi 3, 5, 7 (gate umano)."
+  fase_con_gate_umano "$FASE" || error "--approva si usa solo sulle fasi 6 e 8 (checkpoint umano senza agente)."
   python3 - "$FASE" "$PIPELINE_VERSION_FULL" "$PREZZARIO_VERSION" <<'PY'
 import json, sys, uuid
 from datetime import datetime, timezone
@@ -116,14 +121,14 @@ PY
   exit 0
 fi
 
-# ── Fasi 5 e 7 senza --approva: riportano lo stato, non invocano nulla ─
+# ── Fasi 6 e 8 senza --approva: riportano lo stato, non invocano nulla ─
 if fase_senza_agente "$FASE"; then
   info "Fase $FASE ($NOME_FASE) è un gate umano: nessun agente da eseguire."
   case "$FASE" in
-    5) [ -f output/06_registers/proposal_register.md ] && \
+    6) [ -f output/06_registers/proposal_register.md ] && \
        tail -n 40 output/06_registers/proposal_register.md || \
        warn "output/06_registers/proposal_register.md non trovato ancora." ;;
-    7) [ -d output/10_offer ] && ls output/10_offer || \
+    8) [ -d output/10_offer ] && ls output/10_offer || \
        warn "output/10_offer non trovato ancora." ;;
   esac
   echo "Quando l'intervento umano è completo: spada-fase $SLUG $FASE --approva"
@@ -174,6 +179,16 @@ with open("_state/fasi.json", "w") as f:
 PY
 
 info "Fase $FASE ($NOME_FASE) — run $RUN_ID — pipeline $PIPELINE_VERSION_FULL"
+
+# ── Fase 4: le risposte del professionista, scritte prima dell'agente ─
+# Il digest (output/07_questions/risposte_professionista.md) e il
+# paragrafo della memoria li scrive domande.py, non il modello: ciò che il
+# professionista ha scritto arriva a valle parola per parola. L'agente
+# lo integra poi nel grafo e nel brief.
+if [ "$FASE" = "4" ]; then
+  python3 "$DOMANDE_PY" consolida --run "$RUN_ID" >/dev/null \
+    || error "Fase 4: impossibile consolidare le risposte (output/07_questions/domande.json)."
+fi
 
 # ── Costruzione prompt: memoria + handoff della fase precedente ─────
 PROMPT_FILE="$(mktemp)"
@@ -233,6 +248,13 @@ fi
 # claude e' uscito: chi e' ancora in agenti_attivi non lo e' davvero.
 chiudi_agenti_rimasti "$ESITO" || true
 
+# Fase 4 riuscita: le risposte risultano inviate, e indicazioni e risposte
+# finiscono nelle decisioni dell'handoff che la Fase 5 riceve nel prompt.
+if [ "$FASE" = "4" ] && [ "$ESITO" = "completato" ]; then
+  python3 "$DOMANDE_PY" handoff "_state/handoff/${NOME_FASE}.json" || warn "Fase 4: decisioni non aggiunte all'handoff."
+  python3 "$DOMANDE_PY" segna-inviate --run "$RUN_ID" || warn "Fase 4: risposte non segnate come inviate."
+fi
+
 python3 - "$FASE" "$RUN_ID" "$CONCLUSO_IL" "$ESITO" "$ERRORE" "$AVVIATO_IL" <<'PY'
 import json, sys
 fase, run_id, concluso_il, esito, errore, avviato_il = sys.argv[1:7]
@@ -255,8 +277,7 @@ with open("_state/fasi.json") as f:
 chiave = next(k for k in fasi["fasi"] if k.startswith(f"{fase}_"))
 fasi["fasi"][chiave]["stato"] = "completata" if esito == "completato" else "errore"
 fasi["fasi"][chiave]["conclusa_il"] = concluso_il
-if fase in (3, 5, 7):
-    fasi["fasi"][chiave]["richiede_approvazione"] = True
+fasi["fasi"][chiave].pop("richiede_approvazione", None)
 
 # Sintesi a fine run: l'hook Stop la riscrive a ogni turno
 # dell'orchestratore ("N agenti al lavoro"); qui si chiude con il

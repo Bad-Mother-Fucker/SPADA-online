@@ -1,34 +1,31 @@
-# Fase 3 — Analisi strategica (richiede approvazione)
+# Fase 3 — Analisi strategica
 
 Dipende da: `_state/handoff/2_costruzione_grafo.json`.
 
 ## Esecuzione
 
-`strategy-auditor`, come descritto nel proprio file agente: quattro
-analisi (budget sicurezza, gap prezzi via server MCP `prezzario`,
-viabilità cantiere, capacità di investimento migliorativo). Presenta
-solo dati, nessuna raccomandazione. Scrive
-`output/03_criteria/strategy_audit.md` con la sezione "Indicazioni
-strategiche del professionista" precompilata a vuoto.
+1. `strategy-auditor`, come descritto nel proprio file agente: quattro
+   analisi (budget sicurezza, gap prezzi via server MCP `prezzario`,
+   viabilità cantiere, capacità di investimento migliorativo). Presenta
+   solo dati, nessuna raccomandazione. Scrive
+   `output/03_criteria/strategy_audit.md` (analisi e riepilogo: niente
+   domande e niente indicazioni del professionista nel documento).
+   Registra le **domande strategiche** nel registro unico
+   (`domande.py aggiungi --origine fase_3 --categoria strategica`).
+2. `brief-writer` con motivo **«Fine Fase 3 (audit)»**: porta le
+   classificazioni nel Quadro tecnico-economico, raffina il Potenziale,
+   una frase in In sintesi, Prossimi passi.
 
-## Intervento umano obbligatorio
+La fase non ha un checkpoint proprio: le domande e le indicazioni
+strategiche del professionista si raccolgono tutte nella Fase 4.
 
-Questa fase **non si considera completata** dal solo output
-dell'agente. Resta `richiede_approvazione: true` finché il
-professionista non compila la sezione "Indicazioni strategiche del
-professionista" in `output/03_criteria/strategy_audit.md` (via UI —
-Sprint 6 — o direttamente nel file). `spada-fase` marca lo stato
-`completata` solo quando quella sezione risulta compilata (verifica
-euristica: la sezione non contiene più i segnaposto vuoti del
-template).
-
-## A fine fase (quando approvata)
+## A fine fase
 
 Scrivi `_state/handoff/3_analisi_strategica.json`:
-- `entita_chiave`: classificazioni delle 4 analisi, indicazioni
-  strategiche del professionista (tono, priorità per criterio)
-- `riferimenti`: `output/03_criteria/strategy_audit.md`
+- `entita_chiave`: classificazioni delle 4 analisi
+- `riferimenti`: `output/03_criteria/strategy_audit.md`,
+  `output/07_questions/domande.json`
 - `alert`: classificazioni CRITICO/ALTO/NON RAPPRESENTATIVO
 
 Aggiungi un paragrafo a `_state/memoria.md`: sintesi delle 4
-classificazioni e delle indicazioni del professionista.
+classificazioni e numero di domande strategiche registrate.

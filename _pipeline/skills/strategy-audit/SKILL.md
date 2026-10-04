@@ -427,8 +427,8 @@ Questa analisi non e' un giudizio sulla convenienza dell'investimento
    | N.D.            | NON CALCOLABILE | Prezzario mancante, oppure Analisi 2 NON RAPPRESENTATIVO |
 
 5. Non indicare quale investimento fare o quante risorse stanziare:
-   questa e' una decisione del professionista, raccolta nella sezione
-   "Indicazioni strategiche".
+   questa e' una decisione del professionista, raccolta con le
+   indicazioni strategiche nella Fase 4.
 
 ### Testo da produrre per la sezione
 
@@ -478,6 +478,13 @@ Questa analisi non e' un giudizio sulla convenienza dell'investimento
 ---
 
 ## Generazione domande chiave
+
+> Le domande NON si scrivono in `strategy_audit.md`: si registrano nel
+> registro unico della Fase 4 con
+> `domande.py aggiungi --origine fase_3 --categoria strategica` (vedi
+> l'agente `strategy-auditor`). Il professionista le risponde nella
+> Fase 4 insieme alle indicazioni strategiche (tono, priorita' per
+> criterio, vincoli, opportunita'), che non stanno piu' nell'audit.
 
 ### Principio
 
@@ -578,16 +585,6 @@ OK o dati non disponibili senza motivo specifico.
 
 ---
 
-## Domande chiave per il professionista
-
-1. [domanda 1]
-2. [domanda 2]
-3. [domanda 3]
-[4. domanda 4 — se rilevante]
-[5. domanda 5 — se rilevante]
-
----
-
 ## Riepilogo
 
 | Analisi | Classificazione | Alert |
@@ -597,33 +594,4 @@ OK o dati non disponibili senza motivo specifico.
 | Viabilita' cantiere | [FAV / NEUTRO / SFAV / N.D.] | [testo alert o —] |
 | Investimento migliorativo | [AMPIO / MODERATO / LIMITATO / ASSENTE / N.C.] | [margine EUR o —] |
 
----
-
-## Indicazioni strategiche del professionista
-
-> Compilare questa sezione dopo la lettura dell'audit.
-> Le indicazioni guidano l'analisi dei criteri nelle fasi successive.
-
-### Risposte alle domande chiave
-
-1. [risposta]
-2. [risposta]
-3. [risposta]
-
-### Direttive operative
-
-**Tono generale:** [conservativo / bilanciato / audace]
-
-**Priorita' per criterio:**
-- C1: [indicazione]
-- C2: [indicazione]
-
-**Vincoli specifici:**
-- [vincolo]
-
-**Opportunita' da valorizzare:**
-- [opportunita']
-
-**Note aggiuntive:**
-[testo libero]
 ```

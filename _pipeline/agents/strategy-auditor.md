@@ -6,7 +6,7 @@ description: >
   con quattro analisi strategiche: budget sicurezza, gap prezzi, viabilita'
   cantiere, capacita' di investimento migliorativo. Presenta SOLO dati — nessuna raccomandazione strategica.
   Il professionista decide cosa farne.
-tools: Read, Write, Grep, Glob, mcp__prezzario__cerca_voce, mcp__prezzario__dettaglio_analisi, mcp__prezzario__confronta_prezzo, mcp__prezzario__versione_prezzario
+tools: Read, Write, Bash, Grep, Glob, mcp__prezzario__cerca_voce, mcp__prezzario__dettaglio_analisi, mcp__prezzario__confronta_prezzo, mcp__prezzario__versione_prezzario
 ---
 
 # Ruolo
@@ -99,13 +99,26 @@ Output atteso: margine teorico complessivo in EUR e %, classificazione
 (AMPIO / MODERATO / LIMITATO / ASSENTE / NON CALCOLABILE), tabella
 voci con maggiore e minore spazio di investimento.
 
-## Domande chiave
+## Domande chiave (nel registro della Fase 4, non nell'audit)
 
 Usa `.claude/skills/strategy-audit/SKILL.md` → sezione
-"Generazione domande chiave".
+"Generazione domande chiave" per scegliere le domande: 4-6 domande
+strategiche aperte per il professionista, basate sui dati delle quattro
+analisi, non su valutazioni di merito.
 
-Output atteso: 4-6 domande strategiche aperte per il professionista,
-basate sui dati delle quattro analisi, non su valutazioni di merito.
+Non le scrivi in `strategy_audit.md`: le registri nel registro unico
+delle domande, che il professionista risponde nella Fase 4 insieme a
+quelle delle fasi precedenti. Dalla radice della gara, una per domanda:
+
+```bash
+python3 "$CLAUDE_CONFIG_DIR/scripts/domande/domande.py" aggiungi --origine fase_3 \
+  --categoria strategica --testo "..." --perche "Analisi 4: margine LIMITATO, € 12.400" \
+  --fonte "strategy_audit.md, Analisi 4" [--criterio C2]
+```
+
+Prima di registrarle guarda le domande gia' aperte
+(`domande.py elenco --aperte`): non duplicare una domanda delle Fasi 1-2
+che chiede gia' lo stesso dato.
 
 ---
 
@@ -114,18 +127,15 @@ basate sui dati delle quattro analisi, non su valutazioni di merito.
 Scrivi `output/03_criteria/strategy_audit.md` seguendo esattamente il
 template definito in `.claude/skills/strategy-audit/SKILL.md`.
 
-Il file `strategy_audit.md` si chiude con una sezione
-"## Indicazioni strategiche del professionista" precompilata con campi
-vuoti che il professionista compila dopo la lettura. La sezione include:
-- Risposte alle domande chiave (un campo per ogni domanda)
-- Tono generale delle proposte (conservativo / bilanciato / audace)
-- Priorita' per criterio (un campo per ogni criterio attivo)
-- Vincoli specifici da rispettare
-- Opportunita' da valorizzare
-- Note aggiuntive
+Il file `strategy_audit.md` si chiude con il «Riepilogo». Non contiene
+domande ne' una sezione di indicazioni del professionista: le
+indicazioni strategiche (tono, priorita' per criterio, vincoli,
+opportunita') il professionista le da' nella Fase 4, e le fasi
+successive le leggono da `output/07_questions/risposte_professionista.md`.
 
 Non creare altri file.
-Non modificare file esistenti oltre a `strategy_audit.md`.
+Non modificare file esistenti oltre a `strategy_audit.md` (e il registro
+delle domande, solo tramite `domande.py`).
 
 ---
 
