@@ -1,20 +1,19 @@
 # SPADA Online, istruzioni per Claude Code
 
 SPADA analizza appalti pubblici: elenco gare, creazione gara, upload di
-disciplinare, elaborati e PDF firmati P7M, pipeline a 7 fasi con revisione
-umana. Backend FastAPI in `app/backend`, worker in `app/worker`, pipeline
+disciplinare, elaborati e PDF firmati P7M, pipeline a 8 fasi con revisione
+umana (la Fase 4 raccoglie domande e indicazioni del professionista). Backend FastAPI in `app/backend`, worker in `app/worker`, pipeline
 di agenti in `_pipeline`. In locale tutto parte con `./spada avvia`.
 
-## Frontend: due cartelle durante il redesign
+## Frontend
 
-- `app/web`: il frontend nuovo, Vite + React + TypeScript + Tailwind v4 +
-  shadcn/ui (base Radix, icone Phosphor) + TanStack Query. In sviluppo
-  gira con `cd app/web && npm run dev` su http://localhost:5173, con proxy
-  verso il backend su :8000 e verso `/legacy`. Si compila con
-  `npm run build` in `app/web/dist`.
-- `app/frontend`: il frontend precedente, statico, ancora servito da
-  FastAPI su http://localhost:8000. Resta intatto finché il nuovo non lo
-  sostituisce schermata per schermata, poi viene rimosso.
+`app/web` è l'unica interfaccia: Vite + React + TypeScript + Tailwind v4 +
+shadcn/ui (base Radix, icone Phosphor) + TanStack Query. In sviluppo gira
+con `cd app/web && npm run dev` su http://localhost:5173, con proxy verso
+il backend su :8000. Si compila con `npm run build` in `app/web/dist`, che
+FastAPI serve su http://localhost:8000 (`./spada setup` fa la build; dopo
+una modifica va rifatta). Il backend finto per gli stati di rete e lo
+scatto headless degli screenshot stanno in `app/web/dev`.
 
 Il backend non cambia: nessuna modifica ai contratti delle API senza
 chiederlo prima. Prima di riavviare `./spada` controlla che nessun job

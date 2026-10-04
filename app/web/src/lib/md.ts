@@ -1,5 +1,5 @@
 // Lettura dei registri e dei documenti markdown prodotti dalla pipeline.
-// Porting di app/frontend/js/md.js, senza la parte di rendering, che in
+// Porting di md.js del frontend precedente, senza la parte di rendering, che in
 // React è il componente <Markdown>.
 //
 // I registri sono scritti da agenti: le intestazioni di colonna variano

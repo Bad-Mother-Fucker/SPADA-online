@@ -1,6 +1,6 @@
 // Parser dei registri della pipeline: matrice dei criteri, registro dei
 // gap, registro delle proposte, audit di consegna, run log. Porting delle
-// funzioni parse* di app/frontend/js/gara.js.
+// funzioni parse* del frontend precedente, oggi rimosso.
 
 import { durata } from "@/lib/formato"
 import * as Md from "@/lib/md"

@@ -1,5 +1,5 @@
 // Formattazione condivisa: tempi relativi, scadenze, byte, plurali, slug.
-// Porting di app/frontend/js/ui.js (sezione Formattazione).
+// Porting della sezione Formattazione di ui.js del frontend precedente.
 
 /** "18 min fa", "ieri", "3 h fa". Torna "non disponibile" su input non leggibile. */
 export function quandoRelativo(iso?: string | null, adesso = Date.now()): string {

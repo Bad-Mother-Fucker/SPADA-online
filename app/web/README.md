@@ -51,9 +51,10 @@ node dev/screenshot.mjs "http://localhost:5174/" out.png --eval "document.queryS
 
 ## Build e servizio
 
-`npm run build` compila in `dist/`, che FastAPI serve su `/`. In locale la
-build è parte di `./spada setup`. Finché la pagina gara non è migrata, le
-card aprono `/legacy/gara.html`, cioè l'interfaccia precedente.
+`npm run build` compila in `dist/`, che FastAPI serve su `/`; le rotte
+`/gara/…` ricadono su `index.html`, così un ricaricamento non dà 404. In
+locale la build è parte di `./spada setup` e va rifatta dopo ogni modifica,
+altrimenti :8000 continua a servire la versione precedente.
 
 ## Regole
 

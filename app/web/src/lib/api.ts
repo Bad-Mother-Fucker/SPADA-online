@@ -1,4 +1,4 @@
-// Client del backend FastAPI. Porting tipizzato di app/frontend/js/api.js.
+// Client del backend FastAPI. Porting tipizzato di api.js del frontend precedente.
 //
 // Gli errori portano con sé stato HTTP e percorso: gli stati di errore li
 // mostrano testualmente ("Il servizio ha risposto 503 per /gare"), e senza

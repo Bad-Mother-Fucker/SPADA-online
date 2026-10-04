@@ -2,8 +2,8 @@
 
 Avvio: `./spada avvia` dalla radice del progetto (uvicorn su
 127.0.0.1:8000 + worker.py in un processo separato che consuma la coda
-job). Serve anche il frontend statico (app/frontend/) dalla stessa
-origine: http://localhost:8000 è l'unico indirizzo da aprire.
+job). Serve anche l'interfaccia web (app/web/dist, compilata da Vite)
+dalla stessa origine: http://localhost:8000 è l'unico indirizzo da aprire.
 """
 import logging
 import os
@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fastapi import FastAPI
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -27,11 +27,9 @@ log = logging.getLogger("spada.api")
 
 app = FastAPI(title="SPADA API", version="0.1.0")
 
-# Due interfacce durante il redesign: la nuova (React, compilata da Vite in
-# app/web/dist) su "/", la precedente (statica, app/frontend) su "/legacy"
-# finché la nuova non l'ha sostituita schermata per schermata.
+# L'interfaccia web è la build di Vite in app/web/dist (la produce
+# ./spada setup); FastAPI la serve su "/" accanto alle API.
 APP_DIR = Path(__file__).resolve().parents[1]
-FRONTEND_DIR = APP_DIR / "frontend"
 WEB_DIST_DIR = APP_DIR / "web" / "dist"
 
 # In locale frontend e API hanno la stessa origine: CORS non serve. Resta
@@ -109,22 +107,17 @@ def _pagina_gara(resto: str):
     return RedirectResponse("/", status_code=307)
 
 
-@app.get("/legacy", include_in_schema=False)
-@app.get("/legacy/", include_in_schema=False)
-@app.get("/legacy/index.html", include_in_schema=False)
-def _elenco_precedente():
-    """L'elenco gare è già nella nuova interfaccia: i link «Gare» della
-    pagina gara precedente (relativi a index.html) tornano alla nuova home."""
-    return RedirectResponse("/", status_code=307)
-
-
-# Montati per ultimi: le rotte API (/gare, /sistema, /salute) hanno la
-# precedenza. La pagina gara precedente vive sotto /legacy con i suoi
-# asset relativi; "/" serve la build della nuova interfaccia, oppure, se
-# manca (setup non rieseguito), ancora quella precedente.
-app.mount("/legacy", _FrontendStatico(directory=str(FRONTEND_DIR), html=True), name="legacy")
+# Montato per ultimo: le rotte API (/gare, /sistema, /salute) hanno la
+# precedenza. Se la build manca (setup non rieseguito) una pagina minima
+# dice cosa fare, invece di un 404 muto.
 if (WEB_DIST_DIR / "index.html").exists():
     app.mount("/", _FrontendStatico(directory=str(WEB_DIST_DIR), html=True), name="frontend")
 else:
-    log.warning("Interfaccia nuova non compilata (%s): servo quella precedente. Esegui ./spada setup.", WEB_DIST_DIR)
-    app.mount("/", _FrontendStatico(directory=str(FRONTEND_DIR), html=True), name="frontend")
+    log.warning("Interfaccia web non compilata (%s): esegui ./spada setup.", WEB_DIST_DIR)
+
+    @app.get("/", include_in_schema=False)
+    def _interfaccia_mancante():
+        return HTMLResponse(
+            "<!doctype html><meta charset='utf-8'><title>SPADA</title>"
+            "<p style='font:15px system-ui;margin:3rem'>Interfaccia web non compilata: "
+            "esegui <code>./spada setup</code> e riavvia il server.</p>", status_code=503)

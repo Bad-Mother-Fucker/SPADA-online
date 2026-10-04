@@ -250,7 +250,7 @@ cmd_avvia() {
   fi
 
   login_attivo || avviso "Claude non è autenticato per SPADA: l'app si apre, ma le fasi falliranno finché non esegui './spada login'."
-  [ -f "$REPO_DIR/app/web/dist/index.html" ] || avviso "Interfaccia web non compilata: viene servita quella precedente. Esegui './spada setup'."
+  [ -f "$REPO_DIR/app/web/dist/index.html" ] || avviso "Interfaccia web non compilata: esegui './spada setup'."
 
   info "Avvio il server (127.0.0.1:$PORTA)"
   (

@@ -1,5 +1,5 @@
 // Vocabolario condiviso: le 8 fasi, gli stati, le categorie. Porting di
-// app/frontend/js/dominio.js. Le viste non devono mai conoscere le chiavi
+// dominio.js del frontend precedente, oggi rimosso. Le viste non devono mai conoscere le chiavi
 // della pipeline: la mappa sta qui, in un posto solo.
 
 export type StatoFase = "completata" | "da_rivedere" | "in_esecuzione" | "errore" | "in_coda"

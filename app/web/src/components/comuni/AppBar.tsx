@@ -7,7 +7,6 @@ import { Api } from "@/lib/api"
 import { quandoRelativo } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 
-export const URL_LEGACY = "/legacy"
 
 const BADGE: Record<StatoBackend, { classe: string; punto: string; testo: string }> = {
   connesso: { classe: "text-foreground-2", punto: "bg-status-ok", testo: "Backend connesso" },
