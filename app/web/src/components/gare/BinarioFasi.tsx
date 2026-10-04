@@ -4,7 +4,7 @@ import type { StatoFase } from "@/dominio/fasi"
 const CLASSE: Record<StatoFase, string> = {
   completata: "bg-foreground-2",
   da_rivedere: "bg-status-attn",
-  in_esecuzione: "bg-status-run animate-pulsa",
+  in_esecuzione: "barra-in-corso",
   errore: "bg-status-crit",
   in_coda: "bg-border-strong",
 }

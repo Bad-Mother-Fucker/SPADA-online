@@ -1,5 +1,9 @@
-import { StarFourIcon, ArrowSquareOutIcon, MonitorIcon, CheckIcon } from "@phosphor-icons/react"
+import { StarFourIcon, ArrowSquareOutIcon, MonitorIcon, CheckIcon, SignInIcon, SignOutIcon } from "@phosphor-icons/react"
+import { useQueryClient } from "@tanstack/react-query"
+import { useState } from "react"
 import { Link } from "react-router"
+import { toast } from "sonner"
+import { CHIAVE_LOGIN, DialogoLoginClaude, useLoginClaude } from "./LoginClaude"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useStatoBackend, type StatoBackend } from "@/hooks/useStatoBackend"
 import { useTema } from "@/hooks/useTema"
@@ -60,15 +64,48 @@ function ControlloTema() {
 
 function MenuAvatar() {
   const { tema, scegli } = useTema()
+  const qc = useQueryClient()
+  const { data: claude } = useLoginClaude()
+  const [loginAperto, setLoginAperto] = useState(false)
+  const collegato = !!claude?.disponibile
+  const conToken = claude?.metodo === "oauth_token"
+  const esci = () => Api.esciClaude()
+    .then((d) => { qc.setQueryData(CHIAVE_LOGIN, d); void qc.invalidateQueries({ queryKey: ["sistema"] }); toast.success("Uscito da Claude", { description: "Le fasi non partono finché non accedi di nuovo." }) })
+    .catch((e) => toast.error("Uscita non riuscita", { description: String(e?.message || e) }))
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger
-        aria-label="Menu dell'operatore"
-        className="grid size-7 place-items-center rounded-md border bg-muted text-micro font-semibold text-foreground-2 transition-colors duration-(--d-fast) hover:border-border-strong"
+        aria-label={collegato ? "Menu dell'operatore" : "Menu dell'operatore: Claude non collegato"}
+        title={claude && !collegato ? "Claude non è collegato: le fasi non possono partire" : undefined}
+        className="relative grid size-7 place-items-center rounded-md border bg-muted text-micro font-semibold text-foreground-2 transition-colors duration-(--d-fast) hover:border-border-strong"
       >
         GC
+        {claude && !collegato && <i className="absolute -top-0.5 -right-0.5 size-2 rounded-full border border-card bg-status-crit" aria-hidden="true" />}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-52">
+      <DropdownMenuContent align="end" className="min-w-64">
+        <DropdownMenuLabel>Claude per SPADA</DropdownMenuLabel>
+        <p className="px-2 pb-1.5 text-xs text-muted-foreground">
+          {!claude ? "Verifica in corso…"
+            : collegato ? (claude.account ? `Collegato come ${claude.account}${claude.abbonamento ? ` (${claude.abbonamento})` : ""}` : conToken ? "Collegato con token OAuth" : "Collegato")
+            : "Non collegato: le fasi non possono partire."}
+        </p>
+        {!conToken && (collegato ? (
+          <DropdownMenuItem onSelect={() => setLoginAperto(true)}>
+            <SignInIcon aria-hidden="true" />Accedi con un altro account
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem onSelect={() => setLoginAperto(true)} className="font-medium">
+            <SignInIcon aria-hidden="true" />Accedi a Claude
+          </DropdownMenuItem>
+        ))}
+        {collegato && !conToken && (
+          <DropdownMenuItem onSelect={() => void esci()}>
+            <SignOutIcon aria-hidden="true" />Esci da Claude
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Tema</DropdownMenuLabel>
         <DropdownMenuLabel>Tema</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => scegli("auto")}>
           <MonitorIcon aria-hidden="true" />
@@ -81,6 +118,8 @@ function MenuAvatar() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    <DialogoLoginClaude aperto={loginAperto} onChiudi={() => setLoginAperto(false)} />
+    </>
   )
 }
 

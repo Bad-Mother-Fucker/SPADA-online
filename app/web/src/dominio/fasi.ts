@@ -5,8 +5,13 @@
 export type StatoFase = "completata" | "da_rivedere" | "in_esecuzione" | "errore" | "in_coda"
 export type StatoGara = StatoFase
 
+/** Job della coda sovrapposto dal backend (routers/gare.py::_fasi_con_job):
+    c'è finché la fase è accodata o gira. "in_coda" = in avvio. */
+export interface JobFase { id: number; stato: "in_coda" | "in_esecuzione"; creato_il: string; iniziato_il?: string | null; deliverable_id?: string | null }
+
 export interface CorpoFase {
   stato?: string
+  job?: JobFase
   richiede_approvazione?: boolean
   iniziata_il?: string | null
   conclusa_il?: string | null
@@ -93,6 +98,11 @@ export function statoFase(fasi: Fasi | null | undefined, n: number): StatoFase {
   // decisione, e l'interfaccia deve dirlo con il colore dell'attenzione.
   if (c.richiede_approvazione) return "da_rivedere"
   return normalizzaStato(c.stato)
+}
+
+/** La fase è stata accodata ma il worker non l'ha ancora presa. */
+export function inAvvio(fasi: Fasi | null | undefined, n: number): boolean {
+  return corpoFase(fasi, n)?.job?.stato === "in_coda"
 }
 
 /** Ogni fase sblocca la successiva. Stesso vincolo applicato dal backend. */

@@ -92,7 +92,7 @@ def get_claude_env() -> dict:
     dettaglio = stato.get("errore") or "la configurazione dedicata di SPADA non ha un login attivo"
     raise AutenticazioneClaudeNonDisponibile(
         f"Claude non autenticato per SPADA ({dettaglio}). "
-        "Esegui './spada login' nella cartella dell'app."
+        "Accedi dal menu del profilo in alto a destra (Accedi a Claude), oppure con './spada login'."
     )
 
 

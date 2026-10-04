@@ -306,3 +306,21 @@
   .animate-scossa { animation: none; }
   [data-slot$="-content"], [data-slot$="-overlay"] { animation-duration: 120ms !important; --tw-enter-scale: 1; --tw-enter-translate-x: 0; --tw-enter-translate-y: 0; --tw-exit-translate-x: 0; --tw-exit-translate-y: 0; }
 }
+
+/* Fase in corso: la barra dello stepper e il segmento del binario
+   nell'elenco gare scorrono finché la fase è accodata o gira. È lo stato
+   che deve leggersi a colpo d'occhio, anche dall'altra parte dello
+   schermo: un riflesso chiaro attraversa la barra del colore "in
+   esecuzione". Anima solo background-position (niente layout). Con
+   reduced motion resta la barra piena, senza movimento. */
+@keyframes scorre { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+.barra-in-corso {
+  background-color: var(--status-run);
+  background-image: linear-gradient(90deg, transparent 0%, color-mix(in oklab, var(--status-run), white 55%) 50%, transparent 100%);
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  animation: scorre 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .barra-in-corso { animation: none; background-image: none; }
+}

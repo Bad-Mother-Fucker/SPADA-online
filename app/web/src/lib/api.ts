@@ -127,6 +127,14 @@ export interface StatoAuth {
   stima_scadenza?: { giorni_alla_scadenza_stimata: number; nota: string } | null
 }
 
+/** Login di Claude dall'interfaccia (backend: login_claude.py). */
+export interface StatoLoginClaude extends StatoAuth {
+  metodo?: "oauth_token" | "login_config_dedicata"
+  account?: string | null
+  abbonamento?: string | null
+  login: { fase: "inattivo" | "in_attesa" | "concluso" | "fallito"; url: string | null; codice_inviato: boolean; messaggio: string }
+}
+
 export interface Documento {
   nome_file: string
   percorso: string
@@ -220,6 +228,12 @@ export const Api = {
 
   streamUrl: (slug: string) => `${base()}/gare/${s(slug)}/stream`,
   sistemaAuth: (o?: Opzioni) => richiesta<StatoAuth>("/sistema/auth", o),
+  loginClaude: (o?: Opzioni) => richiesta<StatoLoginClaude>("/sistema/auth/login", o),
+  avviaLoginClaude: () => richiesta<StatoLoginClaude>("/sistema/auth/login", { method: "POST", timeoutMs: 30_000 }),
+  codiceLoginClaude: (codice: string) =>
+    richiesta<StatoLoginClaude>("/sistema/auth/login/codice", { method: "POST", body: JSON.stringify({ codice }), timeoutMs: 30_000 }),
+  annullaLoginClaude: () => richiesta<StatoLoginClaude>("/sistema/auth/login", { method: "DELETE" }),
+  esciClaude: () => richiesta<StatoLoginClaude>("/sistema/auth/logout", { method: "POST", timeoutMs: 30_000 }),
   sistemaPrezzari: (o?: Opzioni) => richiesta<Prezzario[]>("/sistema/prezzari", o),
   sistemaPipeline: (o?: Opzioni) => richiesta<{ versione: string; git_ref: string }>("/sistema/pipeline", o),
   importaPrezzario: (regione: string, anno: number) =>

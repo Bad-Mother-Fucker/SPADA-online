@@ -8,7 +8,8 @@ from fastapi.responses import FileResponse
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from auth import stato_autenticazione
-from models import ImportaPrezzarioRequest
+import login_claude
+from models import CodiceLoginRequest, ImportaPrezzarioRequest
 from paths import DATA_DIR, DB_PATH, PIPELINE_DIR
 from prezzario import ImportazioneNonRiuscita, importa
 
@@ -33,6 +34,43 @@ def design_system_css():
 @router.get("/auth")
 def auth():
     return stato_autenticazione()
+
+
+# ── Login di Claude dall'interfaccia (menu del profilo) ──────────────
+@router.get("/auth/login")
+def stato_login():
+    return login_claude.stato()
+
+
+@router.post("/auth/login")
+def avvia_login():
+    """Avvia `claude auth login` sulla configurazione dedicata: si apre il
+    browser del Mac; la risposta contiene il link di riserva."""
+    try:
+        login_claude.avvia()
+    except FileNotFoundError:
+        raise HTTPException(500, "Il comando `claude` non è nel PATH del server.")
+    return login_claude.stato()
+
+
+@router.post("/auth/login/codice")
+def codice_login(body: CodiceLoginRequest):
+    try:
+        login_claude.invia_codice(body.codice)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    return login_claude.stato()
+
+
+@router.delete("/auth/login")
+def annulla_login():
+    login_claude.annulla()
+    return login_claude.stato()
+
+
+@router.post("/auth/logout")
+def logout():
+    return login_claude.esci()
 
 
 @router.get("/prezzari")

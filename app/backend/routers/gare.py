@@ -42,6 +42,46 @@ def _leggi_json(path: Path, default=None):
         return default
 
 
+def _job_attivi(slug: str) -> dict:
+    """Job di fase in coda o in esecuzione per questa gara, per numero di
+    fase (il più vecchio vince: è quello che il worker prenderà per primo)."""
+    with get_conn() as con:
+        righe = con.execute(
+            "SELECT id, fase, stato, creato_il, iniziato_il, deliverable_id FROM job "
+            "WHERE gara_slug=? AND stato IN ('in_coda','in_esecuzione') AND operazione IS NULL "
+            "ORDER BY id", (slug,)).fetchall()
+    out = {}
+    for r in righe:
+        out.setdefault(r["fase"], dict(r))
+    return out
+
+
+def _fasi_con_job(d: Path, slug: str) -> dict:
+    """fasi.json con sopra lo stato della coda. fasi.json lo scrive lo
+    script di fase solo quando parte davvero: senza questo, fra il clic
+    su «Avvia» e l'avvio (o per un job scartato prima di partire) la fase
+    restava «in coda» come se nulla fosse successo. Una fase con un job
+    in coda o in corso risulta `in_esecuzione`, con `job` per distinguere
+    «in avvio» (in coda nel worker) da «in esecuzione»."""
+    fasi = _leggi_json(d / "_state" / "fasi.json", {})
+    attivi = _job_attivi(slug)
+    if not attivi:
+        return fasi
+    corpi = fasi.get("fasi", {})
+    for n, job in attivi.items():
+        k = next((x for x in corpi if x.startswith(f"{n}_")), None)
+        if k is None:
+            continue
+        corpo = dict(corpi[k])
+        if corpo.get("stato") != "in_esecuzione" or job["stato"] == "in_coda":
+            corpo["stato"] = "in_esecuzione"
+            corpo.pop("richiede_approvazione", None)
+        corpo["job"] = {"id": job["id"], "stato": job["stato"], "creato_il": job["creato_il"],
+                        "iniziato_il": job["iniziato_il"], "deliverable_id": job["deliverable_id"]}
+        corpi[k] = corpo
+    return {**fasi, "fasi": corpi}
+
+
 @router.get("")
 def elenco_gare():
     with get_conn() as con:
@@ -49,7 +89,7 @@ def elenco_gare():
     installate = {(e["regione"].lower(), e["anno"]) for e in edizioni_installate()}
     risultato = []
     for r in righe:
-        fasi = _leggi_json(gara_dir(r["slug"]) / "_state" / "fasi.json", {})
+        fasi = _fasi_con_job(gara_dir(r["slug"]), r["slug"])
         risultato.append({**dict(r), "fase_corrente": fasi.get("fase_corrente"),
                            "fasi": fasi.get("fasi", {}),
                            "prezzario_disponibile": ((r["regione"] or "").lower(), r["anno_prezzario"]) in installate})
@@ -106,7 +146,7 @@ def _gara_o_404(slug: str):
 def dettaglio_gara(slug: str):
     d = _gara_o_404(slug)
     manifest = _leggi_json(d / "manifest.json", {})
-    fasi = _leggi_json(d / "_state" / "fasi.json", {})
+    fasi = _fasi_con_job(d, slug)
     attivita = _leggi_json(d / "_state" / "attivita.json", {})
     return {"manifest": manifest, "fasi": fasi, "attivita": attivita,
             "prezzario": stato_prezzario(d, manifest)}
@@ -326,6 +366,17 @@ def _accoda_job(slug: str, fase: int, tipo: str, deliverable_id: str | None = No
         raise HTTPException(400, "fase deve essere 1-8")
     if operazione is None:
         _verifica_sequenza(d, fase, tipo)
+        # Un secondo clic su «Avvia» non deve accodare un secondo job: la
+        # stessa fase (o lo stesso deliverable) eseguita due volte di fila
+        # costa due volte e scrive due volte sugli stessi file.
+        with get_conn() as con:
+            doppio = con.execute(
+                "SELECT stato FROM job WHERE gara_slug=? AND fase=? AND operazione IS NULL "
+                "AND COALESCE(deliverable_id,'')=COALESCE(?,'') AND stato IN ('in_coda','in_esecuzione')",
+                (slug, fase, deliverable_id)).fetchone()
+        if doppio:
+            cosa = f"Il deliverable {deliverable_id}" if deliverable_id else f"La Fase {fase}"
+            raise HTTPException(409, f"{cosa} è già {'in esecuzione' if doppio['stato'] == 'in_esecuzione' else 'in coda'}: non serve avviarla di nuovo.")
     with get_conn() as con:
         cur = con.execute(
             "INSERT INTO job (gara_slug, fase, tipo, stato, creato_il, deliverable_id, operazione, argomento) "
@@ -672,7 +723,7 @@ async def stream_stato(slug: str, request: Request):
         ultimo = None
         ultimo_invio = asyncio.get_event_loop().time()
         while not await request.is_disconnected():
-            fasi = _leggi_json(d / "_state" / "fasi.json", {})
+            fasi = _fasi_con_job(d, slug)
             attivita = _leggi_json(d / "_state" / "attivita.json", {})
             payload = json.dumps({"fasi": fasi, "attivita": attivita}, ensure_ascii=False)
             ora = asyncio.get_event_loop().time()

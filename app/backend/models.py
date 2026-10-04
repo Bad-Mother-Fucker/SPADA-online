@@ -81,3 +81,9 @@ class InterventoRequest(BaseModel):
     """Sprint 10.4 — chat a controllo pieno, scoped alla sola directory
     della gara. A differenza di AssistenteRequest (sola lettura)."""
     messaggio: str
+
+
+class CodiceLoginRequest(BaseModel):
+    """Codice mostrato dalla pagina di accesso di Anthropic quando il
+    ritorno automatico al login non riesce."""
+    codice: str = Field(min_length=1, max_length=2000)

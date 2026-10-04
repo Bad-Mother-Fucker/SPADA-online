@@ -9,7 +9,8 @@ import { DialogoConferma, type Conferma } from "./DialogoConferma"
 import { useGara } from "./GaraContext"
 import { useAzioniFase } from "@/hooks/useGaraDati"
 import { comeApiError } from "@/lib/risorsa"
-import { GATE_UMANO, fase, motivoBlocco, statoFase } from "@/dominio/fasi"
+import { GATE_UMANO, corpoFase, fase, motivoBlocco, statoFase } from "@/dominio/fasi"
+import { quandoRelativo } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 
 export function useEsegui() {
@@ -20,7 +21,7 @@ export function useEsegui() {
     onError: (e: unknown) => toast.error(errore, { description: comeApiError(e).message }),
   })
   return {
-    esegui: (n: number) => az.esegui.mutate(n, esito(`Fase ${n} accodata.`, "Avvio non riuscito")),
+    esegui: (n: number) => az.esegui.mutate(n, esito(`Fase ${n} avviata: la vedi «in avvio» nello stepper.`, "Avvio non riuscito")),
     riesegui: (n: number) => az.riesegui.mutate(n, esito(`Riesecuzione della Fase ${n} accodata.`, "Riesecuzione non riuscita")),
     approva: (n: number) => az.approva.mutate(n, esito(`Checkpoint della Fase ${n} approvato.`, "Approvazione non riuscita")),
     inCorso: az.esegui.isPending || az.riesegui.isPending || az.approva.isPending,
@@ -67,10 +68,21 @@ export function AzioniFase({ n, blocco, className, azionePrimaria }: { n: number
   } else if (st === "completata") {
     corpo = <Button className="w-full" variant="outline" disabled={inCorso} onClick={chiediRiesecuzione}>Riesegui la fase</Button>
   } else {
+    // In esecuzione: anche quando il job è solo in coda nel worker, il
+    // pulsante sparisce subito, così la fase non si avvia due volte.
+    const job = corpoFase(gara.fasi, n)?.job
     corpo = (
-      <p className="flex items-center justify-center gap-2 text-sm text-status-run">
-        <i className="size-1.5 rounded-full bg-current animate-pulsa" aria-hidden="true" />Esecuzione in corso
-      </p>
+      <div role="status" className="space-y-1 text-center">
+        <p className="flex items-center justify-center gap-2 text-sm font-medium text-status-run">
+          <i className="size-1.5 rounded-full bg-current animate-pulsa" aria-hidden="true" />
+          {job?.stato === "in_coda" ? "In avvio" : "Esecuzione in corso"}
+        </p>
+        <p className="text-micro text-muted-foreground">
+          {job?.stato === "in_coda"
+            ? `Accodata ${quandoRelativo(job.creato_il)}: parte appena il worker è libero.`
+            : `Avviata ${quandoRelativo(job?.iniziato_il || corpoFase(gara.fasi, n)?.iniziata_il || "")}. Puoi chiudere la pagina: la fase continua.`}
+        </p>
+      </div>
     )
   }
 

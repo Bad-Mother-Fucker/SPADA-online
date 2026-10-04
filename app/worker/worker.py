@@ -15,6 +15,7 @@ Sul Mac ogni job gira sotto `caffeinate -i`: il sistema non va in stop
 per inattività mentre una fase è in corso (chiudere il coperchio di un
 portatile lo sospende comunque).
 """
+import json
 import logging
 import os
 import shutil
@@ -28,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from auth import AutenticazioneClaudeNonDisponibile, get_claude_env  # noqa: E402
 from db import get_conn, init_db  # noqa: E402
-from paths import PIPELINE_DIR  # noqa: E402
+from paths import GARE_DIR, PIPELINE_DIR  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s worker %(message)s")
 log = logging.getLogger("spada.worker")
@@ -96,6 +97,36 @@ def c_e_un_job_in_esecuzione() -> bool:
         return con.execute("SELECT 1 FROM job WHERE stato='in_esecuzione' LIMIT 1").fetchone() is not None
 
 
+def registra_errore_prima_dell_avvio(job, messaggio: str):
+    """Un job scartato prima di lanciare lo script (es. Claude non
+    autenticato) non tocca mai _state/: senza questo la fase resterebbe
+    «da eseguire» e l'errore visibile solo nella tabella job. Si scrive
+    come lo scriverebbe spada_fase.sh: fase in errore e una riga nel
+    run_log con la causa, che l'interfaccia mostra in «Perché è fallita»."""
+    if job["deliverable_id"] or ("operazione" in job.keys() and job["operazione"]):
+        return  # deliverable e integrazioni hanno il proprio stato
+    stato_dir = GARE_DIR / job["gara_slug"] / "_state"
+    adesso = now()
+    try:
+        fasi_p = stato_dir / "fasi.json"
+        fasi = json.loads(fasi_p.read_text(encoding="utf-8"))
+        chiave = next((k for k in fasi.get("fasi", {}) if k.startswith(f"{job['fase']}_")), None)
+        if chiave:
+            fasi["fasi"][chiave].update(stato="errore", conclusa_il=adesso)
+            fasi_p.write_text(json.dumps(fasi, ensure_ascii=False, indent=2), encoding="utf-8")
+        log_p = stato_dir / "run_log.json"
+        run_log = json.loads(log_p.read_text(encoding="utf-8")) if log_p.exists() else {"runs": []}
+        run_log.setdefault("runs", []).append({
+            "run_id": f"job-{job['id']}", "fase": job["fase"], "riesecuzione": job["tipo"] == "riesegui",
+            "avviato_il": adesso, "concluso_il": adesso, "pipeline_version": "n/a (non avviata)",
+            "prezzario_version": None, "modello": "n/a", "effort": "n/a",
+            "esito": "errore", "errore": f"Fase non avviata: {messaggio}",
+        })
+        log_p.write_text(json.dumps(run_log, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        log.exception("Job %s: errore non registrato nello stato della gara", job["id"])
+
+
 def esegui_job(job):
     job_id = job["id"]
     slug, fase, tipo = job["gara_slug"], job["fase"], job["tipo"]
@@ -116,6 +147,7 @@ def esegui_job(job):
                 (str(e), now(), job_id),
             )
         log.error("Job %s: autenticazione Claude non disponibile: %s", job_id, e)
+        registra_errore_prima_dell_avvio(job, str(e))
         return
 
     operazione = job["operazione"] if "operazione" in job.keys() else None
