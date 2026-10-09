@@ -91,7 +91,7 @@ export function ElencoGare() {
 
   return (
     <>
-      <AppBar sezione="Gare" />
+      <AppBar />
       <main id="contenuto" className="mx-auto max-w-[1200px] px-6 py-6 max-md:px-4">
         <header className="mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
           <div>

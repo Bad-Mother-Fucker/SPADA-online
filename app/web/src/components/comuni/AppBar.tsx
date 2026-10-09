@@ -152,7 +152,7 @@ function IconaSpada({ className }: { className?: string }) {
     del backend, tema, operatore. */
 export interface Briciola { a?: string; etichetta: string; mono?: boolean }
 
-export function AppBar({ sezione = "Gare", briciole, badge, larga }: { sezione?: string; briciole?: Briciola[]; badge?: React.ReactNode; larga?: boolean }) {
+export function AppBar({ sezione, briciole, badge, larga }: { sezione?: string; briciole?: Briciola[]; badge?: React.ReactNode; larga?: boolean }) {
   return (
     <header className="sticky top-0 z-20 border-b bg-card">
       <div className={cn("mx-auto flex h-12 items-center gap-3.5 px-6 max-md:px-4", larga ? "max-w-[1280px]" : "max-w-[1200px]")}>
@@ -169,9 +169,9 @@ export function AppBar({ sezione = "Gare", briciole, badge, larga }: { sezione?:
               </span>
             ))}
           </nav>
-        ) : (
+        ) : sezione ? (
           <span className="text-muted-foreground">{sezione}</span>
-        )}
+        ) : null}
         <span className="flex-1" />
         {badge ?? <BadgeBackend />}
         <ControlloTema />

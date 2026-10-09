@@ -73,6 +73,8 @@ export function GaraPage() {
 
   useEffect(() => {
     document.title = `${dettaglio.data?.manifest.nome || slug}, Prometheus - S.P.A.D.A.`
+    // Tornando all'elenco la scheda non deve restare col nome della gara.
+    return () => { document.title = "Prometheus - S.P.A.D.A." }
   }, [dettaglio.data?.manifest.nome, slug])
 
   const ctx = useMemo(() => {
