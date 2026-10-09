@@ -24,7 +24,7 @@ const STILE: Record<string, { token: string; forma: string }> = {
 const tronca = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1)}…` : t)
 
 /** I token sono in oklch, che vis-network non sa interpretare: li converte il browser, dipingendoli su un canvas da un pixel. */
-function usaConvertitore() {
+function useConvertitore() {
   const tela = useMemo(() => document.createElement("canvas").getContext("2d", { willReadFrequently: true }), [])
   return (nome: string, alpha?: number) => {
     const v = getComputedStyle(document.documentElement).getPropertyValue(nome).trim()
@@ -41,7 +41,7 @@ export function GrafoRete({ nodi, archi, filtro, onApri, centraRef }: { nodi: No
   const dsNodi = useRef<DataSet<Record<string, unknown>> | null>(null)
   const [selezionato, setSelezionato] = useState<string | null>(null)
   const { effettivo } = useTema()
-  const token = usaConvertitore()
+  const token = useConvertitore()
   const indice = useMemo(() => new Map(nodi.map((n) => [n.id, n])), [nodi])
   const firma = useMemo(() => JSON.stringify([effettivo, nodi.map((n) => [n.id, n.gruppo, n.etichetta]), archi.map((a) => [a.da, a.a, a.tipo])]), [effettivo, nodi, archi])
 

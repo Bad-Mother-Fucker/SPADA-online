@@ -112,6 +112,7 @@ def crea_gara(body: CreaGaraRequest):
     if not body.regione:
         raise HTTPException(400, "Indica la regione del prezzario di riferimento.")
 
+    preesistente = gara_dir(body.slug).exists()
     proc = subprocess.run(
         ["bash", str(script),
          "--slug", body.slug, "--nome", body.nome,
@@ -120,6 +121,11 @@ def crea_gara(body: CreaGaraRequest):
         capture_output=True, text=True,
     )
     if proc.returncode != 0:
+        # Una cartella lasciata a metà bloccherebbe ogni nuovo tentativo
+        # con lo stesso slug, e la gara risulterebbe esistere senza riga
+        # in `gare`.
+        if not preesistente:
+            shutil.rmtree(gara_dir(body.slug), ignore_errors=True)
         raise HTTPException(500, f"new_gara.sh fallito: {proc.stderr.strip() or proc.stdout.strip()}")
 
     with get_conn() as con:

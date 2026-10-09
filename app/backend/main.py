@@ -15,11 +15,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fastapi import FastAPI
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from db import init_db
+from paths import SlugNonValido
 from routers import gare, sistema
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -71,6 +72,13 @@ async def _http_exception_con_causa_originale(request, exc):
     if exc.__cause__ is not None:
         log.exception("HTTPException con causa originale", exc_info=exc.__cause__)
     return await http_exception_handler(request, exc)
+
+
+@app.exception_handler(SlugNonValido)
+async def _percorso_non_valido(request, exc):
+    # Slug o percorso fuori dalla gara (es. "../" in /output/{percorso}):
+    # richiesta rifiutata, non un errore interno.
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
 @app.get("/salute")
