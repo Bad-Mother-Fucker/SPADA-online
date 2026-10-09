@@ -257,6 +257,10 @@
   * { @apply border-border outline-ring/50; }
   html { @apply font-sans text-sm; }
   body { @apply bg-background text-foreground; }
+  /* Sul testo statico niente cursore a «I» né cursore lampeggiante: freccia
+     del mouse ovunque. Restano solo dove si scrive. */
+  body { cursor: default; caret-color: transparent; }
+  input, textarea, [contenteditable="true"] { cursor: auto; caret-color: auto; }
   button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
   :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
   .font-mono, code, kbd, samp { font-variant-numeric: tabular-nums; }

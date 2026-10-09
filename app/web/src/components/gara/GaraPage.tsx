@@ -72,7 +72,7 @@ export function GaraPage() {
   }, [location.hash, navigate])
 
   useEffect(() => {
-    document.title = `${dettaglio.data?.manifest.nome || slug}, SPADA`
+    document.title = `${dettaglio.data?.manifest.nome || slug}, Prometheus - S.P.A.D.A.`
   }, [dettaglio.data?.manifest.nome, slug])
 
   const ctx = useMemo(() => {

@@ -1,4 +1,4 @@
-import { StarFourIcon, ArrowSquareOutIcon, MonitorIcon, CheckIcon, SignInIcon, SignOutIcon, UserIcon } from "@phosphor-icons/react"
+import { ArrowSquareOutIcon, MonitorIcon, CheckIcon, SignInIcon, SignOutIcon, UserIcon } from "@phosphor-icons/react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { Link } from "react-router"
@@ -94,7 +94,7 @@ function MenuAvatar() {
         {claude && !collegato && <i className="absolute -top-0.5 -right-0.5 size-2 rounded-full border border-card bg-status-crit" aria-hidden="true" />}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-64">
-        <DropdownMenuLabel>Claude per SPADA</DropdownMenuLabel>
+        <DropdownMenuLabel>Claude per Prometheus - S.P.A.D.A.</DropdownMenuLabel>
         <p className="px-2 pb-1.5 text-xs text-muted-foreground">
           {!claude ? "Verifica in corso…"
             : collegato ? (claude.account ? `Collegato come ${claude.nome ? `${claude.nome}, ` : ""}${claude.account}${claude.abbonamento ? ` (${claude.abbonamento})` : ""}` : conToken ? "Collegato con token OAuth" : "Collegato")
@@ -133,6 +133,21 @@ function MenuAvatar() {
   )
 }
 
+/** Marchio del prodotto: la spada di public/favicon.svg, a tinta unita
+    (currentColor) per seguire testo e tema. */
+function IconaSpada({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" fill="currentColor" aria-hidden="true" className={className}>
+      <g transform="translate(32 32) scale(1.25) rotate(45) translate(-32 -32.6)">
+        <path d="M32 3 L36.5 9.5 V40 H27.5 V9.5 Z" />
+        <rect x="18" y="40" width="28" height="5" rx="2.5" />
+        <rect x="29.3" y="45" width="5.4" height="10.5" rx="1.2" />
+        <circle cx="32" cy="58.5" r="3.8" />
+      </g>
+    </svg>
+  )
+}
+
 /** Barra applicativa persistente (DESIGN.md §5): marchio, sezione, stato
     del backend, tema, operatore. */
 export interface Briciola { a?: string; etichetta: string; mono?: boolean }
@@ -142,8 +157,8 @@ export function AppBar({ sezione = "Gare", briciole, badge, larga }: { sezione?:
     <header className="sticky top-0 z-20 border-b bg-card">
       <div className={cn("mx-auto flex h-12 items-center gap-3.5 px-6 max-md:px-4", larga ? "max-w-[1280px]" : "max-w-[1200px]")}>
         <Link to="/" className="flex shrink-0 items-center gap-1.5 rounded-sm font-semibold tracking-[0.01em]">
-          <StarFourIcon size={14} weight="fill" aria-hidden="true" />
-          SPADA
+          <IconaSpada className="size-5" />
+          Prometheus - S.P.A.D.A.
         </Link>
         {briciole ? (
           <nav aria-label="Percorso" className="flex min-w-0 items-center gap-2 text-muted-foreground">
