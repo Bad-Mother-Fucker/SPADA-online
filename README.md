@@ -171,3 +171,8 @@ stesso limite dichiarato per gli Sprint precedenti).
 Dettaglio di ogni sprint nei rispettivi `README.md` di `_pipeline/` e
 `app/`, e nel piano originale (non incluso qui: vive nella
 conversazione/issue che ha originato il progetto).
+
+## Piani
+
+- App desktop macOS e Windows, login Google, gare sul cloud:
+  `piani/2026-10-04-piano-app-desktop.md` (2026-10-04, proposto).
