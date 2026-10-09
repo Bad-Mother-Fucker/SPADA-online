@@ -312,6 +312,20 @@ export function useChiediAssistente(slug: string) {
   })
 }
 
+/** Prezzario da file PriMus (.dcf), dalla gara (slug) o dalle impostazioni
+    di sistema. Rilegge prezzari, elenco gare (prezzario presente) e gara. */
+export function useCaricaPrezzario(slug?: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { regione: string; anno: number; file: File }) => Api.caricaPrezzario(v.regione, v.anno, v.file),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["sistema", "prezzari"] })
+      void qc.invalidateQueries({ queryKey: ["gare"] })
+      if (slug) void qc.invalidateQueries({ queryKey: chiaviGara.tutto(slug) })
+    },
+  })
+}
+
 export function useImportaPrezzario(slug: string) {
   const qc = useQueryClient()
   return useMutation({

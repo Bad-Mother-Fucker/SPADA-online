@@ -45,7 +45,8 @@ async function richiesta<T = unknown>(percorso: string, opzioni: Opzioni = {}): 
   let resp: Response
   try {
     resp = await fetch(base() + percorso, {
-      headers: { "Content-Type": "application/json", ...(headers || {}) },
+      // Con FormData il Content-Type (multipart, con boundary) lo mette il browser.
+      headers: resto.body instanceof FormData ? headers : { "Content-Type": "application/json", ...(headers || {}) },
       signal: segnale(signal, timeoutMs),
       ...resto,
     })
@@ -240,6 +241,14 @@ export const Api = {
   sistemaPipeline: (o?: Opzioni) => richiesta<{ versione: string; git_ref: string }>("/sistema/pipeline", o),
   importaPrezzario: (regione: string, anno: number) =>
     richiesta("/sistema/prezzari/importa", { method: "POST", body: JSON.stringify({ regione, anno }), timeoutMs: 600_000 }),
+  /** File PriMus (.dcf) pubblicato dalla regione: conversione e import lato server. */
+  caricaPrezzario: (regione: string, anno: number, file: File) => {
+    const corpo = new FormData()
+    corpo.append("regione", regione)
+    corpo.append("anno", String(anno))
+    corpo.append("file", file)
+    return richiesta("/sistema/prezzari/carica", { method: "POST", body: corpo, timeoutMs: 900_000 })
+  },
   // Fase 4, registro unico delle domande. Salvare non invia: le risposte
   // entrano nel contesto solo eseguendo la Fase 4.
   domande: (slug: string, o?: Opzioni) => richiesta<unknown>(`/gare/${s(slug)}/domande`, o),

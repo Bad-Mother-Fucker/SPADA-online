@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { urlGara } from "./CardGara"
+import { Suggerimento } from "@/components/comuni/Primitivi"
 import { useCreaGara, usePrezzari } from "@/hooks/useGare"
 import type { Prezzario } from "@/lib/api"
 import { slugify } from "@/lib/formato"
@@ -32,13 +33,6 @@ interface Form {
 
 const FORM_VUOTO: Form = { nome: "", slug: "", slugAuto: true, regione: "", anno: ANNO_CORRENTE, altro: false, modello: MODELLI[0].id, effort: "high" }
 
-function Suggerimento({ children, tono = "neu", id }: { children: React.ReactNode; tono?: "neu" | "crit" | "attn"; id?: string }) {
-  return (
-    <p id={id} className={cn("text-micro", tono === "crit" ? "text-status-crit" : tono === "attn" ? "text-status-attn" : "text-muted-foreground")}>
-      {children}
-    </p>
-  )
-}
 
 /** Il pannello laterale "Nuova gara": l'elenco resta visibile dietro, con i
     nomi delle gare esistenti che aiutano a scegliere slug e nome. */

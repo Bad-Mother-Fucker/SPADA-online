@@ -115,3 +115,12 @@ export function BottoneScelta({ attivo, tono, className, children, ...props }: {
     </button>
   )
 }
+
+/** Riga di aiuto sotto un campo: neutra, avviso o errore. */
+export function Suggerimento({ children, tono = "neu", id }: { children: ReactNode; tono?: "neu" | "crit" | "attn"; id?: string }) {
+  return (
+    <p id={id} className={cn("text-micro", tono === "crit" ? "text-status-crit" : tono === "attn" ? "text-status-attn" : "text-muted-foreground")}>
+      {children}
+    </p>
+  )
+}

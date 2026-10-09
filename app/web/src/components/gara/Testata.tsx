@@ -6,6 +6,7 @@ import { Nota } from "@/components/comuni/Primitivi"
 import { useGara } from "./GaraContext"
 import { useEsegui } from "./AzioniFase"
 import { useDeliverableAzioni, useImportaPrezzario } from "@/hooks/useGaraDati"
+import { PulsanteCaricaDcf } from "@/components/comuni/CaricaPrezzario"
 import { quandoRelativo, scadenza as formattaScadenza } from "@/lib/formato"
 import { comeApiError } from "@/lib/risorsa"
 import { cn } from "@/lib/utils"
@@ -128,7 +129,8 @@ export function AvvisoPrezzario() {
               onSuccess: () => toast.success(`Prezzario ${nome} importato`, { description: "Da ora le fasi includono le valutazioni economiche." }),
               onError: (e) => toast.error("Importazione non riuscita", { description: comeApiError(e).message }),
             })}>{importa.isPending ? "Importazione in corso" : "Importa ora"}</Button>
-            <span className="self-center text-micro text-muted-foreground">Lo cerca sul Mac e fra le release pubblicate. Da file: <code className="font-mono">./spada importa-prezzario {p.regione || "Regione"} {p.anno || "anno"} cartella</code></span>
+            {p.regione && p.anno ? <PulsanteCaricaDcf regione={p.regione} anno={p.anno} slug={slug} /> : null}
+            <span className="self-center text-micro text-muted-foreground">«Importa ora» lo cerca su questo computer e fra le release pubblicate; «Carica file .dcf» usa il file PriMus pubblicato dalla regione.</span>
           </>
         }>
         La gara procede senza valutazioni economiche: l'analisi strategica non confronta i prezzi del computo con il prezzario né stima la capacità di investimento, e il computo metrico lascia da definire le voci nuove. Includilo il prima possibile, poi rielabora la Fase 3 e il computo metrico.

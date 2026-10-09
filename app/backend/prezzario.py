@@ -120,34 +120,58 @@ def stato_prezzario(gara_dir: Path, manifest: dict) -> dict:
     }
 
 
-def importa(regione: str, anno: int) -> dict:
-    """Importa un'edizione con import_prezzario.sh: cache locale
-    (~/.spada/prezzari) o release di prometeus-prezzari via gh. Una sola
-    importazione alla volta."""
+def _valida(regione: str, anno: int) -> str:
     regione = regione_canonica(regione)
     if not REGIONE_RE.match(regione):
         raise ValueError(f"Regione non valida: {regione!r}")
     if not 2000 <= int(anno) <= 2100:
         raise ValueError(f"Anno non valido: {anno}")
+    return regione
+
+
+def _esegui_import(regione: str, anno: int, *origine: str) -> subprocess.CompletedProcess:
+    """import_prezzario.sh, una sola importazione alla volta. `origine`:
+    eventuale terzo argomento dello script (cartella o file .dcf)."""
     if not _LOCK_IMPORT.acquire(blocking=False):
         raise ImportazioneNonRiuscita("È già in corso un'altra importazione: riprova tra poco.")
     try:
         script = PIPELINE_DIR / "scripts" / "setup" / "import_prezzario.sh"
-        proc = subprocess.run(
-            ["bash", str(script), regione, str(int(anno))],
+        return subprocess.run(
+            ["bash", str(script), regione, str(int(anno)), *origine],
             capture_output=True, text=True, timeout=15 * 60,
         )
     except subprocess.TimeoutExpired:
         raise ImportazioneNonRiuscita("Importazione interrotta: oltre 15 minuti.")
     finally:
         _LOCK_IMPORT.release()
+
+
+def importa_da_file(regione: str, anno: int, dcf: Path) -> dict:
+    """Importa un file PriMus (.dcf) caricato dall'interfaccia: lo stesso
+    percorso di './spada importa-prezzario <Regione> <anno> file.dcf'.
+    primus_dcf.py rifiuta, senza toccare il database, un file che non è
+    un PriMus leggibile o che dichiara un anno diverso; dopo l'import lo
+    script ne tiene una copia nella cache locale."""
+    regione = _valida(regione, anno)
+    proc = _esegui_import(regione, anno, str(dcf))
+    if proc.returncode != 0:
+        raise ImportazioneNonRiuscita((proc.stderr.strip() or proc.stdout.strip())[-600:])
+    return {"regione": regione, "anno": int(anno), "importato": True, "edizione": _edizione(regione, int(anno))}
+
+
+def importa(regione: str, anno: int) -> dict:
+    """Importa un'edizione con import_prezzario.sh: cache locale
+    (~/.spada/prezzari) o release di prometeus-prezzari via gh. Una sola
+    importazione alla volta."""
+    regione = _valida(regione, anno)
+    proc = _esegui_import(regione, anno)
     if proc.returncode != 0:
         dettaglio = (proc.stderr.strip() or proc.stdout.strip())[-600:]
         if "release not found" in dettaglio.lower() or "no assets" in dettaglio.lower():
             dettaglio = (
                 f"In prometeus-prezzari non c'è ancora una release «{regione.lower()}-{int(anno)}»: "
-                "il prezzario va prima estratto ed elaborato lì (o importato da file con "
-                f"./spada importa-prezzario {regione} {int(anno)} <cartella con i JSON o file .dcf PriMus>)."
+                "il prezzario va prima estratto ed elaborato lì, oppure caricato qui dal file PriMus "
+                "(.dcf) pubblicato dalla regione con «Carica file .dcf»."
             )
         raise ImportazioneNonRiuscita(dettaglio)
     return {"regione": regione, "anno": int(anno), "importato": True, "edizione": _edizione(regione, int(anno))}
