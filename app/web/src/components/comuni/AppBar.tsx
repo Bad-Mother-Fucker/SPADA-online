@@ -1,9 +1,11 @@
-import { ArrowSquareOutIcon, MonitorIcon, CheckIcon, SignInIcon, SignOutIcon, UserIcon } from "@phosphor-icons/react"
+import { ArrowSquareOutIcon, FileArrowUpIcon, MonitorIcon, CheckIcon, SignInIcon, SignOutIcon, UserIcon } from "@phosphor-icons/react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { Link } from "react-router"
 import { toast } from "sonner"
 import { CHIAVE_LOGIN, DialogoLoginClaude, useLoginClaude } from "./LoginClaude"
+import { DialogoCaricaPrezzario } from "./CaricaPrezzario"
+import { usePrezzari } from "@/hooks/useGare"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useStatoBackend, type StatoBackend } from "@/hooks/useStatoBackend"
 import { useTema } from "@/hooks/useTema"
@@ -77,6 +79,8 @@ function MenuAvatar() {
   const qc = useQueryClient()
   const { data: claude } = useLoginClaude()
   const [loginAperto, setLoginAperto] = useState(false)
+  const [prezzarioAperto, setPrezzarioAperto] = useState(false)
+  const prezzari = usePrezzari()
   const collegato = !!claude?.disponibile
   const conToken = claude?.metodo === "oauth_token"
   const esci = () => Api.esciClaude()
@@ -115,7 +119,16 @@ function MenuAvatar() {
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Tema</DropdownMenuLabel>
+        <DropdownMenuLabel>Prezzari</DropdownMenuLabel>
+        <p className="px-2 pb-1.5 text-xs text-muted-foreground">
+          {prezzari.isPending ? "Lettura in corso…"
+            : prezzari.data?.length ? prezzari.data.map((p) => `${p.regione} ${p.anno}`).join(", ")
+            : "Nessun prezzario installato."}
+        </p>
+        <DropdownMenuItem onSelect={() => setPrezzarioAperto(true)}>
+          <FileArrowUpIcon aria-hidden="true" />Aggiungi prezzario (.dcf)
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuLabel>Tema</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => scegli("auto")}>
           <MonitorIcon aria-hidden="true" />
@@ -129,6 +142,7 @@ function MenuAvatar() {
       </DropdownMenuContent>
     </DropdownMenu>
     <DialogoLoginClaude aperto={loginAperto} onChiudi={() => setLoginAperto(false)} />
+    <DialogoCaricaPrezzario aperto={prezzarioAperto} onChiudi={() => setPrezzarioAperto(false)} />
     </>
   )
 }
