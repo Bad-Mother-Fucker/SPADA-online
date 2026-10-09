@@ -10,7 +10,7 @@ import { NOTA_BACKGROUND, PulsanteCaricaDcf } from "@/components/comuni/CaricaPr
 import { quandoRelativo, scadenza as formattaScadenza } from "@/lib/formato"
 import { comeApiError } from "@/lib/risorsa"
 import { cn } from "@/lib/utils"
-import { FASI, STATO_GARA, consultabile, faseCorrente, inAvvio, motivoBlocco, statoFase, statoGara, type StatoFase } from "@/dominio/fasi"
+import { FASI, STATO_GARA, consultabile, faseCorrente, garaInPausa, inAvvio, inPausa, motivoBlocco, statoFase, statoGara, type StatoFase } from "@/dominio/fasi"
 
 /** La sintesi riassume la fase corrente, cioè ciò che la pipeline ha scritto in fasi.json. */
 function sintesiGara(gara: ReturnType<typeof useGara>["gara"]) {
@@ -40,7 +40,9 @@ export function TestataGara() {
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
-            <BadgeStato tono={meta.tono} pulsa={st === "in_esecuzione"}>{meta.etichetta}, Fase {n}</BadgeStato>
+            {garaInPausa(gara.fasi)
+              ? <BadgeStato tono="attn">In pausa, Fase {n}</BadgeStato>
+              : <BadgeStato tono={meta.tono} pulsa={st === "in_esecuzione"}>{meta.etichetta}, Fase {n}</BadgeStato>}
             <Chip mono>{slug}</Chip>
             <Chip>{m.prezzario?.regione || "regione non indicata"}, prezzario {m.prezzario?.anno || "n.d."}</Chip>
             <Chip mono>{m.esecuzione?.modello || "modello n.d."}, {m.esecuzione?.effort || "effort n.d."}</Chip>
@@ -81,15 +83,16 @@ export function Stepper() {
       <ol className="grid grid-cols-8 gap-2">
         {FASI.map((f) => {
           const st = statoFase(gara.fasi, f.n)
-          const blocco = consultabile(gara.fasi, f.n) ? null : motivoBlocco(gara.fasi, f.n)
+          const blocco = consultabile(gara.fasi, f.n, gara.manifest) ? null : motivoBlocco(gara.fasi, f.n)
+          const soloElenco = !blocco && f.n === 7 && !!motivoBlocco(gara.fasi, f.n)
           const attiva = new RegExp(`/fase/${f.n}(/|$)`).test(location.pathname)
           const corpo = (
             <>
-              <span className={cn("mb-2 block h-[3px] rounded-[1px]", BARRA[st])} aria-hidden="true" />
+              <span className={cn("mb-2 block h-[3px] rounded-[1px]", inPausa(gara.fasi, f.n) ? "bg-status-attn" : BARRA[st])} aria-hidden="true" />
               <span className={cn("block font-mono text-micro", attiva ? "text-foreground" : "text-muted-foreground")}>{ICONA[st] && <span aria-hidden="true">{ICONA[st]} </span>}{f.num}</span>
               <span className={cn("block text-xs leading-tight", attiva ? "font-semibold text-foreground" : blocco ? "text-muted-foreground" : "text-foreground-2")}>{f.titolo}</span>
-              <span className={cn("block text-micro", !blocco && ETICHETTA_TONO[st] ? ETICHETTA_TONO[st] : "text-muted-foreground")}>
-                {blocco ? "bloccata" : inAvvio(gara.fasi, f.n) ? "in avvio" : STATO_ETICHETTA[st]}
+              <span className={cn("block text-micro", !blocco && inPausa(gara.fasi, f.n) ? "text-status-attn" : !blocco && ETICHETTA_TONO[st] ? ETICHETTA_TONO[st] : "text-muted-foreground")}>
+                {blocco ? "bloccata" : soloElenco ? "elenco consultabile" : inAvvio(gara.fasi, f.n) ? "in avvio" : inPausa(gara.fasi, f.n) ? "in pausa" : STATO_ETICHETTA[st]}
               </span>
             </>
           )

@@ -35,7 +35,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s worker
 log = logging.getLogger("spada.worker")
 
 POLL_SECONDS = 3
-TIMEOUT_JOB_SECONDI = 2 * 60 * 60
+TIMEOUT_JOB_SECONDI = 2 * 60 * 60  # tempo di lavoro: le pause non contano
+CONTROLLO_PAUSA_SECONDI = 2
 # Su macOS impedisce lo stop per inattività finché il job è vivo; altrove
 # (o se manca) il job parte uguale, senza.
 CAFFEINATE = ["caffeinate", "-i"] if sys.platform == "darwin" and shutil.which("caffeinate") else []
@@ -50,6 +51,9 @@ _job_corrente: subprocess.Popen | None = None
 def _termina_gruppo(proc: subprocess.Popen):
     try:
         os.killpg(proc.pid, signal.SIGTERM)
+        # Un gruppo in pausa (SIGSTOP) non gestisce SIGTERM finché non
+        # riparte: senza SIGCONT resterebbe appeso fino al SIGKILL.
+        os.killpg(proc.pid, signal.SIGCONT)
         proc.wait(timeout=10)
     except ProcessLookupError:
         return
@@ -80,7 +84,8 @@ def pulisci_job_orfani():
         for o in orfani:
             log.warning("Job %s trovato in_esecuzione all'avvio del worker: marcato errore (ripartenza pulita).", o["id"])
             con.execute(
-                "UPDATE job SET stato='errore', errore=?, concluso_il=? WHERE id=?",
+                "UPDATE job SET stato='errore', in_pausa=0, pausa_richiesta=NULL, pausa_dal=NULL, "
+                "errore=?, concluso_il=? WHERE id=?",
                 ("Worker riavviato con il job ancora in_esecuzione: nessuna ripresa automatica.", now(), o["id"]),
             )
 
@@ -125,6 +130,34 @@ def registra_errore_prima_dell_avvio(job, messaggio: str):
         log_p.write_text(json.dumps(run_log, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
         log.exception("Job %s: errore non registrato nello stato della gara", job["id"])
+
+
+def _gestisci_pausa(job_id: int, proc: subprocess.Popen, in_pausa: bool) -> bool:
+    """Applica una richiesta di pausa o ripresa scritta dall'API. La pausa
+    è vera: SIGSTOP all'intero gruppo (bash, claude, subagenti), che resta
+    in memoria con tutto il lavoro fatto e riparte da dove era con
+    SIGCONT. Ritorna il nuovo stato di pausa."""
+    with get_conn() as con:
+        riga = con.execute("SELECT pausa_richiesta FROM job WHERE id=?", (job_id,)).fetchone()
+        richiesta = riga["pausa_richiesta"] if riga else None
+        if not richiesta:
+            return in_pausa
+        try:
+            if richiesta == "pausa" and not in_pausa:
+                os.killpg(proc.pid, signal.SIGSTOP)
+                in_pausa = True
+                log.info("Job %s: in pausa", job_id)
+            elif richiesta == "riprendi" and in_pausa:
+                os.killpg(proc.pid, signal.SIGCONT)
+                in_pausa = False
+                log.info("Job %s: ripreso", job_id)
+        except ProcessLookupError:
+            pass  # il processo è appena finito: lo registra il chiamante
+        con.execute(
+            "UPDATE job SET pausa_richiesta=NULL, in_pausa=?, pausa_dal=? WHERE id=?",
+            (1 if in_pausa else 0, now() if in_pausa else None, job_id),
+        )
+    return in_pausa
 
 
 def esegui_job(job):
@@ -180,8 +213,23 @@ def esegui_job(job):
     proc = subprocess.Popen(CAFFEINATE + argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, start_new_session=True)
     _job_corrente = proc
+    # communicate() a intervalli brevi: fra un intervallo e l'altro si
+    # guardano le richieste di pausa. Ripetere communicate() dopo un
+    # TimeoutExpired non perde output (documentato in subprocess).
+    in_pausa = False
+    lavoro = 0.0  # secondi di esecuzione effettiva, pause escluse
     try:
-        stdout, stderr = proc.communicate(timeout=TIMEOUT_JOB_SECONDI)
+        while True:
+            t0 = time.monotonic()
+            try:
+                stdout, stderr = proc.communicate(timeout=CONTROLLO_PAUSA_SECONDI)
+                break
+            except subprocess.TimeoutExpired:
+                if not in_pausa:
+                    lavoro += time.monotonic() - t0
+                in_pausa = _gestisci_pausa(job_id, proc, in_pausa)
+                if lavoro > TIMEOUT_JOB_SECONDI:
+                    raise
         stato_finale = "completato" if proc.returncode == 0 else "errore"
         errore = None if proc.returncode == 0 else (stderr[-2000:] or stdout[-2000:])
     except subprocess.TimeoutExpired:
@@ -189,13 +237,13 @@ def esegui_job(job):
         # "in_esecuzione": in locale nessun systemd lo riavvia.
         _termina_gruppo(proc)
         stato_finale = "errore"
-        errore = f"Job interrotto: superato il limite di {TIMEOUT_JOB_SECONDI // 60} minuti."
+        errore = f"Job interrotto: superato il limite di {TIMEOUT_JOB_SECONDI // 60} minuti di lavoro."
     finally:
         _job_corrente = None
 
     with get_conn() as con:
         con.execute(
-            "UPDATE job SET stato=?, errore=?, concluso_il=? WHERE id=?",
+            "UPDATE job SET stato=?, in_pausa=0, pausa_richiesta=NULL, pausa_dal=NULL, errore=?, concluso_il=? WHERE id=?",
             (stato_finale, errore, now(), job_id),
         )
     log.info("Job %s: %s", job_id, stato_finale)

@@ -67,6 +67,12 @@ class AssistenteRequest(BaseModel):
     messaggio: str
 
 
+class AssistenteStreamRequest(BaseModel):
+    messaggio: str = Field(min_length=1)
+    # rapida: risposta breve dai dati già noti; approfondita: ricerca e verifiche.
+    modalita: Literal["rapida", "approfondita"] = "rapida"
+
+
 class ProposaOperatoreRequest(BaseModel):
     """Sprint 10.2 — proposta suggerita dal professionista in Ricerca
     soluzioni, valutata dal sistema insieme alle proprie (criterion-agent

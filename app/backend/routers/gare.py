@@ -16,6 +16,7 @@ from deliverables import elenca_deliverables, trova_deliverable
 from grafo import estrai_grafo, leggi_corpo, leggi_frontmatter
 from interventi import InterventoGiaInCorso, invoca_intervento
 from models import (
+    AssistenteStreamRequest,
     ApprovazioneRequest, AssistenteRequest, BozzaDomandeRequest, CreaGaraRequest,
     IntegraDocumentoRequest, InformazioneProfessionistaRequest, InterventoRequest,
     ProposaOperatoreRequest,
@@ -47,7 +48,7 @@ def _job_attivi(slug: str) -> dict:
     fase (il più vecchio vince: è quello che il worker prenderà per primo)."""
     with get_conn() as con:
         righe = con.execute(
-            "SELECT id, fase, stato, creato_il, iniziato_il, deliverable_id FROM job "
+            "SELECT id, fase, stato, creato_il, iniziato_il, deliverable_id, in_pausa, pausa_richiesta, pausa_dal FROM job "
             "WHERE gara_slug=? AND stato IN ('in_coda','in_esecuzione') AND operazione IS NULL "
             "ORDER BY id", (slug,)).fetchall()
     out = {}
@@ -77,7 +78,9 @@ def _fasi_con_job(d: Path, slug: str) -> dict:
             corpo["stato"] = "in_esecuzione"
             corpo.pop("richiede_approvazione", None)
         corpo["job"] = {"id": job["id"], "stato": job["stato"], "creato_il": job["creato_il"],
-                        "iniziato_il": job["iniziato_il"], "deliverable_id": job["deliverable_id"]}
+                        "iniziato_il": job["iniziato_il"], "deliverable_id": job["deliverable_id"],
+                        "in_pausa": bool(job["in_pausa"]), "pausa_richiesta": job["pausa_richiesta"],
+                        "pausa_dal": job["pausa_dal"]}
         corpi[k] = corpo
     return {**fasi, "fasi": corpi}
 
@@ -393,6 +396,37 @@ def _accoda_job(slug: str, fase: int, tipo: str, deliverable_id: str | None = No
     return {"job_id": job_id, "stato": "in_coda"}
 
 
+def _richiedi_pausa(slug: str, job_id: int, richiesta: str) -> dict:
+    """La pausa vale per un'attività già partita (fase, deliverable,
+    integrazione): il worker sospende davvero i suoi processi. Una
+    richiesta ripetuta non cambia nulla."""
+    _gara_o_404(slug)
+    with get_conn() as con:
+        job = con.execute("SELECT id, stato, tipo, in_pausa FROM job WHERE id=? AND gara_slug=?",
+                          (job_id, slug)).fetchone()
+        if job is None:
+            raise HTTPException(404, f"Attività {job_id} non trovata per questa gara.")
+        if job["stato"] == "in_coda":
+            raise HTTPException(409, "L'attività è in coda e non è ancora partita: la pausa vale per un'attività in corso.")
+        if job["stato"] != "in_esecuzione":
+            raise HTTPException(409, "L'attività è già conclusa: non c'è nulla da mettere in pausa o riprendere.")
+        if job["tipo"] == "approva":
+            raise HTTPException(409, "Un'approvazione si registra in un istante: non si può mettere in pausa.")
+        gia = bool(job["in_pausa"]) == (richiesta == "pausa")
+        con.execute("UPDATE job SET pausa_richiesta=? WHERE id=?", (None if gia else richiesta, job_id))
+    return {"job_id": job_id, "richiesta": richiesta, "gia_applicata": gia}
+
+
+@router.post("/{slug}/job/{job_id}/pausa", status_code=202)
+def metti_in_pausa(slug: str, job_id: int):
+    return _richiedi_pausa(slug, job_id, "pausa")
+
+
+@router.post("/{slug}/job/{job_id}/riprendi", status_code=202)
+def riprendi(slug: str, job_id: int):
+    return _richiedi_pausa(slug, job_id, "riprendi")
+
+
 @router.post("/{slug}/fasi/{fase}/esegui", status_code=202)
 def esegui_fase(slug: str, fase: int):
     return _accoda_job(slug, fase, "esegui")
@@ -479,8 +513,30 @@ def elimina_informazione(slug: str, id_domanda: str):
 # ── Sprint 10.3 — deliverables come workspace separati ──────────────
 @router.get("/{slug}/deliverables")
 def elenco_deliverables(slug: str):
+    """L'elenco esiste da quando l'analisi del disciplinare lo scrive nel
+    manifesto: si consulta subito, la produzione resta legata alla
+    sequenza delle fasi (_verifica_sequenza). Sopra lo stato registrato
+    dallo script si mette quello della coda, come per le fasi: un
+    deliverable accodato risulta in coda, uno partito porta il suo job
+    (per la pausa) prima ancora che lo script scriva lo stato."""
     d = _gara_o_404(slug)
-    return elenca_deliverables(d)
+    elenco = elenca_deliverables(d)
+    with get_conn() as con:
+        righe = con.execute(
+            "SELECT id, stato, deliverable_id, in_pausa, pausa_richiesta, pausa_dal FROM job "
+            "WHERE gara_slug=? AND deliverable_id IS NOT NULL AND stato IN ('in_coda','in_esecuzione') "
+            "ORDER BY id", (slug,)).fetchall()
+    attivi = {}
+    for r in righe:
+        attivi.setdefault(r["deliverable_id"], r)
+    for dl in elenco:
+        job = attivi.get(dl["id"])
+        if job is None:
+            continue
+        dl["stato"] = job["stato"]
+        dl["job"] = {"id": job["id"], "stato": job["stato"], "in_pausa": bool(job["in_pausa"]),
+                     "pausa_richiesta": job["pausa_richiesta"], "pausa_dal": job["pausa_dal"]}
+    return elenco
 
 
 def _deliverable_o_404(slug: str, deliverable_id: str):
@@ -608,8 +664,7 @@ def registra_approvazione(slug: str, body: ApprovazioneRequest):
     return {"id": cur.lastrowid}
 
 
-@router.post("/{slug}/assistente")
-def assistente(slug: str, body: AssistenteRequest):
+def _verifica_assistente(slug: str):
     d = _gara_o_404(slug)
     fasi = _leggi_json(d / "_state" / "fasi.json", {})
     fase2 = fasi.get("fasi", {}).get("2_costruzione_grafo", {})
@@ -628,6 +683,51 @@ def assistente(slug: str, body: AssistenteRequest):
     if in_corso:
         raise HTTPException(409, "Una fase è in esecuzione su questa gara: riprova a conversazione conclusa.")
 
+
+def _salva_messaggio(slug: str, ruolo: str, testo: str):
+    with get_conn() as con:
+        con.execute(
+            "INSERT INTO conversazioni (gara_slug, ruolo, testo, creato_il) VALUES (?,?,?,?)",
+            (slug, ruolo, testo, now()),
+        )
+
+
+@router.post("/{slug}/assistente/stream")
+def assistente_stream(slug: str, body: AssistenteStreamRequest):
+    """Come POST /assistente, ma la risposta arriva mentre viene scritta
+    (NDJSON, un evento per riga: vedi assistente.stream_assistente) e in
+    due modalità, rapida o approfondita. Gli stati mostrati vengono dagli
+    strumenti che l'assistente usa davvero."""
+    _verifica_assistente(slug)
+    from assistente import stream_assistente
+    _salva_messaggio(slug, "utente", body.messaggio)
+
+    def righe():
+        concluso = False
+        try:
+            for ev in stream_assistente(slug, body.messaggio, body.modalita):
+                if ev["tipo"] == "fine":
+                    _salva_messaggio(slug, "assistente", ev["risposta"])
+                    concluso = True
+                elif ev["tipo"] == "errore":
+                    concluso = True
+                yield json.dumps(ev, ensure_ascii=False) + "\n"
+        except Exception as e:  # noqa: BLE001 — l'interfaccia deve ricevere l'errore, non una riga troncata
+            concluso = True
+            yield json.dumps({"tipo": "errore", "messaggio": f"Assistente non disponibile: {e}"}, ensure_ascii=False) + "\n"
+        finally:
+            # Chiusa dall'interfaccia (Interrompi, pagina chiusa): la
+            # domanda resta in cronologia con l'esito, non senza risposta.
+            if not concluso:
+                _salva_messaggio(slug, "assistente", "_Risposta interrotta prima della fine._")
+
+    return StreamingResponse(righe(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@router.post("/{slug}/assistente")
+def assistente(slug: str, body: AssistenteRequest):
+    _verifica_assistente(slug)
     with get_conn() as con:
         con.execute(
             "INSERT INTO conversazioni (gara_slug, ruolo, testo, creato_il) VALUES (?,?,?,?)",

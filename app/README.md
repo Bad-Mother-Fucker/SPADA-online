@@ -38,6 +38,22 @@ Endpoint implementati: `GET/POST /gare`, `GET /gare/{slug}`,
 `GET /gare/{slug}/run-log`, `POST /gare/{slug}/approvazioni`,
 `GET /sistema/{auth,prezzari,pipeline}`.
 
+Aggiunti dopo:
+
+- `POST /sistema/prezzari/carica` — prezzario da file PriMus (.dcf).
+- `POST /gare/{slug}/job/{id}/{pausa|riprendi}` — pausa reale di
+  un'attività in esecuzione: l'API registra la richiesta
+  (`job.pausa_richiesta`), il worker sospende o riprende l'intero gruppo
+  di processi (SIGSTOP/SIGCONT) entro 2 secondi e aggiorna `in_pausa`. Il
+  tempo in pausa non conta nel limite di 2 ore. Una pausa molto lunga può
+  far cadere la connessione con Claude: la fase va allora in errore.
+- `POST /gare/{slug}/assistente/stream` — risposta dell'assistente in
+  streaming (NDJSON), modalità `rapida` o `approfondita`. Gli eventi
+  `stato` vengono dagli strumenti che l'assistente usa davvero; il
+  ragionamento interno del modello non viene inoltrato.
+- `GET /gare/{slug}/deliverables` porta anche lo stato della coda
+  (`in_coda`, `in_esecuzione`, `job.in_pausa`).
+
 `POST /gare/{slug}/assistente` risponde `501`: il contratto dati è
 pronto (persiste il messaggio in `conversazioni`), l'esecuzione read-only
 via `claude -p` è Sprint 7.

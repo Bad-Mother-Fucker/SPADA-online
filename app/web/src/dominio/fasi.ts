@@ -7,7 +7,14 @@ export type StatoGara = StatoFase
 
 /** Job della coda sovrapposto dal backend (routers/gare.py::_fasi_con_job):
     c'è finché la fase è accodata o gira. "in_coda" = in avvio. */
-export interface JobFase { id: number; stato: "in_coda" | "in_esecuzione"; creato_il: string; iniziato_il?: string | null; deliverable_id?: string | null }
+export interface JobFase {
+  id: number; stato: "in_coda" | "in_esecuzione"; creato_il?: string; iniziato_il?: string | null; deliverable_id?: string | null
+  /** Pausa reale: il worker ha sospeso i processi del job (SIGSTOP). */
+  in_pausa?: boolean
+  /** Richiesta registrata e non ancora applicata dal worker (pochi secondi). */
+  pausa_richiesta?: "pausa" | "riprendi" | null
+  pausa_dal?: string | null
+}
 
 export interface CorpoFase {
   stato?: string
@@ -100,6 +107,16 @@ export function statoFase(fasi: Fasi | null | undefined, n: number): StatoFase {
   return normalizzaStato(c.stato)
 }
 
+/** La fase sta girando ma il suo lavoro è sospeso. */
+export function inPausa(fasi: Fasi | null | undefined, n: number): boolean {
+  return !!corpoFase(fasi, n)?.job?.in_pausa
+}
+
+/** Qualche fase della gara è in pausa (c'è un solo job in esecuzione alla volta). */
+export function garaInPausa(fasi: Fasi | null | undefined): boolean {
+  return FASI.some((f) => inPausa(fasi, f.n))
+}
+
 /** La fase è stata accodata ma il worker non l'ha ancora presa. */
 export function inAvvio(fasi: Fasi | null | undefined, n: number): boolean {
   return corpoFase(fasi, n)?.job?.stato === "in_coda"
@@ -116,9 +133,18 @@ export function sbloccata(fasi: Fasi | null | undefined, n: number): boolean {
     le domande arrivano già dalla Fase 1 (sopralluogo, quesiti con scadenza)
     e il professionista deve poter rispondere in bozza prima che l'analisi
     strategica sia finita. Eseguirla resta legato a `sbloccata`. */
-export function consultabile(fasi: Fasi | null | undefined, n: number): boolean {
+export function consultabile(fasi: Fasi | null | undefined, n: number, manifest?: Record<string, unknown> | null): boolean {
   if (sbloccata(fasi, n)) return true
+  if (n === 7 && deliverablesIndividuati(manifest)) return true
   return n === 4 && statoFase(fasi, 1) === "completata"
+}
+
+/** La Fase 7 si apre in lettura appena l'analisi del disciplinare ha scritto
+    nel manifesto l'elenco dei deliverable: lo si legge subito, mentre
+    produrli resta legato a `sbloccata` (stesso vincolo del backend). */
+export function deliverablesIndividuati(manifest?: Record<string, unknown> | null): boolean {
+  const d = manifest?.deliverables
+  return !!d && typeof d === "object" && Object.values(d as Record<string, unknown>).some((v) => Array.isArray(v) && v.length > 0)
 }
 
 /** Perché la fase n è chiusa, in una frase: null se è aperta. */

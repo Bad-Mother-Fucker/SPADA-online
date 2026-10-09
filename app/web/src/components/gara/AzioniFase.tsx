@@ -6,6 +6,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { DialogoConferma, type Conferma } from "./DialogoConferma"
+import { ControlloPausa, NOTA_PAUSA, TestoPausa } from "./ControlloPausa"
 import { useGara } from "./GaraContext"
 import { useAzioniFase } from "@/hooks/useGaraDati"
 import { comeApiError } from "@/lib/risorsa"
@@ -72,17 +73,22 @@ export function AzioniFase({ n, blocco, className, azionePrimaria }: { n: number
     // pulsante sparisce subito, così la fase non si avvia due volte.
     const job = corpoFase(gara.fasi, n)?.job
     corpo = (
-      <div role="status" className="space-y-1 text-center">
-        <p className="flex items-center justify-center gap-2 text-sm font-medium text-status-run">
-          <i className="size-1.5 rounded-full bg-current animate-pulsa" aria-hidden="true" />
-          {job?.stato === "in_coda" ? "In avvio" : "Esecuzione in corso"}
-        </p>
-        <p className="text-micro text-muted-foreground">
-          {job?.stato === "in_coda"
-            ? `Accodata ${quandoRelativo(job.creato_il)}: parte appena il worker è libero.`
-            : `Avviata ${quandoRelativo(job?.iniziato_il || corpoFase(gara.fasi, n)?.iniziata_il || "")}. Puoi chiudere la pagina: la fase continua.`}
-        </p>
-      </div>
+      <>
+        <div role="status" className="space-y-1 text-center">
+          <p className={cn("flex items-center justify-center gap-2 text-sm font-medium", job?.in_pausa ? "text-status-attn" : "text-status-run")}>
+            <i className={cn("size-1.5 rounded-full bg-current", !job?.in_pausa && "animate-pulsa")} aria-hidden="true" />
+            {job?.stato === "in_coda" ? "In avvio" : job?.in_pausa ? "In pausa" : "Esecuzione in corso"}
+          </p>
+          <p className="text-micro text-muted-foreground">
+            {job?.stato === "in_coda"
+              ? `Accodata ${quandoRelativo(job.creato_il || "")}: parte appena il worker è libero.`
+              : job?.in_pausa ? <TestoPausa job={job} />
+              : `Avviata ${quandoRelativo(job?.iniziato_il || corpoFase(gara.fasi, n)?.iniziata_il || "")}. Puoi chiudere la pagina: la fase continua.`}
+          </p>
+        </div>
+        <ControlloPausa job={job} className="w-full" />
+        {job?.stato === "in_esecuzione" && <p className="text-micro text-muted-foreground">{NOTA_PAUSA}</p>}
+      </>
     )
   }
 

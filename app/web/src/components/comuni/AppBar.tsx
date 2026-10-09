@@ -166,10 +166,10 @@ function IconaSpada({ className }: { className?: string }) {
     del backend, tema, operatore. */
 export interface Briciola { a?: string; etichetta: string; mono?: boolean }
 
-export function AppBar({ sezione, briciole, badge, larga }: { sezione?: string; briciole?: Briciola[]; badge?: React.ReactNode; larga?: boolean }) {
+export function AppBar({ sezione, briciole, badge, larga, piena }: { sezione?: string; briciole?: Briciola[]; badge?: React.ReactNode; larga?: boolean; piena?: boolean }) {
   return (
     <header className="sticky top-0 z-20 border-b bg-card">
-      <div className={cn("mx-auto flex h-12 items-center gap-3.5 px-6 max-md:px-4", larga ? "max-w-[1280px]" : "max-w-[1200px]")}>
+      <div className={cn("mx-auto flex h-12 items-center gap-3.5 px-6 max-md:px-4", piena ? "max-w-none" : larga ? "max-w-[1280px]" : "max-w-[1200px]")}>
         <Link to="/" className="flex shrink-0 items-center gap-1.5 rounded-sm font-semibold tracking-[0.01em]">
           <IconaSpada className="size-5" />
           Prometheus - S.P.A.D.A.

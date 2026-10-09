@@ -101,6 +101,15 @@ export interface Manifest {
   [k: string]: unknown
 }
 
+export type ModalitaAssistente = "rapida" | "approfondita"
+/** Eventi di /assistente/stream: «stato» viene da uno strumento davvero usato. */
+export type EventoAssistente =
+  | { tipo: "stato"; testo: string }
+  | { tipo: "nuovo" }
+  | { tipo: "testo"; delta: string }
+  | { tipo: "fine"; risposta: string }
+  | { tipo: "errore"; messaggio: string }
+
 export interface StatoPrezzario {
   regione?: string
   anno?: number
@@ -182,6 +191,9 @@ export const Api = {
   esegui: (slug: string, fase: number) => richiesta(`/gare/${s(slug)}/fasi/${fase}/esegui`, { method: "POST" }),
   riesegui: (slug: string, fase: number) => richiesta(`/gare/${s(slug)}/fasi/${fase}/riesegui`, { method: "POST" }),
   approva: (slug: string, fase: number) => richiesta(`/gare/${s(slug)}/fasi/${fase}/approva`, { method: "POST" }),
+  /** Pausa e ripresa di un'attività in esecuzione (fase, deliverable, integrazione). */
+  pausaJob: (slug: string, jobId: number) => richiesta(`/gare/${s(slug)}/job/${jobId}/pausa`, { method: "POST" }),
+  riprendiJob: (slug: string, jobId: number) => richiesta(`/gare/${s(slug)}/job/${jobId}/riprendi`, { method: "POST" }),
   registraApprovazione: (slug: string, body: unknown) =>
     richiesta(`/gare/${s(slug)}/approvazioni`, { method: "POST", body: JSON.stringify(body) }),
 
@@ -215,6 +227,35 @@ export const Api = {
   chiediAssistente: (slug: string, messaggio: string) =>
     richiesta(`/gare/${s(slug)}/assistente`, { method: "POST", body: JSON.stringify({ messaggio }), timeoutMs: 180_000 }),
   cronologiaAssistente: (slug: string, o?: Opzioni) => richiesta<unknown[]>(`/gare/${s(slug)}/assistente`, o),
+  /** Risposta dell'assistente mentre viene scritta (NDJSON, un evento per
+      riga). Nessun timeout: una ricerca approfondita può durare minuti; si
+      interrompe con `signal`. */
+  streamAssistente: async (slug: string, messaggio: string, modalita: ModalitaAssistente, onEvento: (e: EventoAssistente) => void, signal: AbortSignal) => {
+    const percorso = `/gare/${s(slug)}/assistente/stream`
+    let resp: Response
+    try {
+      resp = await fetch(base() + percorso, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messaggio, modalita }), signal })
+    } catch (e) {
+      if (signal.aborted) throw e
+      throw new ApiError("Servizio non raggiungibile", { percorso, dettaglio: "Connessione al servizio non riuscita: il backend potrebbe essere spento." })
+    }
+    if (!resp.ok || !resp.body) {
+      let dettaglio = ""
+      try { const c = await resp.json(); dettaglio = typeof c?.detail === "string" ? c.detail : "" } catch { /* corpo non JSON */ }
+      throw new ApiError(dettaglio || `${resp.status} ${resp.statusText}`, { stato: resp.status, percorso, dettaglio })
+    }
+    const lettore = resp.body.pipeThrough(new TextDecoderStream()).getReader()
+    let resto = ""
+    for (;;) {
+      const { value, done } = await lettore.read()
+      if (done) break
+      resto += value
+      const righe = resto.split("\n")
+      resto = righe.pop() || ""
+      for (const r of righe) if (r.trim()) onEvento(JSON.parse(r) as EventoAssistente)
+    }
+    if (resto.trim()) onEvento(JSON.parse(resto) as EventoAssistente)
+  },
 
   grafo: (slug: string, o?: Opzioni) => richiesta<{ nodi: unknown[]; archi: unknown[] }>(`/gare/${s(slug)}/grafo`, o),
   elencoDeliverables: (slug: string, o?: Opzioni) => richiesta<unknown[]>(`/gare/${s(slug)}/deliverables`, o),

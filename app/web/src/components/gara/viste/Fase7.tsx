@@ -3,7 +3,9 @@ import { Link, useParams } from "react-router"
 import { toast } from "sonner"
 import { CheckIcon, CircleDashedIcon, DownloadSimpleIcon, TableIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
-import { Card, Kv, Scheletro, Split, TitoloSezione, VuotoInline } from "@/components/comuni/Primitivi"
+import { Card, Kv, Nota, Scheletro, Split, TitoloSezione, VuotoInline } from "@/components/comuni/Primitivi"
+import { ControlloPausa } from "../ControlloPausa"
+import { motivoBlocco } from "@/dominio/fasi"
 import { StatoErrore } from "@/components/stati/Stati"
 import { BadgeStato, Chip } from "@/components/gare/BadgeStato"
 import { DialogoConferma, type Conferma } from "../DialogoConferma"
@@ -17,13 +19,23 @@ import { comeApiError, risorsa } from "@/lib/risorsa"
 import type { Tono } from "@/dominio/fasi"
 
 const STATO_DEL: Record<string, { tono: Tono; etichetta: string; azione: string }> = {
-  da_eseguire: { tono: "neu", etichetta: "Da eseguire", azione: "Apri workspace" },
-  in_esecuzione: { tono: "run", etichetta: "In esecuzione", azione: "Apri workspace" },
+  individuato: { tono: "neu", etichetta: "Individuato", azione: "Apri scheda" },
+  da_eseguire: { tono: "neu", etichetta: "In attesa di avvio", azione: "Apri workspace" },
+  in_coda: { tono: "neu", etichetta: "In coda", azione: "Apri workspace" },
+  in_esecuzione: { tono: "run", etichetta: "In lavorazione", azione: "Apri workspace" },
+  in_pausa: { tono: "attn", etichetta: "In pausa", azione: "Apri workspace" },
   completata: { tono: "ok", etichetta: "Completato", azione: "Apri documento" },
   da_rivedere: { tono: "attn", etichetta: "Da approvare", azione: "Rivedi" },
   errore: { tono: "crit", etichetta: "Errore", azione: "Diagnostica" },
 }
-const statoDel = (d: Deliverable) => STATO_DEL[d.stato || ""] || STATO_DEL.da_eseguire
+/** Stato mostrato: quello del backend (script + coda), più «individuato»
+    finché la produzione è chiusa e il deliverable non è mai partito. */
+const statoDel = (d: Deliverable, chiusa: boolean) => {
+  if (d.job?.in_pausa) return STATO_DEL.in_pausa
+  if ((!d.stato || d.stato === "da_eseguire") && chiusa) return STATO_DEL.individuato
+  return STATO_DEL[d.stato || ""] || STATO_DEL.da_eseguire
+}
+const inCorso = (d: Deliverable) => d.stato === "in_esecuzione" || d.stato === "in_coda"
 
 function useAzioniDeliverable() {
   const { slug } = useGara()
@@ -45,15 +57,15 @@ function useAzioniDeliverable() {
   return { avvia, riesegui, dialogo: <DialogoConferma conferma={conferma} onChiudi={() => setConferma(null)} />, inCorso: az.esegui.isPending || az.riesegui.isPending }
 }
 
-function CardDeliverable({ d, onAvvia, onRiesegui }: { d: Deliverable; onAvvia: () => void; onRiesegui: () => void }) {
+function CardDeliverable({ d, onAvvia, onRiesegui, blocco }: { d: Deliverable; onAvvia: () => void; onRiesegui: () => void; blocco: string | null }) {
   const { output } = useGara()
-  const st = statoDel(d)
+  const st = statoDel(d, !!blocco)
   const file = fileDeliverable(output, d)
   const prodotto = file.length > 0
   return (
     <article className="flex flex-col gap-2.5 rounded-lg border bg-card p-3.5">
       <div className="flex items-center justify-between gap-2">
-        <BadgeStato tono={st.tono} pulsa={d.stato === "in_esecuzione"}>{st.etichetta}</BadgeStato>
+        <BadgeStato tono={st.tono} pulsa={d.stato === "in_esecuzione" && !d.job?.in_pausa}>{st.etichetta}</BadgeStato>
         <span className="font-mono text-micro text-muted-foreground">{d.id}</span>
       </div>
       <Link to={`deliverable/${encodeURIComponent(d.id)}`} className="rounded-sm">
@@ -64,20 +76,30 @@ function CardDeliverable({ d, onAvvia, onRiesegui }: { d: Deliverable; onAvvia: 
       <div className="flex flex-wrap items-center gap-2 border-t pt-2.5 text-micro text-muted-foreground">
         <span className="min-w-0 flex-1">{prodotto ? `${plurale(file.length, "file prodotto", "file prodotti")} in output` : "Nessun file ancora prodotto per questo deliverable"}</span>
         {tabellare(d) && <BadgeStato tono={prodotto ? "ok" : "neu"}>{prodotto ? <CheckIcon aria-hidden="true" /> : <CircleDashedIcon aria-hidden="true" />}{prodotto ? "Presente" : "Non prodotto"}</BadgeStato>}
-        {d.stato === "da_eseguire" || !d.stato ? <Button size="sm" onClick={onAvvia}>Avvia</Button> : <Button size="sm" variant="outline" disabled={d.stato === "in_esecuzione"} title={d.stato === "in_esecuzione" ? "Il deliverable è in esecuzione: attendi la conclusione." : undefined} onClick={onRiesegui}>Riesegui</Button>}
+        <AzioneDeliverable d={d} blocco={blocco} onAvvia={onAvvia} onRiesegui={onRiesegui} />
         <Button size="sm" variant="outline" asChild><Link to={`deliverable/${encodeURIComponent(d.id)}`}>{st.azione}</Link></Button>
       </div>
     </article>
   )
 }
 
+/** Avvia/Riesegui, o pausa se gira. Con la produzione chiusa il pulsante
+    resta visibile ma disattivato, col motivo: la scheda si consulta lo stesso. */
+function AzioneDeliverable({ d, blocco, onAvvia, onRiesegui }: { d: Deliverable; blocco: string | null; onAvvia: () => void; onRiesegui: () => void }) {
+  if (d.job?.stato === "in_esecuzione") return <ControlloPausa job={d.job} compatto />
+  if (inCorso(d)) return <Button size="sm" variant="outline" disabled title="Il deliverable è in coda: parte appena il worker è libero.">In coda</Button>
+  if (!d.stato || d.stato === "da_eseguire") return <Button size="sm" disabled={!!blocco} title={blocco || undefined} onClick={onAvvia}>Avvia</Button>
+  return <Button size="sm" variant="outline" disabled={!!blocco} title={blocco || undefined} onClick={onRiesegui}>Riesegui</Button>
+}
+
 export function Fase7Elenco() {
-  const { slug } = useGara()
+  const { slug, gara } = useGara()
+  const blocco = motivoBlocco(gara.fasi, 7)
   const q = useDeliverables(slug)
   const r = risorsa(q, { vuoto: (l) => l.length === 0, percorso: `/gare/${slug}/deliverables` })
   const { avvia, riesegui, dialogo, inCorso } = useAzioniDeliverable()
   const lista = q.data || []
-  const pronti = lista.filter((d) => !d.stato || d.stato === "da_eseguire")
+  const pronti = blocco ? [] : lista.filter((d) => !d.stato || d.stato === "da_eseguire")
   return (
     <Split aside={<PannelloFase n={7} />}>
       {r.stato === "caricamento" && <Scheletro righe={5} />}
@@ -86,12 +108,17 @@ export function Fase7Elenco() {
       {r.stato === "vuoto" && <Card><VuotoInline titolo="Nessun deliverable richiesto" testo="L'elenco è ricavato dal manifesto della gara, che la pipeline compila in Fase 3. Non è un modello fisso: dipende da cosa chiede questo disciplinare. L'azione per questa fase è nel pannello a destra." /></Card>}
       {r.stato === "ok" && (
         <>
+          {blocco && (
+            <Nota tono="neu" titolo="Elenco consultabile, produzione non ancora disponibile">
+              L'analisi del disciplinare ha individuato i deliverable richiesti: puoi leggerli e aprirne le schede. {blocco.replace(/^Si sblocca/, "La produzione si sblocca")}
+            </Nota>
+          )}
           <Card className="flex flex-wrap items-center justify-between gap-3">
             <p className="min-w-0 flex-1 text-sm text-foreground-2">L'elenco è ricavato dal disciplinare di questa gara, non è un modello fisso: sono richiesti <b className="font-semibold text-foreground">{plurale(lista.length, "deliverable", "deliverable")}</b>. Ognuno ha agente e skill propri e può essere avviato per conto suo.</p>
             {pronti.length > 0 && <Button disabled={inCorso} onClick={() => avvia(pronti.map((d) => d.id))}>{pronti.length === 1 ? "Avvia il deliverable pronto" : `Avvia i ${pronti.length} pronti`}</Button>}
           </Card>
           <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
-            {lista.map((d) => <CardDeliverable key={d.id} d={d} onAvvia={() => avvia([d.id])} onRiesegui={() => riesegui(d.id)} />)}
+            {lista.map((d) => <CardDeliverable key={d.id} d={d} blocco={blocco} onAvvia={() => avvia([d.id])} onRiesegui={() => riesegui(d.id)} />)}
           </div>
         </>
       )}
@@ -110,7 +137,8 @@ export function Fase7Workspace() {
   const md = file.find((p) => p.endsWith(".md")) || null
   const contenuto = useContenutoDeliverable(slug, d && !tabellare(d) ? md : null)
   const prodotto = file.length > 0
-  const st = d ? statoDel(d) : STATO_DEL.da_eseguire
+  const blocco = motivoBlocco(gara.fasi, 7)
+  const st = d ? statoDel(d, !!blocco) : STATO_DEL.da_eseguire
   const testata = <TestataVista kicker={`Fase 7, workspace ${id}`} titolo={d?.nome || id} sottotitolo={d ? `${d.tipo.replace(/_/g, " ")}, ${d.agente}` : "Deliverable non trovato fra quelli richiesti."} badge={d ? { tono: prodotto ? "ok" : "neu", etichetta: prodotto ? "Prodotto" : "Non ancora prodotto" } : undefined} indietro={{ a: "../fase/7", etichetta: "Tutti i deliverable" }} />
 
   if (q.isPending) return <>{testata}<Scheletro righe={4} /></>
@@ -135,7 +163,7 @@ export function Fase7Workspace() {
         <Card tono={st.tono}>
           <TitoloSezione azioni={
             <div className="flex flex-wrap gap-1.5">
-              {!d.stato || d.stato === "da_eseguire" ? <Button size="sm" onClick={() => avvia([d.id])}>Avvia</Button> : <Button size="sm" variant="outline" disabled={d.stato === "in_esecuzione"} title={d.stato === "in_esecuzione" ? "Il deliverable è in esecuzione: attendi la conclusione." : undefined} onClick={() => riesegui(d.id)}>Riesegui</Button>}
+              <AzioneDeliverable d={d} blocco={blocco} onAvvia={() => avvia([d.id])} onRiesegui={() => riesegui(d.id)} />
               {file.slice(0, 3).map((p) => <Button key={p} size="sm" variant="outline" asChild><a href={Api.percorsoOutput(slug, p)} target="_blank" rel="noopener"><DownloadSimpleIcon aria-hidden="true" />.{p.split(".").pop()}</a></Button>)}
             </div>
           }>{prodotto ? "Output prodotto" : "Output non ancora prodotto"}</TitoloSezione>

@@ -34,7 +34,13 @@ CREATE TABLE IF NOT EXISTS job (
                        -- (spada_deliverable.sh) invece della fase atomica (spada_fase.sh)
   operazione    TEXT,  -- integrazione fuori fase (spada_integra.sh): 'integra_documento'
                        -- (argomento = percorso sotto la gara) o 'riallinea_brief'
-  argomento     TEXT
+  argomento     TEXT,
+  -- Pausa (solo job in_esecuzione): l'API scrive la richiesta ('pausa' o
+  -- 'riprendi'), il worker sospende/riprende il gruppo di processi e
+  -- aggiorna in_pausa/pausa_dal.
+  pausa_richiesta TEXT,
+  in_pausa      INTEGER NOT NULL DEFAULT 0,
+  pausa_dal     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_job_stato ON job (stato, creato_il);
 CREATE INDEX IF NOT EXISTS idx_job_gara ON job (gara_slug);

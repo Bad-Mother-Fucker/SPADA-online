@@ -6,7 +6,7 @@
 import { useMutation, useMutationState, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { Api, ApiError, type DettaglioGara, type Documento as DocumentoApi, type Manifest, type StatoPrezzario } from "@/lib/api"
-import type { Fasi } from "@/dominio/fasi"
+import type { Fasi, JobFase } from "@/dominio/fasi"
 import * as Md from "@/lib/md"
 import { comeApiError } from "@/lib/risorsa"
 import { normalizzaRuns, parseAudit, parseCriteri, parseDocumento, parseGap, parseProposte, type Run, type RunGrezzo } from "@/dominio/registri"
@@ -109,9 +109,14 @@ export const useProposte = (slug: string, attivo = true) =>
 export const useAudit = (slug: string, attivo = true) =>
   useRegistro(slug, "audit", ["06_registers/audit_summary.md"], parseAudit, attivo)
 
-export interface Deliverable { id: string; criterio: string; nome: string; vincolo_formato: string; fonte: string; tipo: string; agente: string; stato?: string; prodotto?: boolean }
+export interface Deliverable { id: string; criterio: string; nome: string; vincolo_formato: string; fonte: string; tipo: string; agente: string; stato?: string; prodotto?: boolean; job?: JobFase }
 export function useDeliverables(slug: string, attivo = true) {
-  return useQuery({ queryKey: chiaviGara.deliverables(slug), queryFn: ({ signal }) => Api.elencoDeliverables(slug, { signal }) as Promise<Deliverable[]>, enabled: attivo })
+  return useQuery({
+    queryKey: chiaviGara.deliverables(slug), queryFn: ({ signal }) => Api.elencoDeliverables(slug, { signal }) as Promise<Deliverable[]>, enabled: attivo,
+    // Lo stream SSE porta le fasi, non i deliverable: finché uno è in coda o
+    // gira (anche in pausa) si rilegge l'elenco, così lo stato resta quello vero.
+    refetchInterval: (q) => (q.state.data || []).some((d) => d.job) ? 3_000 : false,
+  })
 }
 
 export const TIPI_TABELLARI = new Set(["computo_metrico", "elenco_prezzi", "cronoprogramma", "quadro_economico"])
@@ -240,6 +245,13 @@ export function useAzioniFase(slug: string) {
   const riesegui = useMutation({ mutationFn: (n: number) => Api.riesegui(slug, n), onSettled: invalida })
   const approva = useMutation({ mutationFn: (n: number) => Api.approva(slug, n), onSettled: invalida })
   return { esegui, riesegui, approva }
+}
+
+export function usePausaJob(slug: string) {
+  const invalida = useInvalidaGara(slug)
+  const pausa = useMutation({ mutationFn: (jobId: number) => Api.pausaJob(slug, jobId), onSettled: invalida })
+  const riprendi = useMutation({ mutationFn: (jobId: number) => Api.riprendiJob(slug, jobId), onSettled: invalida })
+  return { pausa, riprendi }
 }
 
 export function useDeliverableAzioni(slug: string) {
