@@ -1,6 +1,6 @@
-# SPADA — versione locale
+# Prometheus - S.P.A.D.A. — versione locale
 
-Il sistema Prometeus S.P.A.D.A. (analisi gare d'appalto e offerta
+Il sistema Prometheus - S.P.A.D.A. (analisi gare d'appalto e offerta
 tecnica) in esecuzione **sul tuo computer**: stessa applicazione di
 SPADA Online (interfaccia, backend, worker, pipeline di agenti), senza
 VM, Cloudflare né dominio. Si apre nel browser su
@@ -25,6 +25,22 @@ Altri comandi: `./spada stato`, `./spada log`, `./spada riavvia`,
 Requisiti: macOS, Claude Code (`claude`) con una subscription, Python
 ≥ 3.10 (es. `brew install python@3.12`), Node.js, `pdftotext`
 (`brew install poppler`).
+
+### Windows (WSL)
+
+Funziona anche su Windows dentro Ubuntu (WSL), con gli stessi comandi.
+Il codice va clonato nel filesystem Linux (`~/SPADA-online`, non sotto
+`/mnt/c`: lì git non può impostare i permessi). Requisiti in Ubuntu:
+
+```bash
+sudo apt install -y nodejs npm poppler-utils sqlite3 python3-venv gh
+```
+
+Per chi non usa il terminale, `bash windows/installa.sh` (dopo
+`./spada setup`) mette sul Desktop di Windows le icone **Avvia** e
+**Ferma Prometheus - S.P.A.D.A.**: doppio clic, nessuna finestra di
+comandi. Il login di Claude si fa dall'app (menu del profilo → Accedi a
+Claude). Su macOS la cartella `windows/` non serve e non cambia nulla.
 
 ## Dove stanno le cose
 

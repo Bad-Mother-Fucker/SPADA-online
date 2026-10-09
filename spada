@@ -80,6 +80,16 @@ ambiente_processi() {
   export PATH="$VENV/bin:$PATH"
 }
 
+apri_browser() {
+  # open (macOS), wslview/explorer.exe (WSL), xdg-open (Linux); se manca
+  # tutto basta l'indirizzo stampato.
+  local c
+  for c in open wslview explorer.exe xdg-open; do
+    if command -v "$c" >/dev/null 2>&1; then "$c" "$1" >/dev/null 2>&1 || true; return 0; fi
+  done
+  return 0
+}
+
 claude_dedicato() {
   env -u ANTHROPIC_API_KEY CLAUDE_CONFIG_DIR="$SPADA_CLAUDE_DIR" claude "$@"
 }
@@ -237,7 +247,7 @@ cmd_avvia() {
 
   if pid_vivo api && pid_vivo worker; then
     info "SPADA è già attivo su $URL"
-    [ "${1:-}" = "--senza-browser" ] || open "$URL"
+    [ "${1:-}" = "--senza-browser" ] || apri_browser "$URL"
     return 0
   fi
   # Un solo processo vivo (es. crash dell'altro): si riparte puliti.
@@ -271,7 +281,7 @@ cmd_avvia() {
     if curl -sf "http://127.0.0.1:$PORTA/salute" >/dev/null 2>&1; then
       pid_vivo worker || errore "Il worker si è fermato subito: vedi $LOG_DIR/worker.log"
       info "SPADA è attivo: $URL"
-      [ "${1:-}" = "--senza-browser" ] || open "$URL"
+      [ "${1:-}" = "--senza-browser" ] || apri_browser "$URL"
       return 0
     fi
     pid_vivo api || break
@@ -383,6 +393,39 @@ cmd_log() {
   tail -n 50 -f "$LOG_DIR/api.log" "$LOG_DIR/worker.log"
 }
 
+cmd_apri() {
+  # Per il lanciatore Windows: come avvia, ma l'output va in
+  # _log/lanciatore.log (nessun terminale su cui leggerlo). Sottoshell:
+  # errore() fa exit, e il codice d'uscita deve arrivare al .vbs.
+  mkdir -p "$LOG_DIR"
+  ( cmd_avvia ) > "$LOG_DIR/lanciatore.log" 2>&1
+}
+
+cmd_mantieni() {
+  # Per il lanciatore Windows (windows/Avvia SPADA.vbs): WSL spegne la
+  # distribuzione pochi secondi dopo l'uscita dell'ultimo wsl.exe, e con
+  # lei server e worker. Questo comando resta in attesa finché il server
+  # è vivo, così la sessione wsl.exe che lo esegue tiene accesa Ubuntu.
+  # Un clic in più su «Avvia SPADA» non ne aggiunge un secondo.
+  # flock c'è su Linux/WSL, non su macOS (dove questo comando non serve).
+  if command -v flock >/dev/null 2>&1; then
+    exec 9>"$RUN_DIR/mantieni.lock"
+    flock -n 9 || return 0
+  fi
+  while pid_vivo api; do
+    sleep 15
+  done
+}
+
+cmd_in_corso() {
+  # Esce 0 se una fase è in coda o in esecuzione: fermare ora la
+  # marcherebbe "errore". Lo usa windows/Ferma SPADA.vbs per chiedere
+  # conferma.
+  local n
+  n="$(sqlite3 "$SPADA_DB_PATH" "SELECT COUNT(*) FROM job WHERE stato IN ('in_coda','in_esecuzione')" 2>/dev/null || echo 0)"
+  [ "${n:-0}" -gt 0 ]
+}
+
 cmd_importa_prezzario() {
   setup_fatto || errore "Esegui prima './spada setup'."
   [ $# -ge 2 ] || errore "Uso: ./spada importa-prezzario <Regione> <anno> [cartella con i JSON | file .dcf PriMus]"
@@ -405,6 +448,9 @@ case "$COMANDO" in
   stato)              cmd_stato ;;
   verifica)           cmd_verifica ;;
   log)                cmd_log ;;
+  apri)               cmd_apri ;;
+  mantieni)           cmd_mantieni ;;
+  in-corso)           cmd_in_corso ;;
   importa-prezzario)  cmd_importa_prezzario "$@" ;;
   ""|-h|--help|aiuto) uso ;;
   *)                  uso; exit 1 ;;
