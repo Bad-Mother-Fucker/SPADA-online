@@ -5,8 +5,8 @@ import { BadgeStato, Chip } from "@/components/gare/BadgeStato"
 import { Nota } from "@/components/comuni/Primitivi"
 import { useGara } from "./GaraContext"
 import { useEsegui } from "./AzioniFase"
-import { useDeliverableAzioni, useImportaPrezzario } from "@/hooks/useGaraDati"
-import { PulsanteCaricaDcf } from "@/components/comuni/CaricaPrezzario"
+import { useDeliverableAzioni, useImportPrezzarioInCorso, useImportaPrezzario } from "@/hooks/useGaraDati"
+import { NOTA_BACKGROUND, PulsanteCaricaDcf } from "@/components/comuni/CaricaPrezzario"
 import { quandoRelativo, scadenza as formattaScadenza } from "@/lib/formato"
 import { comeApiError } from "@/lib/risorsa"
 import { cn } from "@/lib/utils"
@@ -115,11 +115,19 @@ export function AvvisoPrezzario() {
   const { slug, gara } = useGara()
   const p = gara.prezzario
   const importa = useImportaPrezzario(slug)
+  const daFileInCorso = useImportPrezzarioInCorso(p?.regione || "", p?.anno || 0)
   const { riesegui } = useEsegui()
   const del = useDeliverableAzioni(slug)
   if (!p || (p.disponibile && !(p.da_rielaborare || []).length)) return null
   const nome = [p.regione, p.anno].filter(Boolean).join(" ") || "di riferimento"
 
+  if (!p.disponibile && daFileInCorso) {
+    return (
+      <Nota tono="run" role="status" className="mb-4" titolo={`Importazione del prezzario ${nome} in corso`}>
+        {NOTA_BACKGROUND} Intanto la gara procede: puoi caricare i documenti e avviare le fasi.
+      </Nota>
+    )
+  }
   if (!p.disponibile) {
     return (
       <Nota tono="attn" role="status" className="mb-4" titolo={`Prezzario ${nome} non presente`}
@@ -129,7 +137,7 @@ export function AvvisoPrezzario() {
               onSuccess: () => toast.success(`Prezzario ${nome} importato`, { description: "Da ora le fasi includono le valutazioni economiche." }),
               onError: (e) => toast.error("Importazione non riuscita", { description: comeApiError(e).message }),
             })}>{importa.isPending ? "Importazione in corso" : "Importa ora"}</Button>
-            {p.regione && p.anno ? <PulsanteCaricaDcf regione={p.regione} anno={p.anno} slug={slug} /> : null}
+            {p.regione && p.anno ? <PulsanteCaricaDcf regione={p.regione} anno={p.anno} /> : null}
             <span className="self-center text-micro text-muted-foreground">«Importa ora» lo cerca su questo computer e fra le release pubblicate; «Carica file .dcf» usa il file PriMus pubblicato dalla regione.</span>
           </>
         }>

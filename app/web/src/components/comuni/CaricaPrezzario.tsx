@@ -3,30 +3,24 @@
     release in prometeus-prezzari. Due ingressi: dall'avviso della gara
     (regione e anno già noti) e dalle impostazioni di sistema. */
 import { useId, useRef, useState } from "react"
-import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Suggerimento } from "@/components/comuni/Primitivi"
 import { useCaricaPrezzario } from "@/hooks/useGaraDati"
-import { comeApiError } from "@/lib/risorsa"
 
-const NOTA_ATTESA = "La conversione di un prezzario completo richiede in genere da qualche secondo a un paio di minuti."
+/** Chi carica un .dcf non resta ad aspettare: l'import va in background e la
+    notifica arriva a fine lavoro (useCaricaPrezzario). */
+export const NOTA_BACKGROUND = "L'import continua in background, anche se cambi pagina: ti avviso quando il prezzario è disponibile."
 
 /** Pulsante per la gara: regione e anno sono quelli del suo manifesto. */
-export function PulsanteCaricaDcf({ regione, anno, slug }: { regione: string; anno: number; slug: string }) {
+export function PulsanteCaricaDcf({ regione, anno }: { regione: string; anno: number }) {
   const input = useRef<HTMLInputElement>(null)
-  const carica = useCaricaPrezzario(slug)
-  const nome = `${regione} ${anno}`
+  const carica = useCaricaPrezzario()
 
   function scelto(file: File | undefined) {
-    if (!file) return
-    const attesa = toast.loading(`Importo il prezzario ${nome} da ${file.name}`, { description: NOTA_ATTESA })
-    carica.mutate({ regione, anno, file }, {
-      onSuccess: () => toast.success(`Prezzario ${nome} importato`, { id: attesa, description: "Da ora le fasi includono le valutazioni economiche." }),
-      onError: (e) => toast.error("Importazione non riuscita", { id: attesa, description: comeApiError(e).message }),
-    })
+    if (file) carica.mutate({ regione, anno, file })
   }
 
   return (
@@ -46,29 +40,20 @@ export function DialogoCaricaPrezzario({ aperto, onChiudi }: { aperto: boolean; 
   const [regione, setRegione] = useState("")
   const [anno, setAnno] = useState(String(new Date().getFullYear()))
   const [file, setFile] = useState<File | null>(null)
-  const [errore, setErrore] = useState("")
 
   const annoNum = Number(anno)
   const valido = regione.trim().length >= 2 && Number.isInteger(annoNum) && annoNum >= 2000 && annoNum <= 2100 && !!file
 
   function chiudi() {
-    if (carica.isPending) return
-    setFile(null); setErrore("")
+    setFile(null)
     onChiudi()
   }
 
   function invia() {
     if (!valido || !file) return
-    setErrore("")
-    const nome = `${regione.trim()} ${annoNum}`
-    carica.mutate({ regione: regione.trim(), anno: annoNum, file }, {
-      onSuccess: () => {
-        toast.success(`Prezzario ${nome} importato`)
-        setFile(null); setRegione("")
-        onChiudi()
-      },
-      onError: (e) => setErrore(comeApiError(e).message),
-    })
+    carica.mutate({ regione: regione.trim(), anno: annoNum, file })
+    setRegione("")
+    chiudi()
   }
 
   return (
@@ -85,22 +70,21 @@ export function DialogoCaricaPrezzario({ aperto, onChiudi }: { aperto: boolean; 
           <div className="grid grid-cols-[1fr_7rem] gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor={`${id}-regione`}>Regione</Label>
-              <Input id={`${id}-regione`} value={regione} placeholder="Es. Basilicata" onChange={(e) => setRegione(e.target.value)} disabled={carica.isPending} />
+              <Input id={`${id}-regione`} value={regione} placeholder="Es. Basilicata" onChange={(e) => setRegione(e.target.value)} />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor={`${id}-anno`}>Anno</Label>
-              <Input id={`${id}-anno`} inputMode="numeric" value={anno} onChange={(e) => setAnno(e.target.value)} disabled={carica.isPending} />
+              <Input id={`${id}-anno`} inputMode="numeric" value={anno} onChange={(e) => setAnno(e.target.value)} />
             </div>
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor={`${id}-file`}>File del prezzario</Label>
-            <Input id={`${id}-file`} type="file" accept=".dcf,.DCF" disabled={carica.isPending} onChange={(e) => setFile(e.target.files?.[0] || null)} />
+            <Input id={`${id}-file`} type="file" accept=".dcf,.DCF" onChange={(e) => setFile(e.target.files?.[0] || null)} />
           </div>
-          {carica.isPending && <Suggerimento tono="neu">{NOTA_ATTESA}</Suggerimento>}
-          {errore && <Suggerimento tono="crit">{errore}</Suggerimento>}
+          <Suggerimento>{NOTA_BACKGROUND}</Suggerimento>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={chiudi} disabled={carica.isPending}>Annulla</Button>
-            <Button type="submit" disabled={!valido || carica.isPending}>{carica.isPending ? "Importazione in corso" : "Importa"}</Button>
+            <Button type="button" variant="outline" onClick={chiudi}>Annulla</Button>
+            <Button type="submit" disabled={!valido}>Importa</Button>
           </DialogFooter>
         </form>
       </DialogContent>

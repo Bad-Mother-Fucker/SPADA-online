@@ -155,7 +155,9 @@ def importa_da_file(regione: str, anno: int, dcf: Path) -> dict:
     regione = _valida(regione, anno)
     proc = _esegui_import(regione, anno, str(dcf))
     if proc.returncode != 0:
-        raise ImportazioneNonRiuscita((proc.stderr.strip() or proc.stdout.strip())[-600:])
+        # Messaggi degli script per il terminale: senza il «✗» iniziale.
+        dettaglio = (proc.stderr.strip() or proc.stdout.strip())[-600:]
+        raise ImportazioneNonRiuscita(dettaglio.replace("✗ ", "").strip())
     return {"regione": regione, "anno": int(anno), "importato": True, "edizione": _edizione(regione, int(anno))}
 
 

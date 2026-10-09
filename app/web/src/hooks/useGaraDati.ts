@@ -3,10 +3,12 @@
 // I registri markdown si leggono solo se GET /output li elenca: un file
 // assente non viene nemmeno richiesto.
 
-import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query"
+import { useMutation, useMutationState, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query"
+import { toast } from "sonner"
 import { Api, ApiError, type DettaglioGara, type Documento as DocumentoApi, type Manifest, type StatoPrezzario } from "@/lib/api"
 import type { Fasi } from "@/dominio/fasi"
 import * as Md from "@/lib/md"
+import { comeApiError } from "@/lib/risorsa"
 import { normalizzaRuns, parseAudit, parseCriteri, parseDocumento, parseGap, parseProposte, type Run, type RunGrezzo } from "@/dominio/registri"
 
 export const chiaviGara = {
@@ -312,18 +314,50 @@ export function useChiediAssistente(slug: string) {
   })
 }
 
-/** Prezzario da file PriMus (.dcf), dalla gara (slug) o dalle impostazioni
-    di sistema. Rilegge prezzari, elenco gare (prezzario presente) e gara. */
-export function useCaricaPrezzario(slug?: string) {
+const CHIAVE_CARICA_PREZZARIO = ["carica-prezzario"] as const
+type CaricaPrezzario = { regione: string; anno: number; file: File }
+const stessaEdizione = (v: CaricaPrezzario | undefined, regione: string, anno: number) =>
+  !!v && v.regione.trim().toLowerCase() === regione.trim().toLowerCase() && v.anno === anno
+
+/** Prezzario da file PriMus (.dcf), in background: chi lo lancia (nuova
+    gara, avviso della gara, menu) può chiudersi o cambiare pagina. Per
+    questo le notifiche stanno qui, fra le opzioni della mutation, che
+    TanStack esegue anche dopo lo smontaggio del componente; quelle passate
+    a mutate() no. Il toast di attesa resta finché l'import non finisce. */
+export function useCaricaPrezzario() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (v: { regione: string; anno: number; file: File }) => Api.caricaPrezzario(v.regione, v.anno, v.file),
-    onSuccess: () => {
+    mutationKey: CHIAVE_CARICA_PREZZARIO,
+    mutationFn: (v: CaricaPrezzario) => Api.caricaPrezzario(v.regione, v.anno, v.file),
+    onMutate: (v) => ({
+      toast: toast.loading(`Importo il prezzario ${v.regione} ${v.anno}`, {
+        description: "In background: intanto puoi continuare a lavorare. Ti avviso quando è pronto.",
+      }),
+    }),
+    onSuccess: (_d, v, ctx) => {
+      toast.success(`Prezzario ${v.regione} ${v.anno} disponibile`, {
+        id: ctx?.toast, duration: 15_000,
+        description: "Da ora le fasi includono le valutazioni economiche.",
+      })
       void qc.invalidateQueries({ queryKey: ["sistema", "prezzari"] })
       void qc.invalidateQueries({ queryKey: ["gare"] })
-      if (slug) void qc.invalidateQueries({ queryKey: chiaviGara.tutto(slug) })
+      void qc.invalidateQueries({ queryKey: ["gara"] })
+    },
+    onError: (e, v, ctx) => {
+      toast.error(`Prezzario ${v.regione} ${v.anno} non importato`, {
+        id: ctx?.toast, duration: 30_000, description: comeApiError(e).message,
+      })
     },
   })
+}
+
+/** Import da file in corso per questa edizione (lanciato da qualunque parte dell'app). */
+export function useImportPrezzarioInCorso(regione: string, anno: number) {
+  const inCorso = useMutationState({
+    filters: { mutationKey: CHIAVE_CARICA_PREZZARIO, status: "pending" },
+    select: (m) => m.state.variables as CaricaPrezzario | undefined,
+  })
+  return inCorso.some((v) => stessaEdizione(v, regione, anno))
 }
 
 export function useImportaPrezzario(slug: string) {
