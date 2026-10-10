@@ -24,7 +24,8 @@ Altri comandi: `./spada stato`, `./spada log`, `./spada riavvia`,
 
 Requisiti: macOS, Claude Code (`claude`) con una subscription, Python
 ≥ 3.10 (es. `brew install python@3.12`), Node.js, `pdftotext`
-(`brew install poppler`).
+(`brew install poppler`), Tesseract per leggere i PDF scansionati
+(`brew install tesseract tesseract-lang`).
 
 ### Windows (WSL)
 
@@ -33,8 +34,13 @@ Il codice va clonato nel filesystem Linux (`~/SPADA-online`, non sotto
 `/mnt/c`: lì git non può impostare i permessi). Requisiti in Ubuntu:
 
 ```bash
-sudo apt install -y nodejs npm poppler-utils sqlite3 python3-venv gh
+sudo apt install -y nodejs npm poppler-utils sqlite3 python3-venv gh tesseract-ocr tesseract-ocr-ita
 ```
+
+Senza Tesseract i PDF scansionati restano senza testo e la Fase 3 non
+parte. Senza `sudo` basta una copia locale in `~/spada/_ocr/tesseract`
+(i pacchetti Ubuntu scompattati con `apt-get download` + `dpkg -x`):
+`_pipeline/scripts/setup/ocr_scansioni.py` la cerca lì dopo il PATH.
 
 Per chi non usa il terminale, `bash windows/installa.sh` (dopo
 `./spada setup`) mette sul Desktop di Windows le icone **Avvia** e

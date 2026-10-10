@@ -23,6 +23,7 @@ portatile lo sospende comunque).
 import json
 import logging
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -180,6 +181,22 @@ def chiudi_stato_appeso(job):
         log.exception("Job %s: stato dopo l'interruzione non verificato", job["id"])
 
 
+def _runs_registrati(job) -> int:
+    try:
+        dati = json.loads((GARE_DIR / job["gara_slug"] / "_state" / "run_log.json").read_text(encoding="utf-8"))
+        return len(dati.get("runs", []))
+    except (OSError, ValueError):
+        return 0
+
+
+def _motivo_leggibile(testo: str) -> str:
+    """Output dello script per il terminale → testo per l'interfaccia:
+    senza colori ANSI e senza i simboli ✗/▶/⚠."""
+    testo = re.sub(r"\x1b\[[0-9;]*m", "", testo or "")
+    righe = [r.strip().lstrip("✗▶⚠").strip() for r in testo.splitlines()]
+    return "\n".join(r for r in righe if r).strip()[-1500:]
+
+
 def _interruzione_richiesta(job_id: int) -> bool:
     with get_conn() as con:
         riga = con.execute("SELECT interruzione_richiesta FROM job WHERE id=?", (job_id,)).fetchone()
@@ -243,6 +260,7 @@ def esegui_job(job):
     # guarda se è stata chiesta l'interruzione. Ripetere communicate() dopo
     # un TimeoutExpired non perde output (documentato in subprocess).
     avvio = time.monotonic()
+    runs_prima = _runs_registrati(job)
     try:
         while True:
             try:
@@ -265,6 +283,11 @@ def esegui_job(job):
         else:
             stato_finale = "completato" if proc.returncode == 0 else "errore"
             errore = None if proc.returncode == 0 else (stderr[-2000:] or stdout[-2000:])
+            # Fermato da un controllo prima di registrare il run (es. gate
+            # di completezza della Fase 3): senza questo la fase restava
+            # «da eseguire» e il motivo solo nella tabella job.
+            if stato_finale == "errore" and _runs_registrati(job) == runs_prima:
+                registra_errore_prima_dell_avvio(job, _motivo_leggibile(errore))
     except subprocess.TimeoutExpired:
         # Senza questo il worker morirebbe con il job ancora
         # "in_esecuzione": in locale nessun systemd lo riavvia.

@@ -141,6 +141,10 @@ fi
 # di riferimento. Blocca esplicitamente invece di lasciare che
 # strategy-auditor lo scopra a metà analisi.
 if [ "$FASE" = "3" ]; then
+  # Le scansioni senza testo si leggono con l'OCR prima del gate (per le
+  # gare la cui Fase 1 è girata prima che l'OCR esistesse; le nuove lo
+  # fanno a fine Fase 1).
+  python3 "$(dirname "${BASH_SOURCE[0]}")/ocr_scansioni.py" "$GARA_DIR" || true
   if ! python3 "$(dirname "${BASH_SOURCE[0]}")/verifica_completezza.py" "$GARA_DIR"; then
     error "Fase 3 bloccata: estrazione documentale incompleta (vedi sopra). Completa document-preprocessor prima di procedere."
   fi
@@ -268,6 +272,13 @@ if [ "$ESITO" = "errore" ]; then
 fi
 # claude e' uscito: chi e' ancora in agenti_attivi non lo e' davvero.
 chiudi_agenti_rimasti "$ESITO" || true
+
+# Fase 1 riuscita: le scansioni senza testo segnate da
+# document-preprocessor si leggono con l'OCR, così la Fase 2 le trova
+# già estratte.
+if [ "$FASE" = "1" ] && [ "$ESITO" = "completato" ]; then
+  python3 "$(dirname "${BASH_SOURCE[0]}")/ocr_scansioni.py" "$GARA_DIR" || warn "OCR delle scansioni non completato: si riprova prima della Fase 3."
+fi
 
 # Fase 4 riuscita: le risposte risultano inviate, e indicazioni e risposte
 # finiscono nelle decisioni dell'handoff che la Fase 5 riceve nel prompt.

@@ -11,7 +11,7 @@ prima di far girare strategy-auditor.
 
 Legge input/_manifest_input.md (scritto da document-preprocessor,
 Fase 1) e blocca se un documento non di tipo "tavola" non risulta
-Stato=estratto. Le tavole sono lette da drawing-reader, non da
+Stato=estratto (anche con una nota tra parentesi, es. "estratto (OCR)"). Le tavole sono lette da drawing-reader, non da
 estrazione testuale: esenti da questo gate.
 
 Uso:
@@ -62,7 +62,9 @@ def main():
 
     incompleti = [
         r for r in righe
-        if r["tipo"].lower() != "tavola" and r["stato"].strip().lower() != "estratto"
+        # "estratto (parziale: …)", "estratto (OCR)": il testo c'è, la nota
+        # dice solo cosa manca (immagini, diagrammi) o come è stato ottenuto.
+        if r["tipo"].lower() != "tavola" and not r["stato"].strip().lower().startswith("estratto")
     ]
 
     if incompleti:
@@ -73,7 +75,7 @@ def main():
         print("\nL'analisi strategica (Fase 3) su un grafo con testi mancanti puo' "
               "produrre un gap prezzi con categorie 'non coperte' che sembrano un limite "
               "dei dati di riferimento, quando e' invece un limite dell'estrazione. "
-              "Completa l'estrazione (document-preprocessor) prima di procedere.", file=sys.stderr)
+              "Completa l'estrazione (document-preprocessor, OCR per le scansioni: ocr_scansioni.py) prima di procedere.", file=sys.stderr)
         sys.exit(1)
 
     print(f"✓ Estrazione completa: {len(righe)} documenti censiti, tutti estratti o di tipo tavola.")
