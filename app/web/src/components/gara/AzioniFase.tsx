@@ -6,6 +6,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { DialogoConferma, type Conferma } from "./DialogoConferma"
+import { ControlloInterruzione, NOTA_INTERRUZIONE } from "./ControlloInterruzione"
 import { useGara } from "./GaraContext"
 import { useAzioniFase } from "@/hooks/useGaraDati"
 import { comeApiError } from "@/lib/risorsa"
@@ -22,6 +23,7 @@ export function useEsegui() {
   })
   return {
     esegui: (n: number) => az.esegui.mutate(n, esito(`Fase ${n} avviata: la vedi «in avvio» nello stepper.`, "Avvio non riuscito")),
+    riprendi: (n: number) => az.esegui.mutate(n, esito(`Fase ${n} ripresa: continua da dove si era fermata.`, "Ripresa non riuscita")),
     riesegui: (n: number) => az.riesegui.mutate(n, esito(`Riesecuzione della Fase ${n} accodata.`, "Riesecuzione non riuscita")),
     approva: (n: number) => az.approva.mutate(n, esito(`Checkpoint della Fase ${n} approvato.`, "Approvazione non riuscita")),
     inCorso: az.esegui.isPending || az.riesegui.isPending || az.approva.isPending,
@@ -34,12 +36,19 @@ export function AzioniFase({ n, blocco, className, azionePrimaria }: { n: number
   const { gara } = useGara()
   const st = statoFase(gara.fasi, n)
   const f = fase(n)
-  const { esegui, riesegui, approva, inCorso } = useEsegui()
+  const { esegui, riprendi, riesegui, approva, inCorso } = useEsegui()
   const [conferma, setConferma] = useState<Conferma | null>(null)
   const motivo = motivoBlocco(gara.fasi, n) || blocco || null
 
   const chiediRiesecuzione = () => {
-    if (st === "completata") {
+    if (st === "interrotta") {
+      setConferma({
+        titolo: `Ricominciare da capo la Fase ${n}?`,
+        descrizione: "Il lavoro fatto prima dell'interruzione viene archiviato, non cancellato, e la fase riparte dall'inizio. Per continuare da dove si era fermata usa «Riprendi».",
+        etichetta: "Ricomincia da capo",
+        onConferma: () => riesegui(n),
+      })
+    } else if (st === "completata") {
       setConferma({
         titolo: `Rieseguire la Fase ${n}?`,
         descrizione: "Le fasi successive già completate verranno marcate come da rivedere, non cancellate.",
@@ -63,6 +72,13 @@ export function AzioniFase({ n, blocco, className, azionePrimaria }: { n: number
         <Button className="w-full" variant="outline" disabled={inCorso} onClick={chiediRiesecuzione}>Riesegui la fase</Button>
       </>
     )
+  } else if (st === "interrotta") {
+    corpo = (
+      <>
+        <Button className="w-full" disabled={inCorso} onClick={() => riprendi(n)}>Riprendi da dove si era fermata</Button>
+        <Button className="w-full" variant="outline" disabled={inCorso} onClick={chiediRiesecuzione}>Ricomincia da capo</Button>
+      </>
+    )
   } else if (st === "errore" || st === "da_rivedere") {
     corpo = <Button className="w-full" disabled={inCorso} onClick={chiediRiesecuzione}>Riesegui la fase</Button>
   } else if (st === "completata") {
@@ -72,17 +88,21 @@ export function AzioniFase({ n, blocco, className, azionePrimaria }: { n: number
     // pulsante sparisce subito, così la fase non si avvia due volte.
     const job = corpoFase(gara.fasi, n)?.job
     corpo = (
-      <div role="status" className="space-y-1 text-center">
-        <p className="flex items-center justify-center gap-2 text-sm font-medium text-status-run">
-          <i className="size-1.5 rounded-full bg-current animate-pulsa" aria-hidden="true" />
-          {job?.stato === "in_coda" ? "In avvio" : "Esecuzione in corso"}
-        </p>
-        <p className="text-micro text-muted-foreground">
-          {job?.stato === "in_coda"
-            ? `Accodata ${quandoRelativo(job.creato_il)}: parte appena il worker è libero.`
-            : `Avviata ${quandoRelativo(job?.iniziato_il || corpoFase(gara.fasi, n)?.iniziata_il || "")}. Puoi chiudere la pagina: la fase continua.`}
-        </p>
-      </div>
+      <>
+        <div role="status" className="space-y-1 text-center">
+          <p className="flex items-center justify-center gap-2 text-sm font-medium text-status-run">
+            <i className="size-1.5 rounded-full bg-current animate-pulsa" aria-hidden="true" />
+            {job?.interruzione_richiesta ? "Interruzione in corso" : job?.stato === "in_coda" ? "In avvio" : "Esecuzione in corso"}
+          </p>
+          <p className="text-micro text-muted-foreground">
+            {job?.stato === "in_coda"
+              ? `Accodata ${quandoRelativo(job.creato_il || "")}: parte appena il worker è libero.`
+              : `Avviata ${quandoRelativo(job?.iniziato_il || corpoFase(gara.fasi, n)?.iniziata_il || "")}. Puoi chiudere la pagina: la fase continua.`}
+          </p>
+        </div>
+        <ControlloInterruzione job={job} className="w-full" />
+        {job?.stato === "in_esecuzione" && <p className="text-micro text-muted-foreground">{NOTA_INTERRUZIONE}</p>}
+      </>
     )
   }
 

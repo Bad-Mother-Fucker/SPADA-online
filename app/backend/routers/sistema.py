@@ -1,8 +1,10 @@
+import shutil
 import sqlite3
 import subprocess
+import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 import sys
@@ -11,7 +13,7 @@ from auth import stato_autenticazione
 import login_claude
 from models import CodiceLoginRequest, ImportaPrezzarioRequest
 from paths import DATA_DIR, DB_PATH, PIPELINE_DIR
-from prezzario import ImportazioneNonRiuscita, importa
+from prezzario import ImportazioneNonRiuscita, importa, importa_da_file
 
 router = APIRouter(prefix="/sistema", tags=["sistema"])
 
@@ -105,6 +107,28 @@ def importa_prezzario(body: ImportaPrezzarioRequest):
     except ImportazioneNonRiuscita as e:
         raise HTTPException(502, f"Importazione non riuscita: {e}")
 
+
+
+@router.post("/prezzari/carica")
+def carica_prezzario(file: UploadFile, regione: str = Form(...), anno: int = Form(...)):
+    """Importa il file PriMus (.dcf) pubblicato da una regione, caricato
+    dall'interfaccia: niente terminale né release in prometeus-prezzari.
+    def, non async def: lettura e import bloccanti girano in un thread,
+    come l'upload dei documenti. Il file passa da una cartella
+    temporanea; la copia che resta è quella nella cache dei prezzari."""
+    nome = Path(file.filename or "").name
+    if not nome.lower().endswith(".dcf"):
+        raise HTTPException(400, "Serve il file PriMus del prezzario, con estensione .dcf.")
+    with tempfile.TemporaryDirectory(prefix="spada-dcf-") as tmp:
+        dcf = Path(tmp) / nome
+        with dcf.open("wb") as f:
+            shutil.copyfileobj(file.file, f, 1024 * 1024)
+        try:
+            return importa_da_file(regione, anno, dcf)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        except ImportazioneNonRiuscita as e:
+            raise HTTPException(422, f"Importazione non riuscita: {e}")
 
 @router.get("/pipeline")
 def pipeline():

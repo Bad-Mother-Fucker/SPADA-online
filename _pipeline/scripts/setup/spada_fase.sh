@@ -141,6 +141,10 @@ fi
 # di riferimento. Blocca esplicitamente invece di lasciare che
 # strategy-auditor lo scopra a metà analisi.
 if [ "$FASE" = "3" ]; then
+  # Le scansioni senza testo si leggono con l'OCR prima del gate (per le
+  # gare la cui Fase 1 è girata prima che l'OCR esistesse; le nuove lo
+  # fanno a fine Fase 1).
+  python3 "$(dirname "${BASH_SOURCE[0]}")/ocr_scansioni.py" "$GARA_DIR" || true
   if ! python3 "$(dirname "${BASH_SOURCE[0]}")/verifica_completezza.py" "$GARA_DIR"; then
     error "Fase 3 bloccata: estrazione documentale incompleta (vedi sopra). Completa document-preprocessor prima di procedere."
   fi
@@ -151,10 +155,15 @@ RUN_ID="$(python3 -c 'import uuid; print(uuid.uuid4())')"
 AVVIATO_IL="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 MODELLO="$(python3 -c "import json;print(json.load(open('manifest.json'))['esecuzione']['modello'])")"
 EFFORT="$(python3 -c "import json;print(json.load(open('manifest.json'))['esecuzione']['effort'])")"
+# Fase interrotta: si riprende la sua sessione (vedi spada_comune.sh),
+# tranne con --riesegui, che riparte da capo.
+SESSIONE_RIPRESA=""
+[ "$FLAG" = "--riesegui" ] || SESSIONE_RIPRESA="$(sessione_interrotta "$FASE" "" || true)"
+SESSIONE="${SESSIONE_RIPRESA:-$RUN_ID}"
 
-python3 - "$FASE" "$RUN_ID" "$AVVIATO_IL" "$PIPELINE_VERSION_FULL" "$PREZZARIO_VERSION" "$MODELLO" "$EFFORT" <<'PY'
+python3 - "$FASE" "$RUN_ID" "$AVVIATO_IL" "$PIPELINE_VERSION_FULL" "$PREZZARIO_VERSION" "$MODELLO" "$EFFORT" "$SESSIONE" "$SESSIONE_RIPRESA" <<'PY'
 import json, sys
-fase, run_id, avviato_il, pv, pzv, modello, effort = sys.argv[1:8]
+fase, run_id, avviato_il, pv, pzv, modello, effort, sessione, ripresa = sys.argv[1:10]
 fase = int(fase)
 
 with open("_state/run_log.json") as f:
@@ -164,6 +173,7 @@ log["runs"].append({
     "avviato_il": avviato_il, "concluso_il": None,
     "pipeline_version": pv, "prezzario_version": json.loads(pzv) if pzv != "null" else None,
     "modello": modello, "effort": effort, "esito": "in_corso", "errore": None,
+    "session_id": sessione, "ripresa": bool(ripresa),
 })
 with open("_state/run_log.json", "w") as f:
     json.dump(log, f, ensure_ascii=False, indent=2)
@@ -174,11 +184,13 @@ chiave = next(k for k in fasi["fasi"] if k.startswith(f"{fase}_"))
 fasi["fase_corrente"] = fase
 fasi["fasi"][chiave]["stato"] = "in_esecuzione"
 fasi["fasi"][chiave]["iniziata_il"] = avviato_il
+fasi["fasi"][chiave].pop("conclusa_il", None)  # di un run precedente
 with open("_state/fasi.json", "w") as f:
     json.dump(fasi, f, ensure_ascii=False, indent=2)
 PY
 
 info "Fase $FASE ($NOME_FASE) — run $RUN_ID — pipeline $PIPELINE_VERSION_FULL"
+[ -z "$SESSIONE_RIPRESA" ] || info "Ripresa della sessione interrotta $SESSIONE_RIPRESA: continua da dove si era fermata."
 
 # ── Fase 4: le risposte del professionista, scritte prima dell'agente ─
 # Il digest (output/07_questions/risposte_professionista.md) e il
@@ -220,9 +232,20 @@ trap 'rm -f "$PROMPT_FILE"' EXIT
 } > "$PROMPT_FILE"
 
 # ── Invocazione headless ─────────────────────────────────────────────
+# Una ripresa non ripete il prompt iniziale: è già nella sessione.
+if [ -n "$SESSIONE_RIPRESA" ]; then
+  OPZIONE_SESSIONE="--resume"; prompt_ripresa > "$PROMPT_FILE"
+else
+  OPZIONE_SESSIONE="--session-id"
+fi
+# SIGTERM arriva dal worker a tutto il gruppo («Interrompi», arresto di
+# SPADA): claude si chiude salvando la sessione, bash esegue la trap
+# quando claude è uscito e lo script registra l'interruzione.
+INTERROTTO=0
+trap 'INTERROTTO=1' TERM INT
 set +e
 # shellcheck disable=SC2046  # effort_cli e' vuoto o "--effort <livello>"
-bash "$SPADA_CLAUDE" -p "$(cat "$PROMPT_FILE")" \
+bash "$SPADA_CLAUDE" -p "$(cat "$PROMPT_FILE")" "$OPZIONE_SESSIONE" "$SESSIONE" \
   --model "$(modello_cli "$MODELLO")" $(effort_cli "$EFFORT") \
   --permission-mode "$SPADA_PERMISSION_MODE" \
   --output-format stream-json --verbose \
@@ -234,7 +257,9 @@ CONCLUSO_IL="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # ── Verifica: handoff e memoria.md devono essere stati aggiornati ────
 ESITO="completato"; ERRORE=""
-if [ $ESITO_CODICE -ne 0 ]; then
+if [ "$INTERROTTO" = 1 ]; then
+  ESITO="interrotto"; ERRORE="Interrotta prima della fine: alla prossima esecuzione riprende da dove si era fermata."
+elif [ $ESITO_CODICE -ne 0 ]; then
   ESITO="errore"; ERRORE="claude -p e' uscito con codice $ESITO_CODICE."
 elif [ ! -f "_state/handoff/${NOME_FASE}.json" ]; then
   ESITO="errore"; ERRORE="_state/handoff/${NOME_FASE}.json non e' stato scritto: catena verso la fase successiva rotta."
@@ -247,6 +272,13 @@ if [ "$ESITO" = "errore" ]; then
 fi
 # claude e' uscito: chi e' ancora in agenti_attivi non lo e' davvero.
 chiudi_agenti_rimasti "$ESITO" || true
+
+# Fase 1 riuscita: le scansioni senza testo segnate da
+# document-preprocessor si leggono con l'OCR, così la Fase 2 le trova
+# già estratte.
+if [ "$FASE" = "1" ] && [ "$ESITO" = "completato" ]; then
+  python3 "$(dirname "${BASH_SOURCE[0]}")/ocr_scansioni.py" "$GARA_DIR" || warn "OCR delle scansioni non completato: si riprova prima della Fase 3."
+fi
 
 # Fase 4 riuscita: le risposte risultano inviate, e indicazioni e risposte
 # finiscono nelle decisioni dell'handoff che la Fase 5 riceve nel prompt.
@@ -275,7 +307,7 @@ with open("_state/run_log.json", "w") as f:
 with open("_state/fasi.json") as f:
     fasi = json.load(f)
 chiave = next(k for k in fasi["fasi"] if k.startswith(f"{fase}_"))
-fasi["fasi"][chiave]["stato"] = "completata" if esito == "completato" else "errore"
+fasi["fasi"][chiave]["stato"] = {"completato": "completata", "interrotto": "interrotta"}.get(esito, "errore")
 fasi["fasi"][chiave]["conclusa_il"] = concluso_il
 fasi["fasi"][chiave].pop("richiede_approvazione", None)
 
@@ -298,6 +330,10 @@ with open("_state/fasi.json", "w") as f:
     json.dump(fasi, f, ensure_ascii=False, indent=2)
 PY
 
+if [ "$ESITO" = "interrotto" ]; then
+  warn "Fase $FASE interrotta: rieseguendola (senza --riesegui) riprende la sessione $SESSIONE."
+  exit 143
+fi
 if [ "$ESITO" = "errore" ]; then
   warn "Fase $FASE conclusa con errore: $ERRORE"
   warn "Stream completo: _state/run_${RUN_ID}.stream.jsonl"

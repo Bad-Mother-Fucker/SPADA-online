@@ -19,7 +19,7 @@ import { statoGara } from "@/dominio/fasi"
 
 /** Prima ciò che richiede una persona, poi per ultimo aggiornamento: è la
     regola dichiarata in fondo alla pagina, non un ordinamento implicito. */
-const PRIORITA: Record<string, number> = { errore: 0, da_rivedere: 1, in_esecuzione: 2, in_coda: 3, completata: 4 }
+const PRIORITA: Record<string, number> = { errore: 0, da_rivedere: 1, interrotta: 2, in_esecuzione: 3, in_coda: 4, completata: 5 }
 
 function ordinate(lista: Gara[]): Gara[] {
   return lista.slice().sort((a, b) => {
@@ -91,7 +91,7 @@ export function ElencoGare() {
 
   return (
     <>
-      <AppBar sezione="Gare" />
+      <AppBar />
       <main id="contenuto" className="mx-auto max-w-[1200px] px-6 py-6 max-md:px-4">
         <header className="mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
           <div>
@@ -153,7 +153,7 @@ export function ElencoGare() {
           )}
 
           {r.stato === "ok" && filtrate.length > 0 && (
-            <div className="animate-apparizione grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]">
+            <div className="animate-apparizione grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr))]">
               {filtrate.map((g) => (
                 <CardGara key={g.slug} gara={g} onElimina={setDaEliminare} inEliminazione={elimina.isPending && elimina.variables === g.slug} />
               ))}

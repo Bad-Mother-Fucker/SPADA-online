@@ -89,9 +89,9 @@ def get_claude_env() -> dict:
     if stato.get("loggedIn"):
         return env
 
-    dettaglio = stato.get("errore") or "la configurazione dedicata di SPADA non ha un login attivo"
+    dettaglio = stato.get("errore") or "la configurazione dedicata di Prometheus - S.P.A.D.A. non ha un login attivo"
     raise AutenticazioneClaudeNonDisponibile(
-        f"Claude non autenticato per SPADA ({dettaglio}). "
+        f"Claude non autenticato per Prometheus - S.P.A.D.A. ({dettaglio}). "
         "Accedi dal menu del profilo in alto a destra (Accedi a Claude), oppure con './spada login'."
     )
 

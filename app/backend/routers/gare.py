@@ -16,6 +16,7 @@ from deliverables import elenca_deliverables, trova_deliverable
 from grafo import estrai_grafo, leggi_corpo, leggi_frontmatter
 from interventi import InterventoGiaInCorso, invoca_intervento
 from models import (
+    AssistenteStreamRequest,
     ApprovazioneRequest, AssistenteRequest, BozzaDomandeRequest, CreaGaraRequest,
     IntegraDocumentoRequest, InformazioneProfessionistaRequest, InterventoRequest,
     ProposaOperatoreRequest,
@@ -47,7 +48,7 @@ def _job_attivi(slug: str) -> dict:
     fase (il più vecchio vince: è quello che il worker prenderà per primo)."""
     with get_conn() as con:
         righe = con.execute(
-            "SELECT id, fase, stato, creato_il, iniziato_il, deliverable_id FROM job "
+            "SELECT id, fase, stato, creato_il, iniziato_il, deliverable_id, interruzione_richiesta FROM job "
             "WHERE gara_slug=? AND stato IN ('in_coda','in_esecuzione') AND operazione IS NULL "
             "ORDER BY id", (slug,)).fetchall()
     out = {}
@@ -77,7 +78,8 @@ def _fasi_con_job(d: Path, slug: str) -> dict:
             corpo["stato"] = "in_esecuzione"
             corpo.pop("richiede_approvazione", None)
         corpo["job"] = {"id": job["id"], "stato": job["stato"], "creato_il": job["creato_il"],
-                        "iniziato_il": job["iniziato_il"], "deliverable_id": job["deliverable_id"]}
+                        "iniziato_il": job["iniziato_il"], "deliverable_id": job["deliverable_id"],
+                        "interruzione_richiesta": bool(job["interruzione_richiesta"])}
         corpi[k] = corpo
     return {**fasi, "fasi": corpi}
 
@@ -89,10 +91,20 @@ def elenco_gare():
     installate = {(e["regione"].lower(), e["anno"]) for e in edizioni_installate()}
     risultato = []
     for r in righe:
-        fasi = _fasi_con_job(gara_dir(r["slug"]), r["slug"])
-        risultato.append({**dict(r), "fase_corrente": fasi.get("fase_corrente"),
-                           "fasi": fasi.get("fasi", {}),
-                           "prezzario_disponibile": ((r["regione"] or "").lower(), r["anno_prezzario"]) in installate})
+        d = gara_dir(r["slug"])
+        fasi = _fasi_con_job(d, r["slug"])
+        # Il manifesto è la fonte: nome e prezzario possono cambiare dopo la
+        # creazione (la Fase 1 corregge regione/anno dal disciplinare), la
+        # riga in tabella resta quella scritta alla creazione.
+        manifest = _leggi_json(d / "manifest.json", {}) or {}
+        prezzario = manifest.get("prezzario") or {}
+        gara = {**dict(r),
+                "nome": manifest.get("nome") or r["nome"],
+                "regione": prezzario.get("regione") or r["regione"],
+                "anno_prezzario": prezzario.get("anno") or r["anno_prezzario"]}
+        risultato.append({**gara, "fase_corrente": fasi.get("fase_corrente"),
+                          "fasi": fasi.get("fasi", {}),
+                          "prezzario_disponibile": ((gara["regione"] or "").lower(), gara["anno_prezzario"]) in installate})
     return risultato
 
 
@@ -112,6 +124,7 @@ def crea_gara(body: CreaGaraRequest):
     if not body.regione:
         raise HTTPException(400, "Indica la regione del prezzario di riferimento.")
 
+    preesistente = gara_dir(body.slug).exists()
     proc = subprocess.run(
         ["bash", str(script),
          "--slug", body.slug, "--nome", body.nome,
@@ -120,6 +133,11 @@ def crea_gara(body: CreaGaraRequest):
         capture_output=True, text=True,
     )
     if proc.returncode != 0:
+        # Una cartella lasciata a metà bloccherebbe ogni nuovo tentativo
+        # con lo stesso slug, e la gara risulterebbe esistere senza riga
+        # in `gare`.
+        if not preesistente:
+            shutil.rmtree(gara_dir(body.slug), ignore_errors=True)
         raise HTTPException(500, f"new_gara.sh fallito: {proc.stderr.strip() or proc.stdout.strip()}")
 
     with get_conn() as con:
@@ -387,6 +405,31 @@ def _accoda_job(slug: str, fase: int, tipo: str, deliverable_id: str | None = No
     return {"job_id": job_id, "stato": "in_coda"}
 
 
+@router.post("/{slug}/job/{job_id}/interrompi", status_code=202)
+def interrompi_job(slug: str, job_id: int):
+    """«Interrompi» su una fase o un deliverable. In coda: si toglie dalla
+    coda e basta. In esecuzione: il worker termina i processi entro pochi
+    secondi e lo script registra l'interruzione; rieseguirla (esegui, non
+    riesegui) riprende la sessione di Claude da dove si era fermata.
+    Una richiesta ripetuta non cambia nulla."""
+    _gara_o_404(slug)
+    with get_conn() as con:
+        job = con.execute("SELECT id, stato, tipo, operazione FROM job WHERE id=? AND gara_slug=?",
+                          (job_id, slug)).fetchone()
+        if job is None:
+            raise HTTPException(404, f"Attività {job_id} non trovata per questa gara.")
+        if job["operazione"] or job["tipo"] == "approva":
+            raise HTTPException(409, "Questa attività non si può interrompere: dura pochi istanti o non si riprende.")
+        if job["stato"] == "in_coda":
+            con.execute("UPDATE job SET stato='annullato', errore=?, concluso_il=? WHERE id=?",
+                        ("Tolta dalla coda prima di partire.", now(), job_id))
+            return {"job_id": job_id, "stato": "annullato"}
+        if job["stato"] != "in_esecuzione":
+            raise HTTPException(409, "L'attività è già conclusa: non c'è nulla da interrompere.")
+        con.execute("UPDATE job SET interruzione_richiesta=1 WHERE id=?", (job_id,))
+    return {"job_id": job_id, "stato": "in_esecuzione", "interruzione_richiesta": True}
+
+
 @router.post("/{slug}/fasi/{fase}/esegui", status_code=202)
 def esegui_fase(slug: str, fase: int):
     return _accoda_job(slug, fase, "esegui")
@@ -473,8 +516,30 @@ def elimina_informazione(slug: str, id_domanda: str):
 # ── Sprint 10.3 — deliverables come workspace separati ──────────────
 @router.get("/{slug}/deliverables")
 def elenco_deliverables(slug: str):
+    """L'elenco esiste da quando l'analisi del disciplinare lo scrive nel
+    manifesto: si consulta subito, la produzione resta legata alla
+    sequenza delle fasi (_verifica_sequenza). Sopra lo stato registrato
+    dallo script si mette quello della coda, come per le fasi: un
+    deliverable accodato risulta in coda, uno partito porta il suo job
+    (per «Interrompi») prima ancora che lo script scriva lo stato."""
     d = _gara_o_404(slug)
-    return elenca_deliverables(d)
+    elenco = elenca_deliverables(d)
+    with get_conn() as con:
+        righe = con.execute(
+            "SELECT id, stato, deliverable_id, interruzione_richiesta FROM job "
+            "WHERE gara_slug=? AND deliverable_id IS NOT NULL AND stato IN ('in_coda','in_esecuzione') "
+            "ORDER BY id", (slug,)).fetchall()
+    attivi = {}
+    for r in righe:
+        attivi.setdefault(r["deliverable_id"], r)
+    for dl in elenco:
+        job = attivi.get(dl["id"])
+        if job is None:
+            continue
+        dl["stato"] = job["stato"]
+        dl["job"] = {"id": job["id"], "stato": job["stato"],
+                     "interruzione_richiesta": bool(job["interruzione_richiesta"])}
+    return elenco
 
 
 def _deliverable_o_404(slug: str, deliverable_id: str):
@@ -602,8 +667,7 @@ def registra_approvazione(slug: str, body: ApprovazioneRequest):
     return {"id": cur.lastrowid}
 
 
-@router.post("/{slug}/assistente")
-def assistente(slug: str, body: AssistenteRequest):
+def _verifica_assistente(slug: str):
     d = _gara_o_404(slug)
     fasi = _leggi_json(d / "_state" / "fasi.json", {})
     fase2 = fasi.get("fasi", {}).get("2_costruzione_grafo", {})
@@ -622,6 +686,51 @@ def assistente(slug: str, body: AssistenteRequest):
     if in_corso:
         raise HTTPException(409, "Una fase è in esecuzione su questa gara: riprova a conversazione conclusa.")
 
+
+def _salva_messaggio(slug: str, ruolo: str, testo: str):
+    with get_conn() as con:
+        con.execute(
+            "INSERT INTO conversazioni (gara_slug, ruolo, testo, creato_il) VALUES (?,?,?,?)",
+            (slug, ruolo, testo, now()),
+        )
+
+
+@router.post("/{slug}/assistente/stream")
+def assistente_stream(slug: str, body: AssistenteStreamRequest):
+    """Come POST /assistente, ma la risposta arriva mentre viene scritta
+    (NDJSON, un evento per riga: vedi assistente.stream_assistente) e in
+    due modalità, rapida o approfondita. Gli stati mostrati vengono dagli
+    strumenti che l'assistente usa davvero."""
+    _verifica_assistente(slug)
+    from assistente import stream_assistente
+    _salva_messaggio(slug, "utente", body.messaggio)
+
+    def righe():
+        concluso = False
+        try:
+            for ev in stream_assistente(slug, body.messaggio, body.modalita):
+                if ev["tipo"] == "fine":
+                    _salva_messaggio(slug, "assistente", ev["risposta"])
+                    concluso = True
+                elif ev["tipo"] == "errore":
+                    concluso = True
+                yield json.dumps(ev, ensure_ascii=False) + "\n"
+        except Exception as e:  # noqa: BLE001 — l'interfaccia deve ricevere l'errore, non una riga troncata
+            concluso = True
+            yield json.dumps({"tipo": "errore", "messaggio": f"Assistente non disponibile: {e}"}, ensure_ascii=False) + "\n"
+        finally:
+            # Chiusa dall'interfaccia (Interrompi, pagina chiusa): la
+            # domanda resta in cronologia con l'esito, non senza risposta.
+            if not concluso:
+                _salva_messaggio(slug, "assistente", "_Risposta interrotta prima della fine._")
+
+    return StreamingResponse(righe(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@router.post("/{slug}/assistente")
+def assistente(slug: str, body: AssistenteRequest):
+    _verifica_assistente(slug)
     with get_conn() as con:
         con.execute(
             "INSERT INTO conversazioni (gara_slug, ruolo, testo, creato_il) VALUES (?,?,?,?)",

@@ -5,7 +5,8 @@ import { BadgeStato, Chip } from "@/components/gare/BadgeStato"
 import { Nota } from "@/components/comuni/Primitivi"
 import { useGara } from "./GaraContext"
 import { useEsegui } from "./AzioniFase"
-import { useDeliverableAzioni, useImportaPrezzario } from "@/hooks/useGaraDati"
+import { useDeliverableAzioni, useImportPrezzarioInCorso, useImportaPrezzario } from "@/hooks/useGaraDati"
+import { NOTA_BACKGROUND, PulsanteCaricaDcf } from "@/components/comuni/CaricaPrezzario"
 import { quandoRelativo, scadenza as formattaScadenza } from "@/lib/formato"
 import { comeApiError } from "@/lib/risorsa"
 import { cn } from "@/lib/utils"
@@ -37,7 +38,9 @@ export function TestataGara() {
   return (
     <header className="mb-4">
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0 flex-1">
+        {/* basis: sotto i 22rem titolo e azioni vanno su righe separate
+            invece di stringere il titolo a una colonna di lettere. */}
+        <div className="min-w-0 grow basis-[22rem]">
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
             <BadgeStato tono={meta.tono} pulsa={st === "in_esecuzione"}>{meta.etichetta}, Fase {n}</BadgeStato>
             <Chip mono>{slug}</Chip>
@@ -48,8 +51,8 @@ export function TestataGara() {
           <h1 className="text-lg font-semibold tracking-tight">{m.nome || slug}</h1>
           <p className="mt-1 max-w-[80ch] text-xs text-foreground-2">{sintesiGara(gara)}</p>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <nav aria-label="Viste trasversali" className="flex gap-1.5">
+        <div className="flex max-w-full flex-col items-end gap-2 max-md:items-start">
+          <nav aria-label="Viste trasversali" className="flex flex-wrap gap-1.5">
             {trasversali.map((t) => (
               <NavLink key={t.a} to={t.a} className={({ isActive }) => cn("inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-sm font-medium transition-colors duration-(--d-fast)", isActive ? "border-foreground bg-foreground text-background" : "bg-card hover:bg-muted")}>
                 {t.etichetta}
@@ -65,10 +68,10 @@ export function TestataGara() {
 }
 
 const BARRA: Record<StatoFase, string> = {
-  completata: "bg-foreground-2", da_rivedere: "bg-status-attn", in_esecuzione: "barra-in-corso", errore: "bg-status-crit", in_coda: "bg-border-strong",
+  completata: "bg-foreground-2", da_rivedere: "bg-status-attn", in_esecuzione: "barra-in-corso", interrotta: "bg-status-attn", errore: "bg-status-crit", in_coda: "bg-border-strong",
 }
-const ETICHETTA_TONO: Partial<Record<StatoFase, string>> = { in_esecuzione: "text-status-run", errore: "text-status-crit", da_rivedere: "text-status-attn" }
-const ICONA: Record<StatoFase, string> = { completata: "✓", da_rivedere: "◆", in_esecuzione: "", errore: "✕", in_coda: "" }
+const ETICHETTA_TONO: Partial<Record<StatoFase, string>> = { in_esecuzione: "text-status-run", errore: "text-status-crit", da_rivedere: "text-status-attn", interrotta: "text-status-attn" }
+const ICONA: Record<StatoFase, string> = { completata: "✓", da_rivedere: "◆", in_esecuzione: "", interrotta: "", errore: "✕", in_coda: "" }
 
 /** Lo stepper delle fasi: barra superiore colorata per stato, numero
     in mono e titolo sotto. Le fasi bloccate spiegano perché (DESIGN.md §5). */
@@ -76,11 +79,14 @@ export function Stepper() {
   const { gara } = useGara()
   const location = useLocation()
   return (
-    <nav aria-label="Fasi della pipeline" className="mb-5 border-b pb-4">
-      <ol className="grid grid-cols-8 gap-2">
+    // Otto passi non stanno in uno schermo stretto: lì lo stepper scorre
+    // in orizzontale dentro il proprio contenitore, la pagina no.
+    <nav aria-label="Fasi della pipeline" className="mb-5 overflow-x-auto border-b pb-4">
+      <ol className="grid min-w-[46rem] grid-cols-8 gap-2">
         {FASI.map((f) => {
           const st = statoFase(gara.fasi, f.n)
-          const blocco = consultabile(gara.fasi, f.n) ? null : motivoBlocco(gara.fasi, f.n)
+          const blocco = consultabile(gara.fasi, f.n, gara.manifest) ? null : motivoBlocco(gara.fasi, f.n)
+          const soloElenco = !blocco && f.n === 7 && !!motivoBlocco(gara.fasi, f.n)
           const attiva = new RegExp(`/fase/${f.n}(/|$)`).test(location.pathname)
           const corpo = (
             <>
@@ -88,7 +94,7 @@ export function Stepper() {
               <span className={cn("block font-mono text-micro", attiva ? "text-foreground" : "text-muted-foreground")}>{ICONA[st] && <span aria-hidden="true">{ICONA[st]} </span>}{f.num}</span>
               <span className={cn("block text-xs leading-tight", attiva ? "font-semibold text-foreground" : blocco ? "text-muted-foreground" : "text-foreground-2")}>{f.titolo}</span>
               <span className={cn("block text-micro", !blocco && ETICHETTA_TONO[st] ? ETICHETTA_TONO[st] : "text-muted-foreground")}>
-                {blocco ? "bloccata" : inAvvio(gara.fasi, f.n) ? "in avvio" : STATO_ETICHETTA[st]}
+                {blocco ? "bloccata" : soloElenco ? "elenco consultabile" : inAvvio(gara.fasi, f.n) ? "in avvio" : STATO_ETICHETTA[st]}
               </span>
             </>
           )
@@ -106,7 +112,7 @@ export function Stepper() {
     </nav>
   )
 }
-const STATO_ETICHETTA: Record<StatoFase, string> = { completata: "completata", da_rivedere: "da rivedere", in_esecuzione: "in esecuzione", errore: "errore", in_coda: "in coda" }
+const STATO_ETICHETTA: Record<StatoFase, string> = { completata: "completata", da_rivedere: "da rivedere", in_esecuzione: "in esecuzione", interrotta: "interrotta", errore: "errore", in_coda: "in coda" }
 
 /** Avviso in testa alla gara, visibile in ogni vista: prezzario mancante,
     oppure arrivato dopo elaborazioni fatte senza. */
@@ -114,11 +120,19 @@ export function AvvisoPrezzario() {
   const { slug, gara } = useGara()
   const p = gara.prezzario
   const importa = useImportaPrezzario(slug)
+  const daFileInCorso = useImportPrezzarioInCorso(p?.regione || "", p?.anno || 0)
   const { riesegui } = useEsegui()
   const del = useDeliverableAzioni(slug)
   if (!p || (p.disponibile && !(p.da_rielaborare || []).length)) return null
   const nome = [p.regione, p.anno].filter(Boolean).join(" ") || "di riferimento"
 
+  if (!p.disponibile && daFileInCorso) {
+    return (
+      <Nota tono="run" role="status" className="mb-4" titolo={`Importazione del prezzario ${nome} in corso`}>
+        {NOTA_BACKGROUND} Intanto la gara procede: puoi caricare i documenti e avviare le fasi.
+      </Nota>
+    )
+  }
   if (!p.disponibile) {
     return (
       <Nota tono="attn" role="status" className="mb-4" titolo={`Prezzario ${nome} non presente`}
@@ -128,7 +142,8 @@ export function AvvisoPrezzario() {
               onSuccess: () => toast.success(`Prezzario ${nome} importato`, { description: "Da ora le fasi includono le valutazioni economiche." }),
               onError: (e) => toast.error("Importazione non riuscita", { description: comeApiError(e).message }),
             })}>{importa.isPending ? "Importazione in corso" : "Importa ora"}</Button>
-            <span className="self-center text-micro text-muted-foreground">Lo cerca sul Mac e fra le release pubblicate. Da file: <code className="font-mono">./spada importa-prezzario {p.regione || "Regione"} {p.anno || "anno"} cartella</code></span>
+            {p.regione && p.anno ? <PulsanteCaricaDcf regione={p.regione} anno={p.anno} /> : null}
+            <span className="self-center text-micro text-muted-foreground">«Importa ora» lo cerca su questo computer e fra le release pubblicate; «Carica file .dcf» usa il file PriMus pubblicato dalla regione.</span>
           </>
         }>
         La gara procede senza valutazioni economiche: l'analisi strategica non confronta i prezzi del computo con il prezzario né stima la capacità di investimento, e il computo metrico lascia da definire le voci nuove. Includilo il prima possibile, poi rielabora la Fase 3 e il computo metrico.

@@ -8,7 +8,8 @@ import { TestataVista } from "../TestataVista"
 import { useGara } from "../GaraContext"
 import { useSistema } from "@/hooks/useGaraDati"
 import { useTema } from "@/hooks/useTema"
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
+import { DialogoCaricaPrezzario } from "@/components/comuni/CaricaPrezzario"
 import type { Tono } from "@/dominio/fasi"
 
 function Riga({ titolo, valore, tono, azione }: { titolo: string; valore: ReactNode; tono?: Tono; azione?: ReactNode }) {
@@ -29,6 +30,7 @@ export function Impostazioni() {
   const m = gara.manifest
   const { auth, pipeline, prezzari } = useSistema()
   const { tema, scegli } = useTema()
+  const [caricaAperto, setCaricaAperto] = useState(false)
   return (
     <>
       <TestataVista kicker="Vista trasversale" titolo="Impostazioni" sottotitolo="Due ambiti separati: i parametri di questa gara e le impostazioni di sistema che valgono per l'intera installazione." badge={{ tono: "neu", etichetta: "Sempre disponibile" }} />
@@ -58,11 +60,12 @@ export function Impostazioni() {
           <div className="space-y-2">
             {auth.isPending ? <Skeleton className="h-12" /> : <Riga titolo="Autenticazione Claude" tono={auth.data?.disponibile ? undefined : "crit"} valore={auth.data?.disponibile ? `Attiva${auth.data.stima_scadenza ? `, circa ${auth.data.stima_scadenza.giorni_alla_scadenza_stimata} giorni alla scadenza stimata` : ""}` : `Non disponibile: ${auth.data?.motivo || (auth.error ? "endpoint non raggiungibile" : "motivo non riportato")}`} />}
             {pipeline.isPending ? <Skeleton className="h-12" /> : <Riga titolo="Versione pipeline" valore={pipeline.data ? `spada-core ${pipeline.data.versione}, ${pipeline.data.git_ref}` : "non disponibile"} azione={pipeline.data && <BadgeStato tono="ok">installata</BadgeStato>} />}
-            {prezzari.isPending ? <Skeleton className="h-12" /> : <Riga titolo="Prezzari installati" tono={prezzari.data?.length ? undefined : "attn"} valore={prezzari.data?.length ? `${new Set(prezzari.data.map((p) => p.regione)).size} regioni, ${prezzari.data.length} annualità` : "Nessun prezzario importato"} />}
+            {prezzari.isPending ? <Skeleton className="h-12" /> : <Riga titolo="Prezzari installati" tono={prezzari.data?.length ? undefined : "attn"} valore={prezzari.data?.length ? `${new Set(prezzari.data.map((p) => p.regione)).size} regioni, ${prezzari.data.length} annualità` : "Nessun prezzario importato"} azione={<Button size="sm" variant="outline" onClick={() => setCaricaAperto(true)}>Aggiungi da file .dcf</Button>} />}
             <Riga titolo="Tema predefinito" valore={tema === "auto" ? "Segue il sistema operativo" : `Forzato su ${tema === "dark" ? "scuro" : "chiaro"}`} azione={tema !== "auto" && <Button size="sm" variant="outline" onClick={() => scegli("auto")}>Torna ad automatico</Button>} />
           </div>
         </Card>
       </div>
+      <DialogoCaricaPrezzario aperto={caricaAperto} onChiudi={() => setCaricaAperto(false)} />
     </>
   )
 }

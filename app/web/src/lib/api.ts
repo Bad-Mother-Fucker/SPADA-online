@@ -45,7 +45,8 @@ async function richiesta<T = unknown>(percorso: string, opzioni: Opzioni = {}): 
   let resp: Response
   try {
     resp = await fetch(base() + percorso, {
-      headers: { "Content-Type": "application/json", ...(headers || {}) },
+      // Con FormData il Content-Type (multipart, con boundary) lo mette il browser.
+      headers: resto.body instanceof FormData ? headers : { "Content-Type": "application/json", ...(headers || {}) },
       signal: segnale(signal, timeoutMs),
       ...resto,
     })
@@ -99,6 +100,15 @@ export interface Manifest {
   gara?: { nome?: string; CIG?: string; scadenza_offerta?: string | null; [k: string]: unknown }
   [k: string]: unknown
 }
+
+export type ModalitaAssistente = "rapida" | "approfondita"
+/** Eventi di /assistente/stream: «stato» viene da uno strumento davvero usato. */
+export type EventoAssistente =
+  | { tipo: "stato"; testo: string }
+  | { tipo: "nuovo" }
+  | { tipo: "testo"; delta: string }
+  | { tipo: "fine"; risposta: string }
+  | { tipo: "errore"; messaggio: string }
 
 export interface StatoPrezzario {
   regione?: string
@@ -181,6 +191,9 @@ export const Api = {
   esegui: (slug: string, fase: number) => richiesta(`/gare/${s(slug)}/fasi/${fase}/esegui`, { method: "POST" }),
   riesegui: (slug: string, fase: number) => richiesta(`/gare/${s(slug)}/fasi/${fase}/riesegui`, { method: "POST" }),
   approva: (slug: string, fase: number) => richiesta(`/gare/${s(slug)}/fasi/${fase}/approva`, { method: "POST" }),
+  /** «Interrompi» una fase o un deliverable: in coda la toglie, in corso la
+      ferma. Rieseguirla con `esegui` riprende da dove si era fermata. */
+  interrompiJob: (slug: string, jobId: number) => richiesta(`/gare/${s(slug)}/job/${jobId}/interrompi`, { method: "POST" }),
   registraApprovazione: (slug: string, body: unknown) =>
     richiesta(`/gare/${s(slug)}/approvazioni`, { method: "POST", body: JSON.stringify(body) }),
 
@@ -214,6 +227,35 @@ export const Api = {
   chiediAssistente: (slug: string, messaggio: string) =>
     richiesta(`/gare/${s(slug)}/assistente`, { method: "POST", body: JSON.stringify({ messaggio }), timeoutMs: 180_000 }),
   cronologiaAssistente: (slug: string, o?: Opzioni) => richiesta<unknown[]>(`/gare/${s(slug)}/assistente`, o),
+  /** Risposta dell'assistente mentre viene scritta (NDJSON, un evento per
+      riga). Nessun timeout: una ricerca approfondita può durare minuti; si
+      interrompe con `signal`. */
+  streamAssistente: async (slug: string, messaggio: string, modalita: ModalitaAssistente, onEvento: (e: EventoAssistente) => void, signal: AbortSignal) => {
+    const percorso = `/gare/${s(slug)}/assistente/stream`
+    let resp: Response
+    try {
+      resp = await fetch(base() + percorso, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messaggio, modalita }), signal })
+    } catch (e) {
+      if (signal.aborted) throw e
+      throw new ApiError("Servizio non raggiungibile", { percorso, dettaglio: "Connessione al servizio non riuscita: il backend potrebbe essere spento." })
+    }
+    if (!resp.ok || !resp.body) {
+      let dettaglio = ""
+      try { const c = await resp.json(); dettaglio = typeof c?.detail === "string" ? c.detail : "" } catch { /* corpo non JSON */ }
+      throw new ApiError(dettaglio || `${resp.status} ${resp.statusText}`, { stato: resp.status, percorso, dettaglio })
+    }
+    const lettore = resp.body.pipeThrough(new TextDecoderStream()).getReader()
+    let resto = ""
+    for (;;) {
+      const { value, done } = await lettore.read()
+      if (done) break
+      resto += value
+      const righe = resto.split("\n")
+      resto = righe.pop() || ""
+      for (const r of righe) if (r.trim()) onEvento(JSON.parse(r) as EventoAssistente)
+    }
+    if (resto.trim()) onEvento(JSON.parse(resto) as EventoAssistente)
+  },
 
   grafo: (slug: string, o?: Opzioni) => richiesta<{ nodi: unknown[]; archi: unknown[] }>(`/gare/${s(slug)}/grafo`, o),
   elencoDeliverables: (slug: string, o?: Opzioni) => richiesta<unknown[]>(`/gare/${s(slug)}/deliverables`, o),
@@ -240,6 +282,14 @@ export const Api = {
   sistemaPipeline: (o?: Opzioni) => richiesta<{ versione: string; git_ref: string }>("/sistema/pipeline", o),
   importaPrezzario: (regione: string, anno: number) =>
     richiesta("/sistema/prezzari/importa", { method: "POST", body: JSON.stringify({ regione, anno }), timeoutMs: 600_000 }),
+  /** File PriMus (.dcf) pubblicato dalla regione: conversione e import lato server. */
+  caricaPrezzario: (regione: string, anno: number, file: File) => {
+    const corpo = new FormData()
+    corpo.append("regione", regione)
+    corpo.append("anno", String(anno))
+    corpo.append("file", file)
+    return richiesta("/sistema/prezzari/carica", { method: "POST", body: corpo, timeoutMs: 900_000 })
+  },
   // Fase 4, registro unico delle domande. Salvare non invia: le risposte
   // entrano nel contesto solo eseguendo la Fase 4.
   domande: (slug: string, o?: Opzioni) => richiesta<unknown>(`/gare/${s(slug)}/domande`, o),

@@ -106,10 +106,15 @@ PREZZARIO_VERSION="$(versione_prezzario_gara 2>/dev/null || echo null)"
 # ── Registrazione run + stato deliverable, PRIMA di invocare claude ──
 RUN_ID="$(python3 -c 'import uuid; print(uuid.uuid4())')"
 AVVIATO_IL="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+# Deliverable interrotto: si riprende la sua sessione (vedi
+# spada_comune.sh), tranne con --riesegui, che riparte da capo.
+SESSIONE_RIPRESA=""
+[ "$FLAG" = "--riesegui" ] || SESSIONE_RIPRESA="$(sessione_interrotta "" "$DELIVERABLE_ID" || true)"
+SESSIONE="${SESSIONE_RIPRESA:-$RUN_ID}"
 
-python3 - "$RUN_ID" "$AVVIATO_IL" "$PIPELINE_VERSION_FULL" "$MODELLO" "$EFFORT" "$DELIVERABLE_ID" "$AGENTE" "$OUTPUT_DIR" "$PREZZARIO_VERSION" <<'PY'
+python3 - "$RUN_ID" "$AVVIATO_IL" "$PIPELINE_VERSION_FULL" "$MODELLO" "$EFFORT" "$DELIVERABLE_ID" "$AGENTE" "$OUTPUT_DIR" "$PREZZARIO_VERSION" "$SESSIONE" "$SESSIONE_RIPRESA" <<'PY'
 import json, sys
-run_id, avviato_il, pv, modello, effort, deliverable_id, agente, output_dir, pzv = sys.argv[1:10]
+run_id, avviato_il, pv, modello, effort, deliverable_id, agente, output_dir, pzv, sessione, ripresa = sys.argv[1:12]
 
 try:
     with open("_state/run_log.json") as f:
@@ -121,7 +126,7 @@ log["runs"].append({
     "avviato_il": avviato_il, "concluso_il": None,
     "pipeline_version": pv, "prezzario_version": json.loads(pzv),
     "modello": modello, "effort": effort, "esito": "in_corso", "errore": None,
-    "deliverable_id": deliverable_id,
+    "deliverable_id": deliverable_id, "session_id": sessione, "ripresa": bool(ripresa),
 })
 with open("_state/run_log.json", "w") as f:
     json.dump(log, f, ensure_ascii=False, indent=2)
@@ -151,6 +156,7 @@ with open("_state/fasi.json", "w") as f:
 PY
 
 info "Deliverable $DELIVERABLE_ID ($TIPO, criterio $CRITERIO) — agente $AGENTE — run $RUN_ID"
+[ -z "$SESSIONE_RIPRESA" ] || info "Ripresa della sessione interrotta $SESSIONE_RIPRESA: continua da dove si era fermato."
 
 # ── Costruzione prompt ───────────────────────────────────────────────
 PROMPT_FILE="$(mktemp)"
@@ -177,9 +183,17 @@ trap 'rm -f "$PROMPT_FILE"' EXIT
 } > "$PROMPT_FILE"
 
 # ── Invocazione headless ─────────────────────────────────────────────
+# Ripresa e interruzione come in spada_fase.sh.
+if [ -n "$SESSIONE_RIPRESA" ]; then
+  OPZIONE_SESSIONE="--resume"; prompt_ripresa > "$PROMPT_FILE"
+else
+  OPZIONE_SESSIONE="--session-id"
+fi
+INTERROTTO=0
+trap 'INTERROTTO=1' TERM INT
 set +e
 # shellcheck disable=SC2046  # effort_cli e' vuoto o "--effort <livello>"
-bash "$SPADA_CLAUDE" -p "$(cat "$PROMPT_FILE")" \
+bash "$SPADA_CLAUDE" -p "$(cat "$PROMPT_FILE")" "$OPZIONE_SESSIONE" "$SESSIONE" \
   --model "$(modello_cli "$MODELLO")" $(effort_cli "$EFFORT") \
   --permission-mode "$SPADA_PERMISSION_MODE" \
   --output-format stream-json --verbose \
@@ -191,7 +205,9 @@ CONCLUSO_IL="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # ── Verifica minima: il deliverable deve aver scritto qualcosa ──────
 ESITO="completato"; ERRORE=""
-if [ $ESITO_CODICE -ne 0 ]; then
+if [ "$INTERROTTO" = 1 ]; then
+  ESITO="interrotto"; ERRORE="Interrotto prima della fine: alla prossima esecuzione riprende da dove si era fermato."
+elif [ $ESITO_CODICE -ne 0 ]; then
   ESITO="errore"; ERRORE="claude -p e' uscito con codice $ESITO_CODICE."
 elif [ -z "$(ls -A "$OUTPUT_DIR" 2>/dev/null)" ]; then
   ESITO="errore"; ERRORE="$OUTPUT_DIR/ e' vuota: il deliverable non ha prodotto output."
@@ -223,7 +239,7 @@ with open("_state/run_log.json", "w") as f:
 with open("_state/deliverables.json") as f:
     stato = json.load(f)
 stato[deliverable_id] = {
-    "stato": "completata" if esito == "completato" else "errore",
+    "stato": {"completato": "completata", "interrotto": "interrotta"}.get(esito, "errore"),
     "agente": agente, "run_id": run_id, "output_dir": output_dir,
     "iniziata_il": stato.get(deliverable_id, {}).get("iniziata_il", concluso_il),
     "conclusa_il": concluso_il,
@@ -243,7 +259,7 @@ stati = [stato.get(i, {}).get("stato", "da_eseguire") for i in tutti_gli_id]
 if tutti_gli_id and all(s == "completata" for s in stati):
     fase6_stato = "completata"
     sintesi = f"Tutti i {len(tutti_gli_id)} deliverable completati."
-elif any(s in ("da_eseguire", "in_esecuzione") for s in stati):
+elif any(s in ("da_eseguire", "in_esecuzione", "interrotta") for s in stati):
     n_fatti = sum(1 for s in stati if s == "completata")
     fase6_stato = "in_esecuzione"
     sintesi = f"{n_fatti}/{len(tutti_gli_id)} deliverable completati."
@@ -260,6 +276,10 @@ with open("_state/fasi.json", "w") as f:
     json.dump(fasi, f, ensure_ascii=False, indent=2)
 PY
 
+if [ "$ESITO" = "interrotto" ]; then
+  warn "Deliverable $DELIVERABLE_ID interrotto: rieseguendolo (senza --riesegui) riprende la sessione $SESSIONE."
+  exit 143
+fi
 if [ "$ESITO" = "errore" ]; then
   warn "Deliverable $DELIVERABLE_ID concluso con errore: $ERRORE"
   warn "Stream completo: _state/run_${RUN_ID}.stream.jsonl"

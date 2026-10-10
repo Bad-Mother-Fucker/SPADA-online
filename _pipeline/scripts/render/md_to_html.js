@@ -537,7 +537,7 @@ function render(absPath) {
     .filter(([k]) => /^(criterio|stato|stato_feedback|data|generato|versione|confidence|is_latest)/.test(k))
     .map(([k, v]) => `${esc(k)}: <strong>${esc(v)}</strong>`);
   const subtitle = [
-    `Prometeus S.P.A.D.A. — aggiornato ${esc(mtime)}`,
+    `Prometheus - S.P.A.D.A. — aggiornato ${esc(mtime)}`,
     ...chips,
   ].join(' · ');
 
