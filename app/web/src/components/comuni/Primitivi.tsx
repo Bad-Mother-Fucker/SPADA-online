@@ -10,7 +10,7 @@ const BORDO: Record<Tono, string> = {
 
 /** Card: superficie piatta con bordo sottile, senza ombra (DESIGN.md §4). */
 export function Card({ tono, className, children, ...props }: { tono?: Tono } & ComponentProps<"section">) {
-  return <section className={cn("rounded-lg border bg-card p-4", tono && BORDO[tono], className)} {...props}>{children}</section>
+  return <section className={cn("min-w-0 rounded-lg border bg-card p-4", tono && BORDO[tono], className)} {...props}>{children}</section>
 }
 
 export function TitoloSezione({ children, azioni, className }: { children: ReactNode; azioni?: ReactNode; className?: string }) {

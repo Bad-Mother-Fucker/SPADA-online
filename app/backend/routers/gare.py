@@ -91,10 +91,20 @@ def elenco_gare():
     installate = {(e["regione"].lower(), e["anno"]) for e in edizioni_installate()}
     risultato = []
     for r in righe:
-        fasi = _fasi_con_job(gara_dir(r["slug"]), r["slug"])
-        risultato.append({**dict(r), "fase_corrente": fasi.get("fase_corrente"),
-                           "fasi": fasi.get("fasi", {}),
-                           "prezzario_disponibile": ((r["regione"] or "").lower(), r["anno_prezzario"]) in installate})
+        d = gara_dir(r["slug"])
+        fasi = _fasi_con_job(d, r["slug"])
+        # Il manifesto è la fonte: nome e prezzario possono cambiare dopo la
+        # creazione (la Fase 1 corregge regione/anno dal disciplinare), la
+        # riga in tabella resta quella scritta alla creazione.
+        manifest = _leggi_json(d / "manifest.json", {}) or {}
+        prezzario = manifest.get("prezzario") or {}
+        gara = {**dict(r),
+                "nome": manifest.get("nome") or r["nome"],
+                "regione": prezzario.get("regione") or r["regione"],
+                "anno_prezzario": prezzario.get("anno") or r["anno_prezzario"]}
+        risultato.append({**gara, "fase_corrente": fasi.get("fase_corrente"),
+                          "fasi": fasi.get("fasi", {}),
+                          "prezzario_disponibile": ((gara["regione"] or "").lower(), gara["anno_prezzario"]) in installate})
     return risultato
 
 

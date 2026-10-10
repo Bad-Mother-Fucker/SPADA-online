@@ -62,7 +62,7 @@ function CardDeliverable({ d, onAvvia, onRiesegui, blocco }: { d: Deliverable; o
   const file = fileDeliverable(output, d)
   const prodotto = file.length > 0
   return (
-    <article className="flex flex-col gap-2.5 rounded-lg border bg-card p-3.5">
+    <article className="flex min-w-0 flex-col gap-2.5 rounded-lg border bg-card p-3.5">
       <div className="flex items-center justify-between gap-2">
         <BadgeStato tono={st.tono} pulsa={d.stato === "in_esecuzione"}>{st.etichetta}</BadgeStato>
         <span className="font-mono text-micro text-muted-foreground">{d.id}</span>
@@ -124,7 +124,7 @@ export function Fase7Elenco() {
             <p className="min-w-0 flex-1 text-sm text-foreground-2">L'elenco è ricavato dal disciplinare di questa gara, non è un modello fisso: sono richiesti <b className="font-semibold text-foreground">{plurale(lista.length, "deliverable", "deliverable")}</b>. Ognuno ha agente e skill propri e può essere avviato per conto suo.</p>
             {pronti.length > 0 && <Button disabled={inCorso} onClick={() => avvia(pronti.map((d) => d.id))}>{pronti.length === 1 ? "Avvia il deliverable pronto" : `Avvia i ${pronti.length} pronti`}</Button>}
           </Card>
-          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr))]">
             {lista.map((d) => <CardDeliverable key={d.id} d={d} blocco={blocco} onAvvia={() => avvia([d.id])} onRiesegui={() => riesegui(d.id)} />)}
           </div>
         </>

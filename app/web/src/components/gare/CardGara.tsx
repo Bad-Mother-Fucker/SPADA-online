@@ -59,7 +59,7 @@ export function CardGara({ gara, onElimina, inEliminazione }: { gara: Gara; onEl
     <article
       aria-busy={inEliminazione || undefined}
       className={cn(
-        "group relative flex flex-col gap-2.5 rounded-lg border bg-card p-3.5 pb-3",
+        "group relative flex min-w-0 flex-col gap-2.5 rounded-lg border bg-card p-3.5 pb-3",
         "transition-[border-color,box-shadow,opacity] duration-(--d-base) ease-(--e-enter)",
         "hover:border-border-strong hover:shadow-pop focus-within:border-border-strong",
         inEliminazione && "pointer-events-none opacity-40",

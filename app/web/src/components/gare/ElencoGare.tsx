@@ -153,7 +153,7 @@ export function ElencoGare() {
           )}
 
           {r.stato === "ok" && filtrate.length > 0 && (
-            <div className="animate-apparizione grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]">
+            <div className="animate-apparizione grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr))]">
               {filtrate.map((g) => (
                 <CardGara key={g.slug} gara={g} onElimina={setDaEliminare} inEliminazione={elimina.isPending && elimina.variables === g.slug} />
               ))}

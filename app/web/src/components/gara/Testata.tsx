@@ -38,7 +38,9 @@ export function TestataGara() {
   return (
     <header className="mb-4">
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0 flex-1">
+        {/* basis: sotto i 22rem titolo e azioni vanno su righe separate
+            invece di stringere il titolo a una colonna di lettere. */}
+        <div className="min-w-0 grow basis-[22rem]">
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
             <BadgeStato tono={meta.tono} pulsa={st === "in_esecuzione"}>{meta.etichetta}, Fase {n}</BadgeStato>
             <Chip mono>{slug}</Chip>
@@ -49,8 +51,8 @@ export function TestataGara() {
           <h1 className="text-lg font-semibold tracking-tight">{m.nome || slug}</h1>
           <p className="mt-1 max-w-[80ch] text-xs text-foreground-2">{sintesiGara(gara)}</p>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <nav aria-label="Viste trasversali" className="flex gap-1.5">
+        <div className="flex max-w-full flex-col items-end gap-2 max-md:items-start">
+          <nav aria-label="Viste trasversali" className="flex flex-wrap gap-1.5">
             {trasversali.map((t) => (
               <NavLink key={t.a} to={t.a} className={({ isActive }) => cn("inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-sm font-medium transition-colors duration-(--d-fast)", isActive ? "border-foreground bg-foreground text-background" : "bg-card hover:bg-muted")}>
                 {t.etichetta}
@@ -77,8 +79,10 @@ export function Stepper() {
   const { gara } = useGara()
   const location = useLocation()
   return (
-    <nav aria-label="Fasi della pipeline" className="mb-5 border-b pb-4">
-      <ol className="grid grid-cols-8 gap-2">
+    // Otto passi non stanno in uno schermo stretto: lì lo stepper scorre
+    // in orizzontale dentro il proprio contenitore, la pagina no.
+    <nav aria-label="Fasi della pipeline" className="mb-5 overflow-x-auto border-b pb-4">
+      <ol className="grid min-w-[46rem] grid-cols-8 gap-2">
         {FASI.map((f) => {
           const st = statoFase(gara.fasi, f.n)
           const blocco = consultabile(gara.fasi, f.n, gara.manifest) ? null : motivoBlocco(gara.fasi, f.n)

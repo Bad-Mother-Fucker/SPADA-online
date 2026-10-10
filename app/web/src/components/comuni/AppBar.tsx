@@ -33,7 +33,7 @@ function BadgeBackend() {
       className={cn("inline-flex h-7 items-center gap-2 rounded-md px-2 text-xs transition-colors duration-(--d-fast) hover:bg-muted", b.classe)}
     >
       <i className={cn("size-1.5 rounded-full", b.punto)} aria-hidden="true" />
-      {b.testo}
+      <span className="max-md:sr-only">{b.testo}</span>
     </button>
   )
 }
@@ -42,7 +42,8 @@ function ControlloTema() {
   const { tema, effettivo, scegli } = useTema()
   const voci = [["light", "Chiaro"], ["dark", "Scuro"]] as const
   return (
-    <div role="group" aria-label="Tema" className="inline-flex overflow-hidden rounded-md border border-border-strong">
+    // Su schermi stretti il tema resta nel menu del profilo.
+    <div role="group" aria-label="Tema" className="inline-flex shrink-0 overflow-hidden rounded-md border border-border-strong max-md:hidden">
       {voci.map(([id, label]) => {
         const attivo = tema === id || (tema === "auto" && effettivo === id)
         return (
@@ -172,7 +173,7 @@ export function AppBar({ sezione, briciole, badge, larga, piena }: { sezione?: s
       <div className={cn("mx-auto flex h-12 items-center gap-3.5 px-6 max-md:px-4", piena ? "max-w-none" : larga ? "max-w-[1280px]" : "max-w-[1200px]")}>
         <Link to="/" className="flex shrink-0 items-center gap-1.5 rounded-sm font-semibold tracking-[0.01em]">
           <IconaSpada className="size-5" />
-          Prometheus - S.P.A.D.A.
+          <span className="max-sm:sr-only">Prometheus - S.P.A.D.A.</span>
         </Link>
         {briciole ? (
           <nav aria-label="Percorso" className="flex min-w-0 items-center gap-2 text-muted-foreground">
