@@ -191,9 +191,9 @@ export const Api = {
   esegui: (slug: string, fase: number) => richiesta(`/gare/${s(slug)}/fasi/${fase}/esegui`, { method: "POST" }),
   riesegui: (slug: string, fase: number) => richiesta(`/gare/${s(slug)}/fasi/${fase}/riesegui`, { method: "POST" }),
   approva: (slug: string, fase: number) => richiesta(`/gare/${s(slug)}/fasi/${fase}/approva`, { method: "POST" }),
-  /** Pausa e ripresa di un'attività in esecuzione (fase, deliverable, integrazione). */
-  pausaJob: (slug: string, jobId: number) => richiesta(`/gare/${s(slug)}/job/${jobId}/pausa`, { method: "POST" }),
-  riprendiJob: (slug: string, jobId: number) => richiesta(`/gare/${s(slug)}/job/${jobId}/riprendi`, { method: "POST" }),
+  /** «Interrompi» una fase o un deliverable: in coda la toglie, in corso la
+      ferma. Rieseguirla con `esegui` riprende da dove si era fermata. */
+  interrompiJob: (slug: string, jobId: number) => richiesta(`/gare/${s(slug)}/job/${jobId}/interrompi`, { method: "POST" }),
   registraApprovazione: (slug: string, body: unknown) =>
     richiesta(`/gare/${s(slug)}/approvazioni`, { method: "POST", body: JSON.stringify(body) }),
 

@@ -10,7 +10,7 @@ import { NOTA_BACKGROUND, PulsanteCaricaDcf } from "@/components/comuni/CaricaPr
 import { quandoRelativo, scadenza as formattaScadenza } from "@/lib/formato"
 import { comeApiError } from "@/lib/risorsa"
 import { cn } from "@/lib/utils"
-import { FASI, STATO_GARA, consultabile, faseCorrente, garaInPausa, inAvvio, inPausa, motivoBlocco, statoFase, statoGara, type StatoFase } from "@/dominio/fasi"
+import { FASI, STATO_GARA, consultabile, faseCorrente, inAvvio, motivoBlocco, statoFase, statoGara, type StatoFase } from "@/dominio/fasi"
 
 /** La sintesi riassume la fase corrente, cioè ciò che la pipeline ha scritto in fasi.json. */
 function sintesiGara(gara: ReturnType<typeof useGara>["gara"]) {
@@ -40,9 +40,7 @@ export function TestataGara() {
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
-            {garaInPausa(gara.fasi)
-              ? <BadgeStato tono="attn">In pausa, Fase {n}</BadgeStato>
-              : <BadgeStato tono={meta.tono} pulsa={st === "in_esecuzione"}>{meta.etichetta}, Fase {n}</BadgeStato>}
+            <BadgeStato tono={meta.tono} pulsa={st === "in_esecuzione"}>{meta.etichetta}, Fase {n}</BadgeStato>
             <Chip mono>{slug}</Chip>
             <Chip>{m.prezzario?.regione || "regione non indicata"}, prezzario {m.prezzario?.anno || "n.d."}</Chip>
             <Chip mono>{m.esecuzione?.modello || "modello n.d."}, {m.esecuzione?.effort || "effort n.d."}</Chip>
@@ -68,10 +66,10 @@ export function TestataGara() {
 }
 
 const BARRA: Record<StatoFase, string> = {
-  completata: "bg-foreground-2", da_rivedere: "bg-status-attn", in_esecuzione: "barra-in-corso", errore: "bg-status-crit", in_coda: "bg-border-strong",
+  completata: "bg-foreground-2", da_rivedere: "bg-status-attn", in_esecuzione: "barra-in-corso", interrotta: "bg-status-attn", errore: "bg-status-crit", in_coda: "bg-border-strong",
 }
-const ETICHETTA_TONO: Partial<Record<StatoFase, string>> = { in_esecuzione: "text-status-run", errore: "text-status-crit", da_rivedere: "text-status-attn" }
-const ICONA: Record<StatoFase, string> = { completata: "✓", da_rivedere: "◆", in_esecuzione: "", errore: "✕", in_coda: "" }
+const ETICHETTA_TONO: Partial<Record<StatoFase, string>> = { in_esecuzione: "text-status-run", errore: "text-status-crit", da_rivedere: "text-status-attn", interrotta: "text-status-attn" }
+const ICONA: Record<StatoFase, string> = { completata: "✓", da_rivedere: "◆", in_esecuzione: "", interrotta: "", errore: "✕", in_coda: "" }
 
 /** Lo stepper delle fasi: barra superiore colorata per stato, numero
     in mono e titolo sotto. Le fasi bloccate spiegano perché (DESIGN.md §5). */
@@ -88,11 +86,11 @@ export function Stepper() {
           const attiva = new RegExp(`/fase/${f.n}(/|$)`).test(location.pathname)
           const corpo = (
             <>
-              <span className={cn("mb-2 block h-[3px] rounded-[1px]", inPausa(gara.fasi, f.n) ? "bg-status-attn" : BARRA[st])} aria-hidden="true" />
+              <span className={cn("mb-2 block h-[3px] rounded-[1px]", BARRA[st])} aria-hidden="true" />
               <span className={cn("block font-mono text-micro", attiva ? "text-foreground" : "text-muted-foreground")}>{ICONA[st] && <span aria-hidden="true">{ICONA[st]} </span>}{f.num}</span>
               <span className={cn("block text-xs leading-tight", attiva ? "font-semibold text-foreground" : blocco ? "text-muted-foreground" : "text-foreground-2")}>{f.titolo}</span>
-              <span className={cn("block text-micro", !blocco && inPausa(gara.fasi, f.n) ? "text-status-attn" : !blocco && ETICHETTA_TONO[st] ? ETICHETTA_TONO[st] : "text-muted-foreground")}>
-                {blocco ? "bloccata" : soloElenco ? "elenco consultabile" : inAvvio(gara.fasi, f.n) ? "in avvio" : inPausa(gara.fasi, f.n) ? "in pausa" : STATO_ETICHETTA[st]}
+              <span className={cn("block text-micro", !blocco && ETICHETTA_TONO[st] ? ETICHETTA_TONO[st] : "text-muted-foreground")}>
+                {blocco ? "bloccata" : soloElenco ? "elenco consultabile" : inAvvio(gara.fasi, f.n) ? "in avvio" : STATO_ETICHETTA[st]}
               </span>
             </>
           )
@@ -110,7 +108,7 @@ export function Stepper() {
     </nav>
   )
 }
-const STATO_ETICHETTA: Record<StatoFase, string> = { completata: "completata", da_rivedere: "da rivedere", in_esecuzione: "in esecuzione", errore: "errore", in_coda: "in coda" }
+const STATO_ETICHETTA: Record<StatoFase, string> = { completata: "completata", da_rivedere: "da rivedere", in_esecuzione: "in esecuzione", interrotta: "interrotta", errore: "errore", in_coda: "in coda" }
 
 /** Avviso in testa alla gara, visibile in ogni vista: prezzario mancante,
     oppure arrivato dopo elaborazioni fatte senza. */

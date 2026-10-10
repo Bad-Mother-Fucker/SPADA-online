@@ -9,7 +9,7 @@ import { Fase5 } from "./viste/Fase5"
 import { Fase6Elenco } from "./viste/Fase6"
 import { Fase7Elenco } from "./viste/Fase7"
 import { Fase8 } from "./viste/Fase8"
-import { STATO, consultabile, fase, faseCorrente, inPausa, sbloccata, statoFase } from "@/dominio/fasi"
+import { STATO, consultabile, fase, faseCorrente, sbloccata, statoFase } from "@/dominio/fasi"
 
 const VISTE: Record<number, () => React.ReactNode> = { 1: Fase1, 2: Fase2, 3: Fase3, 4: Fase4, 5: Fase5, 6: Fase6Elenco, 7: Fase7Elenco, 8: Fase8 }
 
@@ -27,7 +27,7 @@ export function VistaFase() {
   const soloLettura = !sbloccata(gara.fasi, n)
   return (
     <>
-      <TestataVista kicker={f.kicker} titolo={f.testata} sottotitolo={f.sottotitolo} badge={soloLettura ? { tono: "neu", etichetta: "Elenco consultabile" } : inPausa(gara.fasi, n) ? { tono: "attn", etichetta: "In pausa" } : { tono: STATO[st].tono, etichetta: STATO[st].etichetta, pulsa: st === "in_esecuzione" }} />
+      <TestataVista kicker={f.kicker} titolo={f.testata} sottotitolo={f.sottotitolo} badge={soloLettura ? { tono: "neu", etichetta: "Elenco consultabile" } : { tono: STATO[st].tono, etichetta: STATO[st].etichetta, pulsa: st === "in_esecuzione" }} />
       <Vista />
     </>
   )

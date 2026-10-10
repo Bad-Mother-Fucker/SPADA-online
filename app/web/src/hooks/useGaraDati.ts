@@ -114,7 +114,7 @@ export function useDeliverables(slug: string, attivo = true) {
   return useQuery({
     queryKey: chiaviGara.deliverables(slug), queryFn: ({ signal }) => Api.elencoDeliverables(slug, { signal }) as Promise<Deliverable[]>, enabled: attivo,
     // Lo stream SSE porta le fasi, non i deliverable: finché uno è in coda o
-    // gira (anche in pausa) si rilegge l'elenco, così lo stato resta quello vero.
+    // gira si rilegge l'elenco, così lo stato resta quello vero.
     refetchInterval: (q) => (q.state.data || []).some((d) => d.job) ? 3_000 : false,
   })
 }
@@ -247,11 +247,9 @@ export function useAzioniFase(slug: string) {
   return { esegui, riesegui, approva }
 }
 
-export function usePausaJob(slug: string) {
+export function useInterrompiJob(slug: string) {
   const invalida = useInvalidaGara(slug)
-  const pausa = useMutation({ mutationFn: (jobId: number) => Api.pausaJob(slug, jobId), onSettled: invalida })
-  const riprendi = useMutation({ mutationFn: (jobId: number) => Api.riprendiJob(slug, jobId), onSettled: invalida })
-  return { pausa, riprendi }
+  return useMutation({ mutationFn: (jobId: number) => Api.interrompiJob(slug, jobId), onSettled: invalida })
 }
 
 export function useDeliverableAzioni(slug: string) {

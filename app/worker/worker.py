@@ -9,7 +9,12 @@ all'API), oppure a mano `python3 worker.py`.
 Ripartenza pulita: all'avvio del worker, un job rimasto "in_esecuzione"
 da un processo precedente terminato senza aggiornare lo stato (crash,
 kill -9, Mac spento o riavviato) viene rilevato e marcato "errore" — non
-viene mai ripreso a metà.
+viene mai ripreso a metà automaticamente.
+
+Interruzione: «Interrompi» dall'interfaccia (o l'arresto del worker)
+termina il gruppo del job con SIGTERM; lo script di fase/deliverable lo
+registra "interrotta" con la sessione di Claude, e rieseguirla la
+riprende da dove si era fermata (spada_comune.sh, sessione_interrotta).
 
 Sul Mac ogni job gira sotto `caffeinate -i`: il sistema non va in stop
 per inattività mentre una fase è in corso (chiudere il coperchio di un
@@ -35,8 +40,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s worker
 log = logging.getLogger("spada.worker")
 
 POLL_SECONDS = 3
-TIMEOUT_JOB_SECONDI = 2 * 60 * 60  # tempo di lavoro: le pause non contano
-CONTROLLO_PAUSA_SECONDI = 2
+TIMEOUT_JOB_SECONDI = 2 * 60 * 60
+CONTROLLO_INTERRUZIONE_SECONDI = 2
+# Dopo SIGTERM claude salva la sessione e lo script registra
+# l'interruzione: il tempo per farlo, poi SIGKILL.
+ATTESA_CHIUSURA_SECONDI = 20
+MSG_INTERROTTO = "Interrotta su richiesta: rieseguendola riprende da dove si era fermata."
 # Su macOS impedisce lo stop per inattività finché il job è vivo; altrove
 # (o se manca) il job parte uguale, senza.
 CAFFEINATE = ["caffeinate", "-i"] if sys.platform == "darwin" and shutil.which("caffeinate") else []
@@ -51,23 +60,39 @@ _job_corrente: subprocess.Popen | None = None
 def _termina_gruppo(proc: subprocess.Popen):
     try:
         os.killpg(proc.pid, signal.SIGTERM)
-        # Un gruppo in pausa (SIGSTOP) non gestisce SIGTERM finché non
-        # riparte: senza SIGCONT resterebbe appeso fino al SIGKILL.
-        os.killpg(proc.pid, signal.SIGCONT)
-        proc.wait(timeout=10)
     except ProcessLookupError:
         return
-    except subprocess.TimeoutExpired:
+    # Si aspetta il gruppo, non solo il primo processo: con caffeinate
+    # davanti (macOS) lo script di fase sta ancora registrando l'esito.
+    scadenza = time.monotonic() + ATTESA_CHIUSURA_SECONDI
+    while time.monotonic() < scadenza:
+        proc.poll()  # raccoglie il primo processo: da zombie terrebbe vivo il gruppo
+        try:
+            os.killpg(proc.pid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.2)
+    else:
         try:
             os.killpg(proc.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
 
 
 def _arresto(signum, _frame):
     if _job_corrente is not None and _job_corrente.poll() is None:
-        log.warning("Arresto del worker: termino il job in corso (resterà marcato errore al prossimo avvio).")
+        log.warning("Arresto del worker: interrompo il job in corso (riprende alla prossima esecuzione).")
         _termina_gruppo(_job_corrente)
+        with get_conn() as con:
+            con.execute(
+                "UPDATE job SET stato='annullato', interruzione_richiesta=0, errore=?, concluso_il=? "
+                "WHERE stato='in_esecuzione'",
+                ("SPADA è stato fermato durante l'esecuzione: rieseguendola riprende da dove si era fermata.", now()),
+            )
     sys.exit(0)
 
 
@@ -84,8 +109,7 @@ def pulisci_job_orfani():
         for o in orfani:
             log.warning("Job %s trovato in_esecuzione all'avvio del worker: marcato errore (ripartenza pulita).", o["id"])
             con.execute(
-                "UPDATE job SET stato='errore', in_pausa=0, pausa_richiesta=NULL, pausa_dal=NULL, "
-                "errore=?, concluso_il=? WHERE id=?",
+                "UPDATE job SET stato='errore', interruzione_richiesta=0, errore=?, concluso_il=? WHERE id=?",
                 ("Worker riavviato con il job ancora in_esecuzione: nessuna ripresa automatica.", now(), o["id"]),
             )
 
@@ -132,32 +156,34 @@ def registra_errore_prima_dell_avvio(job, messaggio: str):
         log.exception("Job %s: errore non registrato nello stato della gara", job["id"])
 
 
-def _gestisci_pausa(job_id: int, proc: subprocess.Popen, in_pausa: bool) -> bool:
-    """Applica una richiesta di pausa o ripresa scritta dall'API. La pausa
-    è vera: SIGSTOP all'intero gruppo (bash, claude, subagenti), che resta
-    in memoria con tutto il lavoro fatto e riparte da dove era con
-    SIGCONT. Ritorna il nuovo stato di pausa."""
+def chiudi_stato_appeso(job):
+    """Dopo un'interruzione lo stato lo scrive lo script (trap su SIGTERM).
+    Se il segnale è arrivato prima che lo script lanciasse claude, la fase
+    o il deliverable resterebbero «in_esecuzione» per sempre: si segnano
+    «interrotta». Senza una sessione salvata, rieseguirla riparte da capo."""
+    if "operazione" in job.keys() and job["operazione"]:
+        return
+    stato_dir = GARE_DIR / job["gara_slug"] / "_state"
+    try:
+        if job["deliverable_id"]:
+            p = stato_dir / "deliverables.json"
+            dati = json.loads(p.read_text(encoding="utf-8"))
+            corpo = dati.get(job["deliverable_id"])
+        else:
+            p = stato_dir / "fasi.json"
+            dati = json.loads(p.read_text(encoding="utf-8"))
+            corpo = next((v for k, v in dati.get("fasi", {}).items() if k.startswith(f"{job['fase']}_")), None)
+        if corpo and corpo.get("stato") == "in_esecuzione":
+            corpo.update(stato="interrotta", conclusa_il=now())
+            p.write_text(json.dumps(dati, ensure_ascii=False, indent=2), encoding="utf-8")
+    except (OSError, ValueError):
+        log.exception("Job %s: stato dopo l'interruzione non verificato", job["id"])
+
+
+def _interruzione_richiesta(job_id: int) -> bool:
     with get_conn() as con:
-        riga = con.execute("SELECT pausa_richiesta FROM job WHERE id=?", (job_id,)).fetchone()
-        richiesta = riga["pausa_richiesta"] if riga else None
-        if not richiesta:
-            return in_pausa
-        try:
-            if richiesta == "pausa" and not in_pausa:
-                os.killpg(proc.pid, signal.SIGSTOP)
-                in_pausa = True
-                log.info("Job %s: in pausa", job_id)
-            elif richiesta == "riprendi" and in_pausa:
-                os.killpg(proc.pid, signal.SIGCONT)
-                in_pausa = False
-                log.info("Job %s: ripreso", job_id)
-        except ProcessLookupError:
-            pass  # il processo è appena finito: lo registra il chiamante
-        con.execute(
-            "UPDATE job SET pausa_richiesta=NULL, in_pausa=?, pausa_dal=? WHERE id=?",
-            (1 if in_pausa else 0, now() if in_pausa else None, job_id),
-        )
-    return in_pausa
+        riga = con.execute("SELECT interruzione_richiesta FROM job WHERE id=?", (job_id,)).fetchone()
+    return bool(riga and riga["interruzione_richiesta"])
 
 
 def esegui_job(job):
@@ -214,36 +240,44 @@ def esegui_job(job):
                             text=True, start_new_session=True)
     _job_corrente = proc
     # communicate() a intervalli brevi: fra un intervallo e l'altro si
-    # guardano le richieste di pausa. Ripetere communicate() dopo un
-    # TimeoutExpired non perde output (documentato in subprocess).
-    in_pausa = False
-    lavoro = 0.0  # secondi di esecuzione effettiva, pause escluse
+    # guarda se è stata chiesta l'interruzione. Ripetere communicate() dopo
+    # un TimeoutExpired non perde output (documentato in subprocess).
+    avvio = time.monotonic()
     try:
         while True:
-            t0 = time.monotonic()
             try:
-                stdout, stderr = proc.communicate(timeout=CONTROLLO_PAUSA_SECONDI)
+                stdout, stderr = proc.communicate(timeout=CONTROLLO_INTERRUZIONE_SECONDI)
                 break
             except subprocess.TimeoutExpired:
-                if not in_pausa:
-                    lavoro += time.monotonic() - t0
-                in_pausa = _gestisci_pausa(job_id, proc, in_pausa)
-                if lavoro > TIMEOUT_JOB_SECONDI:
+                if _interruzione_richiesta(job_id):
+                    log.info("Job %s: interruzione richiesta", job_id)
+                    _termina_gruppo(proc)
+                    try:
+                        proc.communicate(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        pass
+                    break
+                if time.monotonic() - avvio > TIMEOUT_JOB_SECONDI:
                     raise
-        stato_finale = "completato" if proc.returncode == 0 else "errore"
-        errore = None if proc.returncode == 0 else (stderr[-2000:] or stdout[-2000:])
+        if _interruzione_richiesta(job_id):
+            stato_finale, errore = "annullato", MSG_INTERROTTO
+            chiudi_stato_appeso(job)
+        else:
+            stato_finale = "completato" if proc.returncode == 0 else "errore"
+            errore = None if proc.returncode == 0 else (stderr[-2000:] or stdout[-2000:])
     except subprocess.TimeoutExpired:
         # Senza questo il worker morirebbe con il job ancora
         # "in_esecuzione": in locale nessun systemd lo riavvia.
         _termina_gruppo(proc)
         stato_finale = "errore"
-        errore = f"Job interrotto: superato il limite di {TIMEOUT_JOB_SECONDI // 60} minuti di lavoro."
+        errore = (f"Job interrotto: superato il limite di {TIMEOUT_JOB_SECONDI // 60} minuti. "
+                  "Rieseguendolo riprende da dove si era fermato.")
     finally:
         _job_corrente = None
 
     with get_conn() as con:
         con.execute(
-            "UPDATE job SET stato=?, in_pausa=0, pausa_richiesta=NULL, pausa_dal=NULL, errore=?, concluso_il=? WHERE id=?",
+            "UPDATE job SET stato=?, interruzione_richiesta=0, errore=?, concluso_il=? WHERE id=?",
             (stato_finale, errore, now(), job_id),
         )
     log.info("Job %s: %s", job_id, stato_finale)

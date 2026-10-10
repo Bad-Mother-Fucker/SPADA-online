@@ -8,6 +8,7 @@ export const FILTRI: readonly { id: Filtro; etichetta: string; tono?: Tono }[] =
   { id: "tutte", etichetta: "Tutte" },
   { id: "da_rivedere", etichetta: STATO_GARA.da_rivedere.etichetta, tono: "attn" },
   { id: "in_esecuzione", etichetta: STATO_GARA.in_esecuzione.etichetta, tono: "run" },
+  { id: "interrotta", etichetta: "Interrotte", tono: "attn" },
   { id: "errore", etichetta: STATO_GARA.errore.etichetta, tono: "crit" },
   { id: "completata", etichetta: "Completate", tono: "ok" },
 ]

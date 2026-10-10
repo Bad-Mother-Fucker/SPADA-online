@@ -22,14 +22,10 @@ def _applica_migrazioni(con: sqlite3.Connection):
         con.execute("ALTER TABLE job ADD COLUMN operazione TEXT")
     if "argomento" not in colonne_job:
         con.execute("ALTER TABLE job ADD COLUMN argomento TEXT")
-    # Pausa di un job in esecuzione: l'API registra la richiesta, il worker
-    # (che possiede il processo) la applica e aggiorna in_pausa.
-    if "pausa_richiesta" not in colonne_job:
-        con.execute("ALTER TABLE job ADD COLUMN pausa_richiesta TEXT")
-    if "in_pausa" not in colonne_job:
-        con.execute("ALTER TABLE job ADD COLUMN in_pausa INTEGER NOT NULL DEFAULT 0")
-    if "pausa_dal" not in colonne_job:
-        con.execute("ALTER TABLE job ADD COLUMN pausa_dal TEXT")
+    # «Interrompi»: l'API registra la richiesta, il worker (che possiede il
+    # processo) la applica.
+    if "interruzione_richiesta" not in colonne_job:
+        con.execute("ALTER TABLE job ADD COLUMN interruzione_richiesta INTEGER NOT NULL DEFAULT 0")
 
 
 def init_db():

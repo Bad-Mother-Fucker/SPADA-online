@@ -4,7 +4,7 @@ import { toast } from "sonner"
 import { CheckIcon, CircleDashedIcon, DownloadSimpleIcon, TableIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Card, Kv, Nota, Scheletro, Split, TitoloSezione, VuotoInline } from "@/components/comuni/Primitivi"
-import { ControlloPausa } from "../ControlloPausa"
+import { ControlloInterruzione } from "../ControlloInterruzione"
 import { motivoBlocco } from "@/dominio/fasi"
 import { StatoErrore } from "@/components/stati/Stati"
 import { BadgeStato, Chip } from "@/components/gare/BadgeStato"
@@ -23,7 +23,7 @@ const STATO_DEL: Record<string, { tono: Tono; etichetta: string; azione: string 
   da_eseguire: { tono: "neu", etichetta: "In attesa di avvio", azione: "Apri workspace" },
   in_coda: { tono: "neu", etichetta: "In coda", azione: "Apri workspace" },
   in_esecuzione: { tono: "run", etichetta: "In lavorazione", azione: "Apri workspace" },
-  in_pausa: { tono: "attn", etichetta: "In pausa", azione: "Apri workspace" },
+  interrotta: { tono: "attn", etichetta: "Interrotto", azione: "Apri workspace" },
   completata: { tono: "ok", etichetta: "Completato", azione: "Apri documento" },
   da_rivedere: { tono: "attn", etichetta: "Da approvare", azione: "Rivedi" },
   errore: { tono: "crit", etichetta: "Errore", azione: "Diagnostica" },
@@ -31,7 +31,6 @@ const STATO_DEL: Record<string, { tono: Tono; etichetta: string; azione: string 
 /** Stato mostrato: quello del backend (script + coda), più «individuato»
     finché la produzione è chiusa e il deliverable non è mai partito. */
 const statoDel = (d: Deliverable, chiusa: boolean) => {
-  if (d.job?.in_pausa) return STATO_DEL.in_pausa
   if ((!d.stato || d.stato === "da_eseguire") && chiusa) return STATO_DEL.individuato
   return STATO_DEL[d.stato || ""] || STATO_DEL.da_eseguire
 }
@@ -65,7 +64,7 @@ function CardDeliverable({ d, onAvvia, onRiesegui, blocco }: { d: Deliverable; o
   return (
     <article className="flex flex-col gap-2.5 rounded-lg border bg-card p-3.5">
       <div className="flex items-center justify-between gap-2">
-        <BadgeStato tono={st.tono} pulsa={d.stato === "in_esecuzione" && !d.job?.in_pausa}>{st.etichetta}</BadgeStato>
+        <BadgeStato tono={st.tono} pulsa={d.stato === "in_esecuzione"}>{st.etichetta}</BadgeStato>
         <span className="font-mono text-micro text-muted-foreground">{d.id}</span>
       </div>
       <Link to={`deliverable/${encodeURIComponent(d.id)}`} className="rounded-sm">
@@ -83,11 +82,19 @@ function CardDeliverable({ d, onAvvia, onRiesegui, blocco }: { d: Deliverable; o
   )
 }
 
-/** Avvia/Riesegui, o pausa se gira. Con la produzione chiusa il pulsante
-    resta visibile ma disattivato, col motivo: la scheda si consulta lo stesso. */
+/** Avvia/Riesegui, Interrompi se gira o è in coda, Riprendi se interrotto.
+    Con la produzione chiusa il pulsante resta visibile ma disattivato, col
+    motivo: la scheda si consulta lo stesso. */
 function AzioneDeliverable({ d, blocco, onAvvia, onRiesegui }: { d: Deliverable; blocco: string | null; onAvvia: () => void; onRiesegui: () => void }) {
-  if (d.job?.stato === "in_esecuzione") return <ControlloPausa job={d.job} compatto />
+  if (d.job) return <ControlloInterruzione job={d.job} compatto />
   if (inCorso(d)) return <Button size="sm" variant="outline" disabled title="Il deliverable è in coda: parte appena il worker è libero.">In coda</Button>
+  // «Esegui» su un deliverable interrotto ne riprende la sessione.
+  if (d.stato === "interrotta") return (
+    <>
+      <Button size="sm" variant="outline" disabled={!!blocco} title="Riparte dall'inizio: il contenuto già prodotto viene archiviato" onClick={onRiesegui}>Da capo</Button>
+      <Button size="sm" disabled={!!blocco} title="Continua da dove si era fermato" onClick={onAvvia}>Riprendi</Button>
+    </>
+  )
   if (!d.stato || d.stato === "da_eseguire") return <Button size="sm" disabled={!!blocco} title={blocco || undefined} onClick={onAvvia}>Avvia</Button>
   return <Button size="sm" variant="outline" disabled={!!blocco} title={blocco || undefined} onClick={onRiesegui}>Riesegui</Button>
 }

@@ -41,18 +41,21 @@ Endpoint implementati: `GET/POST /gare`, `GET /gare/{slug}`,
 Aggiunti dopo:
 
 - `POST /sistema/prezzari/carica` — prezzario da file PriMus (.dcf).
-- `POST /gare/{slug}/job/{id}/{pausa|riprendi}` — pausa reale di
-  un'attività in esecuzione: l'API registra la richiesta
-  (`job.pausa_richiesta`), il worker sospende o riprende l'intero gruppo
-  di processi (SIGSTOP/SIGCONT) entro 2 secondi e aggiorna `in_pausa`. Il
-  tempo in pausa non conta nel limite di 2 ore. Una pausa molto lunga può
-  far cadere la connessione con Claude: la fase va allora in errore.
+- `POST /gare/{slug}/job/{id}/interrompi` — «Interrompi» una fase o un
+  deliverable. In coda: il job diventa `annullato`. In esecuzione: l'API
+  segna `job.interruzione_richiesta`, il worker termina il gruppo di
+  processi con SIGTERM entro 2 secondi, lo script registra il run
+  `interrotto` e la fase/il deliverable `interrotta`. Ogni run è una
+  sessione di Claude Code con id = run_id: rieseguirla con `esegui`
+  riprende quella sessione (`claude --resume`) e continua da dove si era
+  fermata; `riesegui` riparte da capo. Lo stesso vale se SPADA viene
+  fermato durante un'esecuzione.
 - `POST /gare/{slug}/assistente/stream` — risposta dell'assistente in
   streaming (NDJSON), modalità `rapida` o `approfondita`. Gli eventi
   `stato` vengono dagli strumenti che l'assistente usa davvero; il
   ragionamento interno del modello non viene inoltrato.
 - `GET /gare/{slug}/deliverables` porta anche lo stato della coda
-  (`in_coda`, `in_esecuzione`, `job.in_pausa`).
+  (`in_coda`, `in_esecuzione`, `job.interruzione_richiesta`).
 
 `POST /gare/{slug}/assistente` risponde `501`: il contratto dati è
 pronto (persiste il messaggio in `conversazioni`), l'esecuzione read-only
@@ -70,6 +73,8 @@ alla volta, **globale**, non per-gara — il worker verifica che nessun
 job sia `in_esecuzione` prima di prelevarne uno nuovo, qualunque gara).
 All'avvio marca `errore` ogni job trovato `in_esecuzione` (residuo di
 un crash o riavvio precedente): mai ripreso a metà automaticamente.
+Un job interrotto («Interrompi», o worker fermato con SIGTERM) invece si
+riprende da dove era quando l'operatore lo riesegue.
 
 ## Livello di autenticazione Claude (`backend/auth.py`)
 

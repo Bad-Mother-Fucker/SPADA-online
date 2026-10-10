@@ -7,7 +7,7 @@ import { useArricchimento } from "@/hooks/useGare"
 import type { Gara } from "@/lib/api"
 import { plurale, quandoRelativo, scadenza as formattaScadenza } from "@/lib/formato"
 import { cn } from "@/lib/utils"
-import { FASI, STATO_GARA, corpoFase, fase, faseCorrente, garaInPausa, segmenti, statoFase, statoGara } from "@/dominio/fasi"
+import { FASI, STATO_GARA, corpoFase, fase, faseCorrente, segmenti, statoFase, statoGara } from "@/dominio/fasi"
 
 /** Ultimo momento in cui è successo qualcosa su questa gara. */
 export function ultimoMovimento(g: Gara): string | null {
@@ -26,6 +26,9 @@ export function avvisoGara(g: Gara, adesso = Date.now()): { testo: string; tono:
   const fasi = g.fasi || {}
   for (let n = 1; n <= FASI.length; n++) {
     if (statoFase(fasi, n) === "errore") return { testo: `errore in Fase ${n}`, tono: "crit" }
+  }
+  for (let n = 1; n <= FASI.length; n++) {
+    if (statoFase(fasi, n) === "interrotta") return { testo: `Fase ${n} interrotta, da riprendere`, tono: "attn" }
   }
   for (let n = 1; n <= FASI.length; n++) {
     if (statoFase(fasi, n) === "da_rivedere") {
@@ -63,7 +66,7 @@ export function CardGara({ gara, onElimina, inEliminazione }: { gara: Gara; onEl
       )}
     >
       <div className="flex items-center justify-between gap-3">
-        {garaInPausa(fasi) ? <BadgeStato tono="attn">In pausa</BadgeStato> : <BadgeStato tono={meta.tono} pulsa={st === "in_esecuzione"}>{meta.etichetta}</BadgeStato>}
+        <BadgeStato tono={meta.tono} pulsa={st === "in_esecuzione"}>{meta.etichetta}</BadgeStato>
         <span className="min-w-0 truncate font-mono text-micro text-muted-foreground" title={gara.slug}>{gara.slug}</span>
       </div>
 

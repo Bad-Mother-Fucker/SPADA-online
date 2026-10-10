@@ -2,18 +2,15 @@
 // dominio.js del frontend precedente, oggi rimosso. Le viste non devono mai conoscere le chiavi
 // della pipeline: la mappa sta qui, in un posto solo.
 
-export type StatoFase = "completata" | "da_rivedere" | "in_esecuzione" | "errore" | "in_coda"
+export type StatoFase = "completata" | "da_rivedere" | "in_esecuzione" | "interrotta" | "errore" | "in_coda"
 export type StatoGara = StatoFase
 
 /** Job della coda sovrapposto dal backend (routers/gare.py::_fasi_con_job):
     c'è finché la fase è accodata o gira. "in_coda" = in avvio. */
 export interface JobFase {
   id: number; stato: "in_coda" | "in_esecuzione"; creato_il?: string; iniziato_il?: string | null; deliverable_id?: string | null
-  /** Pausa reale: il worker ha sospeso i processi del job (SIGSTOP). */
-  in_pausa?: boolean
-  /** Richiesta registrata e non ancora applicata dal worker (pochi secondi). */
-  pausa_richiesta?: "pausa" | "riprendi" | null
-  pausa_dal?: string | null
+  /** «Interrompi» chiesto e non ancora applicato dal worker (pochi secondi). */
+  interruzione_richiesta?: boolean
 }
 
 export interface CorpoFase {
@@ -66,6 +63,7 @@ export const STATO: Record<StatoFase, { tono: Tono; etichetta: string; breve: st
   completata:    { tono: "ok",   etichetta: "Completata",               breve: "completata" },
   da_rivedere:   { tono: "attn", etichetta: "Richiede la tua decisione", breve: "da rivedere" },
   in_esecuzione: { tono: "run",  etichetta: "In esecuzione",            breve: "in esecuzione" },
+  interrotta:    { tono: "attn", etichetta: "Interrotta",               breve: "interrotta" },
   errore:        { tono: "crit", etichetta: "Errore",                   breve: "errore" },
   in_coda:       { tono: "neu",  etichetta: "Non ancora eseguita",      breve: "in coda" },
 }
@@ -74,6 +72,7 @@ export const STATO: Record<StatoFase, { tono: Tono; etichetta: string; breve: st
 export const STATO_GARA: Record<StatoGara, { tono: Tono; etichetta: string }> = {
   da_rivedere:   { tono: "attn", etichetta: "Da rivedere" },
   in_esecuzione: { tono: "run",  etichetta: "In esecuzione" },
+  interrotta:    { tono: "attn", etichetta: "Interrotta" },
   completata:    { tono: "ok",   etichetta: "Completata" },
   errore:        { tono: "crit", etichetta: "Errore" },
   in_coda:       { tono: "neu",  etichetta: "In coda" },
@@ -105,16 +104,6 @@ export function statoFase(fasi: Fasi | null | undefined, n: number): StatoFase {
   // decisione, e l'interfaccia deve dirlo con il colore dell'attenzione.
   if (c.richiede_approvazione) return "da_rivedere"
   return normalizzaStato(c.stato)
-}
-
-/** La fase sta girando ma il suo lavoro è sospeso. */
-export function inPausa(fasi: Fasi | null | undefined, n: number): boolean {
-  return !!corpoFase(fasi, n)?.job?.in_pausa
-}
-
-/** Qualche fase della gara è in pausa (c'è un solo job in esecuzione alla volta). */
-export function garaInPausa(fasi: Fasi | null | undefined): boolean {
-  return FASI.some((f) => inPausa(fasi, f.n))
 }
 
 /** La fase è stata accodata ma il worker non l'ha ancora presa. */
@@ -171,6 +160,7 @@ export function statoGara(fasi: Fasi | null | undefined): StatoGara {
   if (stati.includes("errore")) return "errore"
   if (stati.includes("da_rivedere")) return "da_rivedere"
   if (stati.includes("in_esecuzione")) return "in_esecuzione"
+  if (stati.includes("interrotta")) return "interrotta"
   if (stati.every((s) => s === "completata")) return "completata"
   return "in_coda"
 }
