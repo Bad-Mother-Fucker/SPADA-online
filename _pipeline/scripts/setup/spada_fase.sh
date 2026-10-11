@@ -120,11 +120,26 @@ else:
     corpo["conclusa_il"] = now
 if stato == "completata":
     corpo["richiede_approvazione"] = False
-    # I deliverable già scritti non conoscevano queste decisioni.
-    f7 = fasi["fasi"].get("7_stesura_offerta", {})
-    if f7.get("stato") not in (None, "da_eseguire"):
-        f7["stato"] = "da_rivedere"
-        f7["sintesi"] = "Da rivedere: la revisione delle proposte (Fase 6) è stata confermata dopo questi deliverable."
+    # La Fase 7 non parte: i suoi deliverable si sbloccano e si avviano
+    # uno per uno. Quelli già scritti non conoscevano queste decisioni:
+    # tornano «da rivedere» (vanno rieseguiti), non si cancellano.
+    try:
+        with open("_state/deliverables.json") as f:
+            dl = json.load(f)
+    except (OSError, ValueError):
+        dl = {}
+    vecchi = [k for k, v in dl.items() if v.get("stato") == "completata"]
+    for k in vecchi:
+        dl[k]["stato"] = "da_rivedere"
+        dl[k]["nota"] = "Scritto prima della conferma della revisione delle proposte: va rieseguito."
+    if dl:
+        with open("_state/deliverables.json", "w") as f:
+            json.dump(dl, f, ensure_ascii=False, indent=2)
+    f7 = fasi["fasi"].setdefault("7_stesura_offerta", {})
+    f7["stato"] = "da_eseguire"
+    f7.pop("conclusa_il", None)
+    f7["sintesi"] = ("Deliverable sbloccati: si avviano uno per uno."
+                     + (f" {len(vecchi)} già scritti prima della conferma vanno rieseguiti." if vecchi else ""))
 with open("_state/fasi.json", "w") as f:
     json.dump(fasi, f, ensure_ascii=False, indent=2)
 PY
@@ -217,8 +232,9 @@ PY
   done
 
   python3 "$DECISIONI_PY" memoria "$GARA_DIR" "$SPADA_DB_PATH" || warn "Memoria di gara non aggiornata con la Fase 6."
-  segna_fase6 completata "Revisione confermata: decisioni elaborate nel grafo, nei registri e nel brief."
-  info "Fase 6 completata: revisione delle proposte confermata. La Fase 7 si avvia a parte."
+  python3 "$DECISIONI_PY" vincoli "$GARA_DIR" "$SPADA_DB_PATH" || warn "Sezione B di vincoli_offerta_tecnica.md non compilata."
+  segna_fase6 completata "Revisione confermata: decisioni elaborate nel grafo, nei registri e nel brief; Sezione B dei vincoli compilata."
+  info "Fase 6 completata: revisione delle proposte confermata. I deliverable della Fase 7 si avviano uno per uno."
   exit 0
 fi
 

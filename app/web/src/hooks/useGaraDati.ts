@@ -5,7 +5,7 @@
 
 import { useMutation, useMutationState, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Api, ApiError, type DettaglioGara, type Documento as DocumentoApi, type Manifest, type StatoPrezzario } from "@/lib/api"
+import { Api, ApiError, type NuovaPropostaProfessionista, type DettaglioGara, type Documento as DocumentoApi, type Manifest, type StatoPrezzario } from "@/lib/api"
 import type { Fasi, JobFase } from "@/dominio/fasi"
 import * as Md from "@/lib/md"
 import { comeApiError } from "@/lib/risorsa"
@@ -22,6 +22,7 @@ export const chiaviGara = {
   grafo: (slug: string) => ["gara", slug, "grafo"] as const,
   runLog: (slug: string) => ["gara", slug, "run-log"] as const,
   proposteOperatore: (slug: string) => ["gara", slug, "proposte-operatore"] as const,
+  proposteProfessionista: (slug: string) => ["gara", slug, "proposte-professionista"] as const,
   proposta: (slug: string, id: string) => ["gara", slug, "proposta", id] as const,
   approvazioni: (slug: string, fase: number) => ["gara", slug, "approvazioni", fase] as const,
   domande: (slug: string) => ["gara", slug, "domande"] as const,
@@ -270,8 +271,26 @@ export function useRegistraDecisione(slug: string) {
   return useMutation({
     mutationFn: (v: { id: string; decisione: Md.Decisione; nota?: string | null }) =>
       Api.registraApprovazione(slug, { fase: 6, tipo: "proposta", riferimento: v.id, decisione: v.decisione, nota: v.nota || null }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: chiaviGara.approvazioni(slug, 6) }),
+    // Una decisione cambiata dopo la conferma riapre la Fase 6: anche lo stato delle fasi cambia.
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: chiaviGara.approvazioni(slug, 6) })
+      void qc.invalidateQueries({ queryKey: chiaviGara.dettaglio(slug) })
+    },
   })
+}
+
+export function useProposteProfessionista(slug: string, attivo = true) {
+  return useQuery({ queryKey: chiaviGara.proposteProfessionista(slug), queryFn: ({ signal }) => Api.elencoProposteProfessionista(slug, { signal }), enabled: attivo })
+}
+export function useAzioniPropostaProfessionista(slug: string) {
+  const qc = useQueryClient()
+  const aggiorna = () => {
+    void qc.invalidateQueries({ queryKey: chiaviGara.proposteProfessionista(slug) })
+    void qc.invalidateQueries({ queryKey: chiaviGara.dettaglio(slug) })
+  }
+  const crea = useMutation({ mutationFn: (body: NuovaPropostaProfessionista) => Api.creaPropostaProfessionista(slug, body), onSuccess: aggiorna })
+  const elimina = useMutation({ mutationFn: (id: string) => Api.eliminaPropostaProfessionista(slug, id), onSuccess: aggiorna })
+  return { crea, elimina }
 }
 
 /** Salva la bozza (solo le risposte cambiate e le indicazioni): non invia. */

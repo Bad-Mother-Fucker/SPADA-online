@@ -83,6 +83,17 @@ class ProposaOperatoreRequest(BaseModel):
     descrizione: str
 
 
+class PropostaProfessionistaRequest(BaseModel):
+    """Fase 6 — proposta scritta dal professionista, approvata per
+    definizione: alla conferma entra nel Cx_output.md del criterio e
+    feedback-processor ne fa un nodo del grafo."""
+    criterio: str = Field(pattern=r"^C[0-9]+$")
+    sottocriterio: Optional[str] = Field(default=None, pattern=r"^C[0-9]+\.[0-9]+$")
+    gap_id: Optional[str] = Field(default=None, pattern=r"^G-C[0-9]+-[0-9]+$")
+    titolo: str = Field(min_length=3, max_length=200)
+    descrizione: str = Field(min_length=10, max_length=8000)
+
+
 class InterventoRequest(BaseModel):
     """Sprint 10.4 — chat a controllo pieno, scoped alla sola directory
     della gara. A differenza di AssistenteRequest (sola lettura)."""

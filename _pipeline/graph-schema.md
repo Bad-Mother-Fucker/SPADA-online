@@ -222,6 +222,7 @@ criterio: "[[C1]]"
 sottocriterio: "C1.2"
 titolo: "[titolo proposta]"
 stato: approvata             # approvata | approvata_con_modifiche
+origine: sistema             # sistema | professionista (scritta dal professionista in Fase 6: evidence_documents vuoto, confidence TBD)
 confidence: verificato       # forza dell'evidenza a supporto della proposta
 punteggio_stimato: 4         # confidence: inferito
 evidence_documents:

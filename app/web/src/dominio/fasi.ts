@@ -47,7 +47,7 @@ export const FASI: readonly Fase[] = [
   { n: 6, num: "06", chiave: "6_revisione_proposte", titolo: "Revisione proposte", kicker: "Fase 6, checkpoint umano", testata: "Revisione delle proposte tecniche",
     sottotitolo: "Decisione proposta per proposta: approvate entrano nei deliverable, rimandate tornano agli agenti con la tua nota, scartate restano nello storico." },
   { n: 7, num: "07", chiave: "7_stesura_offerta", titolo: "Deliverables", kicker: "Fase 7, deliverables", testata: "Deliverable richiesti",
-    sottotitolo: "Elenco ricavato dal disciplinare di questa gara, non un modello fisso. Ogni deliverable ha agente e skill propri e può girare in parallelo." },
+    sottotitolo: "Elenco ricavato dal disciplinare di questa gara, non un modello fisso. Si sbloccano a revisione delle proposte confermata e ognuno si avvia, si segue e si interrompe per conto suo." },
   { n: 8, num: "08", chiave: "8_approvazione_finale", titolo: "Audit e consegna", kicker: "Fase 8, audit di consegna", testata: "Audit formale del plico",
     sottotitolo: "Verifica di completezza e consegnabilità, non una seconda verifica delle prove, già svolta in Fase 5 e 6." },
 ]
@@ -114,6 +114,9 @@ export function inAvvio(fasi: Fasi | null | undefined, n: number): boolean {
 /** Ogni fase sblocca la successiva. Stesso vincolo applicato dal backend. */
 export function sbloccata(fasi: Fasi | null | undefined, n: number): boolean {
   if (n <= 1) return true
+  // I deliverable dipendono dalle decisioni della Fase 6, e uno stato
+  // rimasto appeso sulla Fase 7 non deve bastare ad aprirli.
+  if (n === 7) return statoFase(fasi, 6) === "completata"
   if (statoFase(fasi, n) !== "in_coda") return true
   return statoFase(fasi, n - 1) === "completata"
 }
@@ -139,6 +142,9 @@ export function deliverablesIndividuati(manifest?: Record<string, unknown> | nul
 /** Perché la fase n è chiusa, in una frase: null se è aperta. */
 export function motivoBlocco(fasi: Fasi | null | undefined, n: number): string | null {
   if (sbloccata(fasi, n)) return null
+  if (n === 7) return statoFase(fasi, 6) === "in_esecuzione"
+    ? "Si sblocca quando la conferma delle decisioni della Fase 6 ha finito di aggiornare grafo e registri."
+    : "Si sblocca quando confermi le decisioni della Fase 6 (Revisione proposte) e la loro elaborazione è conclusa."
   const prec = fase(n - 1)
   return statoFase(fasi, n - 1) === "da_rivedere"
     ? `Si sblocca quando approvi il checkpoint della Fase ${n - 1} (${prec.titolo}).`

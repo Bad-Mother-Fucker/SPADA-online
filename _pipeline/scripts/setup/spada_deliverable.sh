@@ -143,14 +143,12 @@ stato[deliverable_id] = {
 with open("_state/deliverables.json", "w") as f:
     json.dump(stato, f, ensure_ascii=False, indent=2)
 
-# Fase 7 nel suo insieme e' "in_esecuzione" finche' almeno un
-# deliverable e' in corso o da eseguire, indipendentemente da quanti
-# altri sono gia' completati.
+# Lo stato della Fase 7 non si tocca qui: che un deliverable giri lo
+# dice la coda dei job (il backend lo sovrappone a fasi.json). Scritto
+# qui, restava «in_esecuzione» per sempre se il processo veniva ucciso.
 with open("_state/fasi.json") as f:
     fasi = json.load(f)
-fasi["fase_corrente"] = 6
-fasi["fasi"]["7_stesura_offerta"]["stato"] = "in_esecuzione"
-fasi["fasi"]["7_stesura_offerta"]["sintesi"] = f"Deliverable in esecuzione: {deliverable_id} ({agente})."
+fasi["fase_corrente"] = 7
 with open("_state/fasi.json", "w") as f:
     json.dump(fasi, f, ensure_ascii=False, indent=2)
 PY
@@ -259,9 +257,11 @@ stati = [stato.get(i, {}).get("stato", "da_eseguire") for i in tutti_gli_id]
 if tutti_gli_id and all(s == "completata" for s in stati):
     fase6_stato = "completata"
     sintesi = f"Tutti i {len(tutti_gli_id)} deliverable completati."
-elif any(s in ("da_eseguire", "in_esecuzione", "interrotta") for s in stati):
+elif any(s in ("da_eseguire", "in_esecuzione", "interrotta", "da_rivedere") for s in stati):
+    # Altri deliverable da avviare: la fase non «gira» (ogni deliverable
+    # ha il suo job, e quello in corso lo mostra la coda), è da eseguire.
     n_fatti = sum(1 for s in stati if s == "completata")
-    fase6_stato = "in_esecuzione"
+    fase6_stato = "da_eseguire"
     sintesi = f"{n_fatti}/{len(tutti_gli_id)} deliverable completati."
 else:
     fase6_stato = "errore"

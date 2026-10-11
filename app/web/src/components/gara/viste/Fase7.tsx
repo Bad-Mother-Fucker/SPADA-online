@@ -25,7 +25,7 @@ const STATO_DEL: Record<string, { tono: Tono; etichetta: string; azione: string 
   in_esecuzione: { tono: "run", etichetta: "In lavorazione", azione: "Apri workspace" },
   interrotta: { tono: "attn", etichetta: "Interrotto", azione: "Apri workspace" },
   completata: { tono: "ok", etichetta: "Completato", azione: "Apri documento" },
-  da_rivedere: { tono: "attn", etichetta: "Da approvare", azione: "Rivedi" },
+  da_rivedere: { tono: "attn", etichetta: "Da aggiornare", azione: "Apri workspace" },
   errore: { tono: "crit", etichetta: "Errore", azione: "Diagnostica" },
 }
 /** Stato mostrato: quello del backend (script + coda), più «individuato»
@@ -96,7 +96,37 @@ function AzioneDeliverable({ d, blocco, onAvvia, onRiesegui }: { d: Deliverable;
     </>
   )
   if (!d.stato || d.stato === "da_eseguire") return <Button size="sm" disabled={!!blocco} title={blocco || undefined} onClick={onAvvia}>Avvia</Button>
+  // Scritto prima della conferma della Fase 6: non conosce le decisioni.
+  if (d.stato === "da_rivedere") return <Button size="sm" disabled={!!blocco} title={blocco || "Scritto prima della conferma delle decisioni: va rifatto"} onClick={onRiesegui}>Riesegui</Button>
   return <Button size="sm" variant="outline" disabled={!!blocco} title={blocco || undefined} onClick={onRiesegui}>Riesegui</Button>
+}
+
+/** Al posto di «Avvia la fase»: la Fase 7 non si esegue in blocco. Dice
+    cosa è sbloccato, cosa è prodotto e cosa gira adesso, con Interrompi. */
+function RiepilogoDeliverable({ lista, blocco }: { lista: Deliverable[]; blocco: string | null }) {
+  const fatti = lista.filter((d) => d.stato === "completata").length
+  const daRifare = lista.filter((d) => d.stato === "da_rivedere" || d.stato === "errore").length
+  const attivi = lista.filter((d) => d.job || inCorso(d))
+  if (blocco) return <Nota tono="neu" titolo="Produzione bloccata">{blocco}</Nota>
+  return (
+    <div className="space-y-3">
+      <Kv voci={[["Prodotti", `${fatti} / ${lista.length}`, true], daRifare ? ["Da rifare", String(daRifare), true] : null]} />
+      {attivi.length ? (
+        <ul className="space-y-2" aria-label="Deliverable in corso">
+          {attivi.map((d) => (
+            <li key={d.id} className="space-y-1.5 rounded-md border p-2">
+              <div className="flex items-center gap-2 text-xs">
+                <BadgeStato tono="run" pulsa={d.stato === "in_esecuzione"}>{d.stato === "in_esecuzione" ? "In lavorazione" : "In coda"}</BadgeStato>
+                <Link to={`deliverable/${encodeURIComponent(d.id)}`} className="min-w-0 flex-1 truncate font-medium">{d.nome || d.id}</Link>
+              </div>
+              {d.job && <ControlloInterruzione job={d.job} compatto className="w-full" />}
+            </li>
+          ))}
+        </ul>
+      ) : <p className="text-micro text-muted-foreground">Nessun deliverable in lavorazione.</p>}
+      <p className="text-micro text-muted-foreground">Ogni deliverable si avvia dal suo pulsante nell'elenco. Il worker li esegue uno alla volta, nell'ordine in cui li avvii; ognuno si interrompe per conto suo e riprende da dove si era fermato.</p>
+    </div>
+  )
 }
 
 export function Fase7Elenco() {
@@ -104,15 +134,14 @@ export function Fase7Elenco() {
   const blocco = motivoBlocco(gara.fasi, 7)
   const q = useDeliverables(slug)
   const r = risorsa(q, { vuoto: (l) => l.length === 0, percorso: `/gare/${slug}/deliverables` })
-  const { avvia, riesegui, dialogo, inCorso } = useAzioniDeliverable()
+  const { avvia, riesegui, dialogo } = useAzioniDeliverable()
   const lista = q.data || []
-  const pronti = blocco ? [] : lista.filter((d) => !d.stato || d.stato === "da_eseguire")
   return (
-    <Split aside={<PannelloFase n={7} />}>
+    <Split aside={<PannelloFase n={7} azioni={<RiepilogoDeliverable lista={lista} blocco={blocco} />} />}>
       {r.stato === "caricamento" && <Scheletro righe={5} />}
       {r.stato === "errore" && r.errore && <StatoErrore titolo="Elenco dei deliverable non leggibile" errore={r.errore} percorso={`/gare/${slug}/deliverables`} onRiprova={r.riprova} />}
       {r.stato === "assente" && <Card><VuotoInline titolo="Questa vista richiede un backend più recente" testo="Il servizio non espone i deliverable per tipo. Riavvia l'app con ./spada riavvia per caricare il backend aggiornato." /></Card>}
-      {r.stato === "vuoto" && <Card><VuotoInline titolo="Nessun deliverable richiesto" testo="L'elenco è ricavato dal manifesto della gara, che la pipeline compila in Fase 3. Non è un modello fisso: dipende da cosa chiede questo disciplinare. L'azione per questa fase è nel pannello a destra." /></Card>}
+      {r.stato === "vuoto" && <Card><VuotoInline titolo="Nessun deliverable richiesto" testo="L'elenco è ricavato dal manifesto della gara, che la pipeline compila in Fase 3. Non è un modello fisso: dipende da cosa chiede questo disciplinare." /></Card>}
       {r.stato === "ok" && (
         <>
           {blocco && (
@@ -120,9 +149,8 @@ export function Fase7Elenco() {
               L'analisi del disciplinare ha individuato i deliverable richiesti: puoi leggerli e aprirne le schede. {blocco.replace(/^Si sblocca/, "La produzione si sblocca")}
             </Nota>
           )}
-          <Card className="flex flex-wrap items-center justify-between gap-3">
-            <p className="min-w-0 flex-1 text-sm text-foreground-2">L'elenco è ricavato dal disciplinare di questa gara, non è un modello fisso: sono richiesti <b className="font-semibold text-foreground">{plurale(lista.length, "deliverable", "deliverable")}</b>. Ognuno ha agente e skill propri e può essere avviato per conto suo.</p>
-            {pronti.length > 0 && <Button disabled={inCorso} onClick={() => avvia(pronti.map((d) => d.id))}>{pronti.length === 1 ? "Avvia il deliverable pronto" : `Avvia i ${pronti.length} pronti`}</Button>}
+          <Card>
+            <p className="text-sm text-foreground-2">L'elenco è ricavato dal disciplinare di questa gara, non è un modello fisso: sono richiesti <b className="font-semibold text-foreground">{plurale(lista.length, "deliverable", "deliverable")}</b>. Ognuno ha agente e skill propri e si avvia, si segue e si interrompe per conto suo: non c'è un avvio di tutta la fase.</p>
           </Card>
           <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr))]">
             {lista.map((d) => <CardDeliverable key={d.id} d={d} blocco={blocco} onAvvia={() => avvia([d.id])} onRiesegui={() => riesegui(d.id)} />)}

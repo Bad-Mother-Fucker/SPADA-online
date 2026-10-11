@@ -105,7 +105,7 @@ export function BottoneScelta({ attivo, tono, className, children, ...props }: {
       type="button"
       aria-pressed={attivo}
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors duration-(--d-fast)",
+        "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors duration-(--d-fast) disabled:pointer-events-none disabled:opacity-50",
         attivo ? attivoClasse[tono || "neu"] : "border-border-strong bg-card text-foreground-2 hover:bg-muted hover:text-foreground",
         className,
       )}

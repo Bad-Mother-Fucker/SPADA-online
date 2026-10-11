@@ -19,7 +19,7 @@ from models import (
     AssistenteStreamRequest,
     ApprovazioneRequest, AssistenteRequest, BozzaDomandeRequest, CreaGaraRequest,
     IntegraDocumentoRequest, InformazioneProfessionistaRequest, InterventoRequest,
-    ProposaOperatoreRequest,
+    ProposaOperatoreRequest, PropostaProfessionistaRequest,
 )
 from paths import DB_PATH, PIPELINE_DIR, SlugNonValido, gara_dir, percorso_sotto_gara, valida_slug
 
@@ -348,7 +348,7 @@ def _corpo_fase(fasi: dict, n: int) -> dict:
     return next((v for k, v in fasi.items() if k.startswith(f"{n}_")), {})
 
 
-def _verifica_sequenza(d: Path, fase: int, tipo: str):
+def _verifica_sequenza(d: Path, fase: int, tipo: str, deliverable_id: str | None = None):
     """Ogni fase sblocca la successiva (stessa regola di
     Dominio.sbloccata nel frontend): si esegue la fase n solo con la n-1
     completata e, se è un checkpoint, approvata. I checkpoint di 6 e 8
@@ -367,6 +367,12 @@ def _verifica_sequenza(d: Path, fase: int, tipo: str):
         if not chiusa(fase - 1):
             raise HTTPException(409, f"Il checkpoint della Fase {fase} si sblocca al completamento della Fase {fase - 1} ({NOMI_FASI_UI[fase - 1]}).")
         return
+    if fase == 7 and deliverable_id is None:
+        raise HTTPException(409, "La Fase 7 non si avvia in blocco: ogni deliverable si avvia, "
+                                 "si segue e si interrompe per conto suo dall'elenco dei deliverable.")
+    if fase == 7 and not chiusa(6):
+        raise HTTPException(409, "I deliverable si sbloccano quando confermi le decisioni della Fase 6 "
+                                 "(Revisione proposte) e la loro elaborazione nel grafo è conclusa.")
     if fase > 1 and not chiusa(fase - 1):
         prec = _corpo_fase(fasi, fase - 1)
         motivo = ("quando approvi il checkpoint" if prec.get("richiede_approvazione")
@@ -385,7 +391,7 @@ def _accoda_job(slug: str, fase: int, tipo: str, deliverable_id: str | None = No
     if not (1 <= fase <= 8):
         raise HTTPException(400, "fase deve essere 1-8")
     if operazione is None:
-        _verifica_sequenza(d, fase, tipo)
+        _verifica_sequenza(d, fase, tipo, deliverable_id)
         # Un secondo clic su «Avvia» non deve accodare un secondo job: la
         # stessa fase (o lo stesso deliverable) eseguita due volte di fila
         # costa due volte e scrive due volte sugli stessi file.
@@ -647,6 +653,48 @@ def crea_proposta_operatore(slug: str, body: ProposaOperatoreRequest):
     return {"id": proposta_id, "creato": True}
 
 
+# ── Fase 6 — proposte scritte dal professionista ────────────────────
+# Fonte di verità: output/06_registers/proposte_professionista.json
+# (decisioni_proposte.py). Approvate per definizione: alla conferma
+# diventano schede del loro Cx_output.md e poi nodi del grafo.
+def _con_stato_propria(d: Path, p: dict) -> dict:
+    return {**p, "elaborata": decisioni_proposte.elaborata(d, p["id"])}
+
+
+@router.get("/{slug}/proposte-professionista")
+def elenco_proposte_professionista(slug: str):
+    d = _gara_o_404(slug)
+    return [_con_stato_propria(d, p) for p in decisioni_proposte.proposte_proprie(d)]
+
+
+@router.post("/{slug}/proposte-professionista", status_code=201)
+def crea_proposta_professionista(slug: str, body: PropostaProfessionistaRequest):
+    d = _gara_o_404(slug)
+    if not (d / "output" / "05_criteria_outputs" / f"{body.criterio}_output.md").is_file():
+        raise HTTPException(409, f"Il criterio {body.criterio} non ha ancora una scheda di analisi (Fase 5): "
+                                 "la proposta non avrebbe dove essere scritta.")
+    if body.sottocriterio and not body.sottocriterio.startswith(body.criterio + "."):
+        raise HTTPException(422, f"Il sottocriterio {body.sottocriterio} non appartiene al criterio {body.criterio}.")
+    _conferma_fase6_in_corso(slug)
+    voce = decisioni_proposte.aggiungi_propria(d, body.criterio, body.sottocriterio, body.gap_id,
+                                               body.titolo, body.descrizione)
+    _riapri_fase6(d, f"Aggiunta la proposta {voce['id']} dopo la conferma.")
+    return _con_stato_propria(d, voce)
+
+
+@router.delete("/{slug}/proposte-professionista/{proposta_id}", status_code=204)
+def elimina_proposta_professionista(slug: str, proposta_id: str):
+    d = _gara_o_404(slug)
+    if not PROPOSTA_ID_RE.match(proposta_id):
+        raise HTTPException(400, f"id proposta non valido: {proposta_id!r}")
+    _conferma_fase6_in_corso(slug)
+    if decisioni_proposte.elaborata(d, proposta_id):
+        raise HTTPException(409, f"{proposta_id} è già un nodo del grafo: per toglierla dall'offerta scartala.")
+    if not decisioni_proposte.elimina_propria(d, proposta_id):
+        raise HTTPException(404, f"Proposta {proposta_id} non trovata fra quelle del professionista.")
+    _riapri_fase6(d, f"Tolta la proposta {proposta_id} dopo la conferma.")
+
+
 @router.get("/{slug}/output")
 def elenco_output(slug: str):
     d = _gara_o_404(slug)
@@ -685,9 +733,42 @@ def elenco_approvazioni(slug: str, fase: int | None = None):
         return [dict(r) for r in con.execute(query + " ORDER BY id", parametri).fetchall()]
 
 
+def _conferma_fase6_in_corso(slug: str):
+    with get_conn() as con:
+        if con.execute("SELECT 1 FROM job WHERE gara_slug=? AND fase=6 AND tipo='approva' "
+                       "AND stato IN ('in_coda','in_esecuzione')", (slug,)).fetchone():
+            raise HTTPException(409, "La conferma delle decisioni è in corso: le modifiche si fanno a conferma conclusa.")
+
+
+def _riapri_fase6(d: Path, motivo: str):
+    """Una decisione cambiata (o una proposta aggiunta o tolta) dopo la
+    conferma non è ancora nel grafo né nei registri: la Fase 6 torna a
+    chiedere la conferma, e i deliverable restano bloccati finché non
+    arriva. Lo stato lo scrive il job alla conferma successiva."""
+    p = d / "_state" / "fasi.json"
+    dati = _leggi_json(p, {})
+    k = next((x for x in dati.get("fasi", {}) if x.startswith("6_")), None)
+    if k is None or dati["fasi"][k].get("stato") != "completata":
+        return
+    dati["fasi"][k].update(stato="da_rivedere", sintesi=f"{motivo} Conferma di nuovo per aggiornare grafo, registri e brief.")
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(dati, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(p)
+
+
 @router.post("/{slug}/approvazioni", status_code=201)
 def registra_approvazione(slug: str, body: ApprovazioneRequest):
-    _gara_o_404(slug)
+    d = _gara_o_404(slug)
+    if body.fase == 6 and body.tipo == "proposta":
+        if body.decisione == "da_modificare" and not (body.nota or "").strip():
+            raise HTTPException(422, "«Da modificare» richiede una nota che dica cosa cambiare.")
+        _conferma_fase6_in_corso(slug)
+        with get_conn() as con:
+            ultima = con.execute(
+                "SELECT decisione, nota FROM approvazioni WHERE gara_slug=? AND fase=6 AND tipo='proposta' "
+                "AND riferimento=? ORDER BY id DESC LIMIT 1", (slug, body.riferimento)).fetchone()
+        if ultima is None or ultima["decisione"] != body.decisione or (ultima["nota"] or "").strip() != (body.nota or "").strip():
+            _riapri_fase6(d, f"Decisione su {body.riferimento} cambiata dopo la conferma.")
     with get_conn() as con:
         cur = con.execute(
             "INSERT INTO approvazioni (gara_slug, fase, tipo, riferimento, decisione, nota, creato_il) "

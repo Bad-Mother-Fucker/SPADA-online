@@ -147,6 +147,10 @@ export interface StatoLoginClaude extends StatoAuth {
   login: { fase: "inattivo" | "in_attesa" | "concluso" | "fallito"; url: string | null; codice_inviato: boolean; messaggio: string }
 }
 
+export interface NuovaPropostaProfessionista { criterio: string; sottocriterio: string | null; gap_id: string | null; titolo: string; descrizione: string }
+/** `elaborata`: è già un nodo del grafo (dopo la conferma), non si toglie più. */
+export interface PropostaProfessionista extends NuovaPropostaProfessionista { id: string; creato_il: string; elaborata: boolean }
+
 export interface ApprovazioneRegistrata {
   riferimento: string | null
   tipo: "direttive" | "proposta" | "offerta"
@@ -278,6 +282,13 @@ export const Api = {
     richiesta<unknown[]>(`/gare/${s(slug)}/proposte-operatore${criterio ? `?criterio=${encodeURIComponent(criterio)}` : ""}`, o),
   creaPropostaOperatore: (slug: string, body: unknown) =>
     richiesta(`/gare/${s(slug)}/proposte-operatore`, { method: "POST", body: JSON.stringify(body) }),
+  /** Fase 6: proposte scritte dal professionista, approvate per definizione. */
+  elencoProposteProfessionista: (slug: string, o?: Opzioni) =>
+    richiesta<PropostaProfessionista[]>(`/gare/${s(slug)}/proposte-professionista`, o),
+  creaPropostaProfessionista: (slug: string, body: NuovaPropostaProfessionista) =>
+    richiesta<PropostaProfessionista>(`/gare/${s(slug)}/proposte-professionista`, { method: "POST", body: JSON.stringify(body) }),
+  eliminaPropostaProfessionista: (slug: string, id: string) =>
+    richiesta<void>(`/gare/${s(slug)}/proposte-professionista/${s(id)}`, { method: "DELETE" }),
   cronologiaInterventi: (slug: string, o?: Opzioni) => richiesta<unknown[]>(`/gare/${s(slug)}/interventi`, o),
   intervieni: (slug: string, messaggio: string) =>
     richiesta(`/gare/${s(slug)}/interventi`, { method: "POST", body: JSON.stringify({ messaggio }), timeoutMs: 600_000 }),
