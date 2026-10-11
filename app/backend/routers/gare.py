@@ -19,7 +19,7 @@ from models import (
     AssistenteStreamRequest,
     ApprovazioneRequest, AssistenteRequest, BozzaDomandeRequest, CreaGaraRequest,
     IntegraDocumentoRequest, InformazioneProfessionistaRequest, InterventoRequest,
-    ProposaOperatoreRequest, PropostaProfessionistaRequest,
+    ProposaOperatoreRequest, PropostaProfessionistaRequest, RichiestaModificheRequest, TestoStadioRequest,
 )
 from paths import DB_PATH, PIPELINE_DIR, SlugNonValido, gara_dir, percorso_sotto_gara, valida_slug
 
@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "_pipeline" / "scri
 import domande as registro_domande  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "_pipeline" / "scripts" / "setup"))
 import decisioni_proposte  # noqa: E402
+import deliverables_offerta  # noqa: E402
 from prezzario import edizioni_installate, regione_canonica, stato_prezzario
 
 router = APIRouter(prefix="/gare", tags=["gare"])
@@ -548,7 +549,7 @@ def elenco_deliverables(slug: str):
     elenco = elenca_deliverables(d)
     with get_conn() as con:
         righe = con.execute(
-            "SELECT id, stato, deliverable_id, interruzione_richiesta FROM job "
+            "SELECT id, stato, deliverable_id, interruzione_richiesta, argomento FROM job "
             "WHERE gara_slug=? AND deliverable_id IS NOT NULL AND stato IN ('in_coda','in_esecuzione') "
             "ORDER BY id", (slug,)).fetchall()
     attivi = {}
@@ -559,7 +560,11 @@ def elenco_deliverables(slug: str):
         if job is None:
             continue
         dl["stato"] = job["stato"]
-        dl["job"] = {"id": job["id"], "stato": job["stato"],
+        try:
+            stadio = (json.loads(job["argomento"]) if job["argomento"] else {}).get("stadio")
+        except ValueError:
+            stadio = None
+        dl["job"] = {"id": job["id"], "stato": job["stato"], "stadio": stadio,
                      "interruzione_richiesta": bool(job["interruzione_richiesta"])}
     return elenco
 
@@ -572,16 +577,101 @@ def _deliverable_o_404(slug: str, deliverable_id: str):
     return dl
 
 
+def _stadio_o_404(slug: str, deliverable_id: str, stadio: str):
+    d = _gara_o_404(slug)
+    dl = _deliverable_o_404(slug, deliverable_id)
+    voce = next((x for x in deliverables_offerta.stadi_di(dl["tipo"]) if x[0] == stadio), None)
+    if voce is None:
+        raise HTTPException(404, f"Il deliverable {deliverable_id} non ha lo stadio «{stadio}».")
+    return d, dl, voce
+
+
+def _deliverable_libero(slug: str, deliverable_id: str):
+    with get_conn() as con:
+        if con.execute("SELECT 1 FROM job WHERE gara_slug=? AND deliverable_id=? AND stato IN ('in_coda','in_esecuzione')",
+                       (slug, deliverable_id)).fetchone():
+            raise HTTPException(409, f"Il deliverable {deliverable_id} è in lavorazione: aspetta che finisca o interrompilo.")
+
+
 @router.post("/{slug}/deliverables/{deliverable_id}/esegui", status_code=202)
 def esegui_deliverable(slug: str, deliverable_id: str):
-    _deliverable_o_404(slug, deliverable_id)
+    """Produce il primo stadio non ancora prodotto (o l'unico)."""
+    d = _gara_o_404(slug)
+    dl = _deliverable_o_404(slug, deliverable_id)
+    st = deliverables_offerta.stato_deliverable(d, dl)
+    attesa = next((x for x in st["stadi"] if x["stato"] == "da_approvare"), None)
+    if attesa:
+        raise HTTPException(409, f"«{attesa['etichetta']}» aspetta la tua approvazione: approvalo o chiedi modifiche.")
+    if st["stato"] == "completata":
+        raise HTTPException(409, "Il deliverable è già prodotto: chiedi modifiche al definitivo o rieseguilo da capo.")
     return _accoda_job(slug, 7, "esegui", deliverable_id=deliverable_id)
 
 
 @router.post("/{slug}/deliverables/{deliverable_id}/riesegui", status_code=202)
 def riesegui_deliverable(slug: str, deliverable_id: str):
+    """Da capo, dal primo stadio: l'output precedente si archivia."""
     _deliverable_o_404(slug, deliverable_id)
     return _accoda_job(slug, 7, "riesegui", deliverable_id=deliverable_id)
+
+
+@router.post("/{slug}/deliverables/{deliverable_id}/stadi/{stadio}/approva", status_code=202)
+def approva_stadio(slug: str, deliverable_id: str, stadio: str):
+    """Approva lo stadio e accoda subito la produzione del successivo
+    (la scaletta approvata produce la bozza, la bozza il definitivo)."""
+    d, dl, voce = _stadio_o_404(slug, deliverable_id, stadio)
+    _deliverable_libero(slug, deliverable_id)
+    st = next(x for x in deliverables_offerta.stato_deliverable(d, dl)["stadi"] if x["id"] == stadio)
+    if st["stato"] not in ("da_approvare", "approvato"):
+        raise HTTPException(409, f"«{voce[1]}» non è ancora prodotto: non c'è nulla da approvare.")
+    successivo = deliverables_offerta.approva(d, dl, stadio)
+    if successivo is None:
+        return {"approvato": stadio, "job_id": None}
+    job = _accoda_job(slug, 7, "esegui", deliverable_id=deliverable_id, argomento=json.dumps({"stadio": successivo}))
+    return {"approvato": stadio, "successivo": successivo, **job}
+
+
+@router.post("/{slug}/deliverables/{deliverable_id}/stadi/{stadio}/modifica", status_code=202)
+def modifica_stadio(slug: str, deliverable_id: str, stadio: str, body: RichiestaModificheRequest):
+    """L'agente riscrive lo stadio applicando la nota del professionista."""
+    d, dl, voce = _stadio_o_404(slug, deliverable_id, stadio)
+    st = next(x for x in deliverables_offerta.stato_deliverable(d, dl)["stadi"] if x["id"] == stadio)
+    if st["stato"] == "da_produrre":
+        raise HTTPException(409, f"«{voce[1]}» non è ancora prodotto: non c'è nulla da modificare.")
+    return _accoda_job(slug, 7, "esegui", deliverable_id=deliverable_id,
+                       argomento=json.dumps({"stadio": stadio, "nota": body.nota.strip()}, ensure_ascii=False))
+
+
+@router.put("/{slug}/deliverables/{deliverable_id}/stadi/{stadio}")
+def salva_stadio(slug: str, deliverable_id: str, stadio: str, body: TestoStadioRequest):
+    """Modifica a mano del testo di uno stadio: torna da approvare, e gli
+    stadi successivi già prodotti vanno rifatti."""
+    d, dl, voce = _stadio_o_404(slug, deliverable_id, stadio)
+    if voce[2] is None:
+        raise HTTPException(409, "Questo deliverable non ha un testo modificabile dall'interfaccia.")
+    _deliverable_libero(slug, deliverable_id)
+    deliverables_offerta.salva_testo(d, dl, stadio, body.testo)
+    return {"salvato": stadio}
+
+
+@router.post("/{slug}/deliverables/{deliverable_id}/esporta")
+def esporta_deliverable(slug: str, deliverable_id: str, formato: str):
+    """Definitivo → DOCX (formato della Sezione A dei vincoli) o PDF (dal DOCX)."""
+    if formato not in ("docx", "pdf"):
+        raise HTTPException(400, "formato deve essere docx o pdf")
+    d = _gara_o_404(slug)
+    dl = _deliverable_o_404(slug, deliverable_id)
+    stadi = deliverables_offerta.stadi_di(dl["tipo"])
+    if stadi[-1][2] is None:
+        raise HTTPException(409, "Questo deliverable non ha un definitivo da convertire.")
+    sorgente = d / dl["cartella"] / stadi[-1][2]
+    if not sorgente.is_file():
+        raise HTTPException(409, "Il definitivo non è ancora prodotto.")
+    from esporta import esporta
+    try:
+        percorso = esporta(d, dl, sorgente, formato)
+    except RuntimeError as e:
+        raise HTTPException(422, str(e))
+    return {"percorso": str(percorso.relative_to(d / "output"))}
 
 
 PROPOSTA_ID_RE = re.compile(r"^P-C[0-9]+-[0-9]+$")

@@ -287,6 +287,16 @@ export const Api = {
   elencoDeliverables: (slug: string, o?: Opzioni) => richiesta<unknown[]>(`/gare/${s(slug)}/deliverables`, o),
   eseguiDeliverable: (slug: string, id: string) => richiesta(`/gare/${s(slug)}/deliverables/${s(id)}/esegui`, { method: "POST" }),
   rieseguiDeliverable: (slug: string, id: string) => richiesta(`/gare/${s(slug)}/deliverables/${s(id)}/riesegui`, { method: "POST" }),
+  /** Stadi di un deliverable (scaletta → bozza → definitivo): approvare
+      accoda lo stadio successivo; «modifica» lo fa riscrivere con la nota. */
+  approvaStadio: (slug: string, id: string, stadio: string) =>
+    richiesta<{ job_id?: number | null; successivo?: string }>(`/gare/${s(slug)}/deliverables/${s(id)}/stadi/${s(stadio)}/approva`, { method: "POST" }),
+  modificaStadio: (slug: string, id: string, stadio: string, nota: string) =>
+    richiesta(`/gare/${s(slug)}/deliverables/${s(id)}/stadi/${s(stadio)}/modifica`, { method: "POST", body: JSON.stringify({ nota }) }),
+  salvaStadio: (slug: string, id: string, stadio: string, testo: string) =>
+    richiesta(`/gare/${s(slug)}/deliverables/${s(id)}/stadi/${s(stadio)}`, { method: "PUT", body: JSON.stringify({ testo }) }),
+  esportaDeliverable: (slug: string, id: string, formato: "docx" | "pdf") =>
+    richiesta<{ percorso: string }>(`/gare/${s(slug)}/deliverables/${s(id)}/esporta?formato=${formato}`, { method: "POST", timeoutMs: 200_000 }),
   dettaglioProposta: (slug: string, id: string, o?: Opzioni) => richiesta<unknown>(`/gare/${s(slug)}/proposte/${s(id)}`, o),
   elencoProposteOperatore: (slug: string, criterio?: string, o?: Opzioni) =>
     richiesta<unknown[]>(`/gare/${s(slug)}/proposte-operatore${criterio ? `?criterio=${encodeURIComponent(criterio)}` : ""}`, o),

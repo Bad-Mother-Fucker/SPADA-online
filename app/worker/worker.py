@@ -242,6 +242,9 @@ def esegui_job(job):
         argv = ["bash", str(spada_deliverable), slug, deliverable_id]
         if tipo == "riesegui":
             argv.append("--riesegui")
+        # Stadio da rifare e nota del professionista (richiesta di modifiche).
+        if job["argomento"]:
+            argv += ["--argomento", job["argomento"]]
     else:
         spada_fase = PIPELINE_DIR / "scripts" / "setup" / "spada_fase.sh"
         argv = ["bash", str(spada_fase), slug, str(fase)]

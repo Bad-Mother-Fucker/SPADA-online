@@ -112,7 +112,16 @@ export const useProposte = (slug: string, attivo = true) =>
 export const useAudit = (slug: string, attivo = true) =>
   useRegistro(slug, "audit", ["06_registers/audit_summary.md"], parseAudit, attivo)
 
-export interface Deliverable { id: string; criterio: string; nome: string; vincolo_formato: string; fonte: string; tipo: string; agente: string; stato?: string; prodotto?: boolean; job?: JobFase }
+/** Stadio di un deliverable: da_produrre, da_approvare, approvato, superato
+    (prodotto, ma uno stadio precedente è cambiato dopo). */
+export interface StadioDeliverable { id: string; etichetta: string; file: string | null; stato: "da_produrre" | "da_approvare" | "approvato" | "superato"; prodotto_il?: string | null; approvato_il?: string | null }
+/** Un documento dell'offerta (non una parte per criterio): `criteri` sono
+    quelli che copre. `job.stadio` = stadio accodato o in lavorazione. */
+export interface Deliverable {
+  id: string; criterio: string; criteri: string[]; trasversale: boolean; nome: string; vincolo_formato: string; fonte: string; tipo: string
+  agente: string; skill: string | null; cartella: string; stato?: string; prodotto?: boolean; errore?: string | null
+  stadi: StadioDeliverable[]; esportazioni: { docx?: string; pdf?: string }; job?: JobFase & { stadio?: string | null }
+}
 export function useDeliverables(slug: string, attivo = true) {
   return useQuery({
     queryKey: chiaviGara.deliverables(slug), queryFn: ({ signal }) => Api.elencoDeliverables(slug, { signal }) as Promise<Deliverable[]>, enabled: attivo,
@@ -125,11 +134,19 @@ export function useDeliverables(slug: string, attivo = true) {
 export const TIPI_TABELLARI = new Set(["computo_metrico", "elenco_prezzi", "cronoprogramma", "quadro_economico"])
 export const tabellare = (d: Deliverable) => TIPI_TABELLARI.has(d.tipo)
 
-/** File prodotti per un deliverable: relazione_tecnica conserva il percorso
-    storico output/10_offer/, gli altri hanno una cartella per id. */
+/** File prodotti per un deliverable: una cartella per documento, output/10_offer/<id>/. */
 export function fileDeliverable(output: string[], d: Deliverable) {
-  const cartella = d.tipo === "relazione_tecnica" ? "10_offer/" : `10_offer/${d.id}/`
-  return output.filter((p) => p.startsWith(cartella) && !p.slice(cartella.length).includes("/") && !p.startsWith("11_view/"))
+  const cartella = `${d.cartella}/`
+  return output.filter((p) => p.startsWith(cartella) && !p.slice(cartella.length).includes("/"))
+}
+
+/** Testo di un file di output; `versione` (data di produzione) lo fa rileggere quando cambia. */
+export function useTestoOutput(slug: string, percorso: string | null, versione?: string | null) {
+  return useQuery({
+    queryKey: [...chiaviGara.tutto(slug), "testo", percorso || "", versione || ""],
+    queryFn: ({ signal }) => Api.testoOutput(slug, percorso!, { signal }),
+    enabled: !!percorso,
+  })
 }
 
 export interface ContenutoDeliverable { paragrafi: { titolo?: string; testo?: string }[]; sezioni: { titolo: string; parole: number }[] }
@@ -259,7 +276,11 @@ export function useDeliverableAzioni(slug: string) {
   const invalida = useInvalidaGara(slug)
   const esegui = useMutation({ mutationFn: (id: string) => Api.eseguiDeliverable(slug, id), onSettled: invalida })
   const riesegui = useMutation({ mutationFn: (id: string) => Api.rieseguiDeliverable(slug, id), onSettled: invalida })
-  return { esegui, riesegui }
+  const approva = useMutation({ mutationFn: (v: { id: string; stadio: string }) => Api.approvaStadio(slug, v.id, v.stadio), onSettled: invalida })
+  const modifica = useMutation({ mutationFn: (v: { id: string; stadio: string; nota: string }) => Api.modificaStadio(slug, v.id, v.stadio, v.nota), onSettled: invalida })
+  const salva = useMutation({ mutationFn: (v: { id: string; stadio: string; testo: string }) => Api.salvaStadio(slug, v.id, v.stadio, v.testo), onSettled: invalida })
+  const esporta = useMutation({ mutationFn: (v: { id: string; formato: "docx" | "pdf" }) => Api.esportaDeliverable(slug, v.id, v.formato), onSettled: invalida })
+  return { esegui, riesegui, approva, modifica, salva, esporta }
 }
 
 /** Decisioni della Fase 6 salvate nel database: sopravvivono al ricarico della pagina. */

@@ -1,16 +1,20 @@
-# Deliverable — Computo metrico (migliorie)
+# Deliverable — Computo metrico
 
-Agente: `deliverable-computo-metrico`.
+Agente: `deliverable-computo-metrico`. Procedimento: skill
+`deliverable-computo-metrico`.
 
 ## Esecuzione
 
-Segui `deliverable-computo-metrico` come descritto nel proprio file
-agente: legge le proposte approvate e le loro lavorazioni a computo
-collegate, verifica i prezzi con il server MCP `prezzario`, produce il
-computo metrico estimativo delle sole migliorie in
-`output/10_offer/{deliverable_id}/computo_metrico_migliorie.md`.
+Un documento unico con tutte le proposte approvate di tutti i criteri,
+prodotto per stadi: elenco delle voci → bozza → definitivo. Il prompt dice
+quale stadio eseguire e quale file scrivere nella cartella del deliverable
+(`output/10_offer/<id>/`): esegui solo quello e fermati.
+
+Prima di tutto stabilisci dalla skill la variante (migliorie o lavori a
+base di gara rimodulati) e se il computo è **non estimativo**: in quel
+caso nessun prezzo né importo in nessuno stadio, a pena di esclusione.
 
 ## Prerequisiti
 
-Almeno una proposta approvata (`output/06_registers/proposal_register.md`
-non vuoto). Se vuoto, non procedere: segnalalo.
+Almeno una proposta approvata in `02_graph/proposals/`. Se manca, non
+procedere: segnalalo.

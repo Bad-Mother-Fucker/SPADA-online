@@ -128,7 +128,7 @@ if stato == "completata":
             dl = json.load(f)
     except (OSError, ValueError):
         dl = {}
-    vecchi = [k for k, v in dl.items() if v.get("stato") == "completata"]
+    vecchi = [k for k, v in dl.items() if v.get("stato") in ("completata", "pronto") or v.get("stadi")]
     for k in vecchi:
         dl[k]["stato"] = "da_rivedere"
         dl[k]["nota"] = "Scritto prima della conferma della revisione delle proposte: va rieseguito."

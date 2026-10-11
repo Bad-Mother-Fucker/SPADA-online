@@ -94,6 +94,17 @@ class PropostaProfessionistaRequest(BaseModel):
     descrizione: str = Field(min_length=10, max_length=8000)
 
 
+class RichiestaModificheRequest(BaseModel):
+    """Fase 7 — cosa cambiare in uno stadio di un deliverable (scaletta,
+    bozza, definitivo): l'agente lo riscrive applicando la nota."""
+    nota: str = Field(min_length=3, max_length=4000)
+
+
+class TestoStadioRequest(BaseModel):
+    """Fase 7 — testo di uno stadio modificato a mano dal professionista."""
+    testo: str = Field(min_length=1, max_length=400_000)
+
+
 class InterventoRequest(BaseModel):
     """Sprint 10.4 — chat a controllo pieno, scoped alla sola directory
     della gara. A differenza di AssistenteRequest (sola lettura)."""
