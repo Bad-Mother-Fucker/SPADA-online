@@ -713,6 +713,14 @@ def leggi_output(slug: str, percorso: str):
     return FileResponse(str(file_path))
 
 
+@router.get("/{slug}/avanzamento")
+def avanzamento_esecuzione(slug: str, fase: int | None = None, deliverable: str | None = None):
+    """Cosa sta facendo adesso la fase (o il deliverable) in esecuzione,
+    dagli ultimi passi del suo stream. null se non gira nulla."""
+    from avanzamento import avanzamento
+    return avanzamento(_gara_o_404(slug), fase, deliverable)
+
+
 @router.get("/{slug}/run-log")
 def run_log(slug: str):
     d = _gara_o_404(slug)

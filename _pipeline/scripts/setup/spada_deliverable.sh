@@ -122,7 +122,7 @@ try:
 except FileNotFoundError:
     log = {"runs": []}
 log["runs"].append({
-    "run_id": run_id, "fase": 6, "riesecuzione": False,
+    "run_id": run_id, "fase": 7, "riesecuzione": False,
     "avviato_il": avviato_il, "concluso_il": None,
     "pipeline_version": pv, "prezzario_version": json.loads(pzv),
     "modello": modello, "effort": effort, "esito": "in_corso", "errore": None,

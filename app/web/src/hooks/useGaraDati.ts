@@ -21,6 +21,7 @@ export const chiaviGara = {
   contenutoDeliverable: (slug: string, file: string) => ["gara", slug, "deliverable-file", file] as const,
   grafo: (slug: string) => ["gara", slug, "grafo"] as const,
   runLog: (slug: string) => ["gara", slug, "run-log"] as const,
+  avanzamento: (slug: string, chi: string) => ["gara", slug, "avanzamento", chi] as const,
   proposteOperatore: (slug: string) => ["gara", slug, "proposte-operatore"] as const,
   proposteProfessionista: (slug: string) => ["gara", slug, "proposte-professionista"] as const,
   proposta: (slug: string, id: string) => ["gara", slug, "proposta", id] as const,
@@ -405,5 +406,16 @@ export function useImportaPrezzario(slug: string) {
       void qc.invalidateQueries({ queryKey: ["sistema", "prezzari"] })
       void qc.invalidateQueries({ queryKey: chiaviGara.tutto(slug) })
     },
+  })
+}
+
+/** Passi dal vivo di un'esecuzione: si interroga solo mentre gira. */
+export function useAvanzamento(slug: string, q: { fase?: number; deliverable?: string }, attivo: boolean) {
+  return useQuery({
+    queryKey: chiaviGara.avanzamento(slug, q.deliverable || `fase-${q.fase}`),
+    queryFn: ({ signal }) => Api.avanzamento(slug, q, { signal }),
+    enabled: attivo,
+    refetchInterval: attivo ? 3_000 : false,
+    retry: false,
   })
 }

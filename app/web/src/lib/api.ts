@@ -147,6 +147,13 @@ export interface StatoLoginClaude extends StatoAuth {
   login: { fase: "inattivo" | "in_attesa" | "concluso" | "fallito"; url: string | null; codice_inviato: boolean; messaggio: string }
 }
 
+export interface Avanzamento {
+  run_id: string; fase: number | null; criterio: string | null; deliverable_id: string | null
+  avviato_il: string | null; aggiornato_il: string | null
+  /** Passo in corso e i precedenti, dal più recente: frasi già leggibili. */
+  attuale: string | null; precedenti: string[]
+}
+
 export interface NuovaPropostaProfessionista { criterio: string; sottocriterio: string | null; gap_id: string | null; titolo: string; descrizione: string }
 /** `elaborata`: è già un nodo del grafo (dopo la conferma), non si toglie più. */
 export interface PropostaProfessionista extends NuovaPropostaProfessionista { id: string; creato_il: string; elaborata: boolean }
@@ -189,6 +196,9 @@ export const Api = {
     richiesta<{ slug: string; creato: boolean }>("/gare", { ...o, method: "POST", body: JSON.stringify(dati), timeoutMs: 60_000 }),
   dettaglioGara: (slug: string, o?: Opzioni) => richiesta<DettaglioGara>(`/gare/${s(slug)}`, o),
   eliminaGara: (slug: string, o?: Opzioni) => richiesta<void>(`/gare/${s(slug)}`, { ...o, method: "DELETE" }),
+  /** Cosa sta facendo adesso una fase o un deliverable in esecuzione (null se nulla gira). */
+  avanzamento: (slug: string, q: { fase?: number; deliverable?: string }, o?: Opzioni) =>
+    richiesta<Avanzamento | null>(`/gare/${s(slug)}/avanzamento?${q.deliverable ? `deliverable=${encodeURIComponent(q.deliverable)}` : `fase=${q.fase}`}`, o),
   runLog: (slug: string, o?: Opzioni) => richiesta<{ runs?: unknown[] }>(`/gare/${s(slug)}/run-log`, o),
   elencoOutput: (slug: string, o?: Opzioni) => richiesta<string[]>(`/gare/${s(slug)}/output`, o),
   percorsoOutput: (slug: string, p: string) => `${base()}/gare/${s(slug)}/output/${p}`,

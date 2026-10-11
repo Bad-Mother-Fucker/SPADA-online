@@ -5,6 +5,7 @@ import { CheckIcon, CircleDashedIcon, DownloadSimpleIcon, TableIcon } from "@pho
 import { Button } from "@/components/ui/button"
 import { Card, Kv, Nota, Scheletro, Split, TitoloSezione, VuotoInline } from "@/components/comuni/Primitivi"
 import { ControlloInterruzione } from "../ControlloInterruzione"
+import { Avanzamento } from "../Avanzamento"
 import { motivoBlocco } from "@/dominio/fasi"
 import { StatoErrore } from "@/components/stati/Stati"
 import { BadgeStato, Chip } from "@/components/gare/BadgeStato"
@@ -119,6 +120,7 @@ function RiepilogoDeliverable({ lista, blocco }: { lista: Deliverable[]; blocco:
                 <BadgeStato tono="run" pulsa={d.stato === "in_esecuzione"}>{d.stato === "in_esecuzione" ? "In lavorazione" : "In coda"}</BadgeStato>
                 <Link to={`deliverable/${encodeURIComponent(d.id)}`} className="min-w-0 flex-1 truncate font-medium">{d.nome || d.id}</Link>
               </div>
+              {d.stato === "in_esecuzione" && <Avanzamento deliverable={d.id} attivo fallback={null} />}
               {d.job && <ControlloInterruzione job={d.job} compatto className="w-full" />}
             </li>
           ))}

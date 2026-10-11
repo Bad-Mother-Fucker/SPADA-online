@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { DialogoConferma, type Conferma } from "./DialogoConferma"
 import { ControlloInterruzione, NOTA_INTERRUZIONE } from "./ControlloInterruzione"
+import { Avanzamento } from "./Avanzamento"
 import { useGara } from "./GaraContext"
 import { useAzioniFase } from "@/hooks/useGaraDati"
 import { comeApiError } from "@/lib/risorsa"
@@ -96,11 +97,10 @@ export function AzioniFase({ n, blocco, className, azionePrimaria }: { n: number
             <i className="size-1.5 rounded-full bg-current animate-pulsa" aria-hidden="true" />
             {job?.interruzione_richiesta ? "Interruzione in corso" : job?.stato === "in_coda" ? "In avvio" : "Esecuzione in corso"}
           </p>
-          <p className="text-micro text-muted-foreground">
-            {job?.stato === "in_coda"
-              ? `Accodata ${quandoRelativo(job.creato_il || "")}: parte appena il worker è libero.`
-              : `Avviata ${quandoRelativo(job?.iniziato_il || corpoFase(gara.fasi, n)?.iniziata_il || "")}. Puoi chiudere la pagina: la fase continua.`}
-          </p>
+          {job?.stato === "in_coda"
+            ? <p className="text-micro text-muted-foreground">{`Accodata ${quandoRelativo(job.creato_il || "")}: parte appena il worker è libero.`}</p>
+            : <Avanzamento fase={n} deliverable={job?.deliverable_id || undefined} attivo={!job || job.stato === "in_esecuzione"}
+                fallback={<p className="text-micro text-muted-foreground">{`Avviata ${quandoRelativo(job?.iniziato_il || corpoFase(gara.fasi, n)?.iniziata_il || "")}. Puoi chiudere la pagina: la fase continua.`}</p>} />}
         </div>
         <ControlloInterruzione job={job} className="w-full" />
         {job?.stato === "in_esecuzione" && <p className="text-micro text-muted-foreground">{NOTA_INTERRUZIONE}</p>}

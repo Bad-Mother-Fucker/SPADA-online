@@ -132,8 +132,29 @@ def descrivi_strumento(nome: str, argomenti: dict, base: Path) -> str:
     """Una riga in italiano per lo strumento che l'assistente sta usando:
     solo ciò che fa davvero, con i suoi argomenti."""
     a = argomenti or {}
+    percorso = a.get("file_path", "")
+    # Istruzioni della pipeline (agenti, comandi, riferimenti), fuori dalla gara.
+    if nome == "Read" and "/_claude/" in percorso:
+        return f"Leggo le istruzioni «{Path(percorso).stem}»"
+    if nome in ("Write", "Edit", "MultiEdit"):
+        rel = _relativo(percorso, base)
+        verbo = "Scrivo" if nome == "Write" else "Aggiorno"
+        if rel.startswith("02_graph/") and Path(rel).stem == "index":
+            return f"{verbo} l'indice del grafo di conoscenza"
+        if rel.startswith("02_graph/"):
+            return f"{verbo} il nodo del grafo {Path(rel).stem}"
+        if rel.startswith("_state/"):
+            return "Registro lo stato di avanzamento della gara"
+        return f"{verbo} {Path(rel).name}"
+    if nome in ("Agent", "Task"):
+        chi = a.get("subagent_type") or "un agente"
+        return f"Affido a {chi}: {a.get('description', '').strip() or 'un compito'}"
+    if nome == "Bash":
+        return f"Eseguo un comando: {a.get('description', '').strip() or 'verifica'}"
+    if nome == "TodoWrite":
+        return "Aggiorno la lista dei passi da fare"
     if nome == "Read":
-        rel = _relativo(a.get("file_path", ""), base)
+        rel = _relativo(percorso, base)
         if rel.startswith("_state/"):
             return "Controllo lo stato di avanzamento della gara"
         if rel.startswith("02_graph/") and Path(rel).stem == "index":
