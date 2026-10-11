@@ -35,6 +35,11 @@ gara rimodulati) e la natura (non estimativo / estimativo) dal nome e dal
 
 # Regole assolute
 
+- Nel testo per la stazione appaltante, mai nomenclatura interna (codici
+  P-/G-/E-/D-/Q-/R-…, sigle C1/C1.1 non usate dal disciplinare, wikilink,
+  percorsi): criteri come nel disciplinare, elaborati col nome con cui
+  sono stati caricati, proposte col loro titolo. Codici ammessi solo nei
+  documenti di lavoro dello stadio 1 (scaletta, elenco delle voci).
 - **Non estimativo** (vincolo «non estimativo», «nessun prezzo», divieto
   di elementi economici): nessun prezzo, importo o totale economico in
   nessuno stadio, e niente prezzario. L'inserimento esclude l'offerta.

@@ -276,6 +276,43 @@ def ricalcola_fase7(gara: Path):
     _scrivi(p, fasi)
 
 
+# ── Nomenclatura interna: vietata nei testi per la stazione appaltante ─
+# Codici del sistema (proposte, gap, evidenze, domande, rischi, tavole
+# interne), wikilink e percorsi interni. Le sigle di criterio (C1, C1.1)
+# non si controllano qui: «C3» può essere una classe di corrosione.
+RE_INTERNI = re.compile(
+    r"\b[PGERQDI]-C\d+-\d{2,3}\b"          # P-C1-001, G-C2-005, E-C2-016, R-C2-010, Q-C1-006
+    r"|\b[DQRX]-\d{2,3}\b"                   # D-020, X-06
+    r"|\bTAV-M-\d+\b"
+    r"|\[\[[^\]\n]+\]\]"                    # [[wikilink]]
+    r"|\b(?:02_graph|05_criteria_outputs|06_registers|_state)/\S*"
+    r"|\bC\d+_output\.md\b")
+
+
+def stadio_di_lavoro(tipo: str, stadio: str) -> bool:
+    """Lo stadio 1 (scaletta, elenco delle voci) è un documento di lavoro:
+    lì i codici interni sono ammessi per brevità."""
+    stadi = stadi_di(tipo)
+    return len(stadi) > 1 and stadio == stadi[0][0]
+
+
+def riferimenti_interni(testo: str) -> list[str]:
+    """Occorrenze di nomenclatura interna, senza ripetizioni, nell'ordine."""
+    visti, out = set(), []
+    for m in RE_INTERNI.finditer(testo):
+        if m.group(0) not in visti:
+            visti.add(m.group(0))
+            out.append(m.group(0))
+    return out
+
+
+def file_da_controllare(gara: Path, dl: dict, stadio: str) -> list[Path]:
+    voce = next(s for s in stadi_di(dl["tipo"]) if s[0] == stadio)
+    if voce[2]:
+        return [gara / dl["cartella"] / voce[2]]
+    return sorted((gara / dl["cartella"]).glob("*.md"))
+
+
 # ── Riga di comando (spada_deliverable.sh) ──────────────────────────
 def _cli_risolvi(did: str, argomento: str) -> int:
     gara = Path.cwd()
@@ -314,7 +351,24 @@ def _cli_concludi(did: str, stadio: str, esito: str, errore: str) -> int:
     return 0
 
 
+def _cli_controlla(did: str, stadio: str) -> int:
+    """Stampa «file: codici» per ogni file con nomenclatura interna; esce
+    con 4 se ne trova (0 se lo stadio è di lavoro o il testo è pulito)."""
+    gara = Path.cwd()
+    dl = trova(_leggi(gara / "manifest.json", {}), did)
+    if dl is None or stadio_di_lavoro(dl["tipo"], stadio):
+        return 0
+    trovati = 0
+    for f in file_da_controllare(gara, dl, stadio):
+        if f.is_file() and (r := riferimenti_interni(f.read_text(encoding="utf-8"))):
+            trovati += 1
+            print(f"{f.relative_to(gara)}: {', '.join(r[:40])}{' …' if len(r) > 40 else ''}")
+    return 4 if trovati else 0
+
+
 if __name__ == "__main__":
+    if len(sys.argv) >= 4 and sys.argv[1] == "controlla":
+        sys.exit(_cli_controlla(sys.argv[2], sys.argv[3]))
     if len(sys.argv) >= 3 and sys.argv[1] == "risolvi":
         sys.exit(_cli_risolvi(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else ""))
     if len(sys.argv) >= 5 and sys.argv[1] == "concludi":

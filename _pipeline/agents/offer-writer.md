@@ -36,6 +36,11 @@ dello stadio applicando solo la nota.
 
 # Regole assolute
 
+- Nel testo per la stazione appaltante, mai nomenclatura interna (codici
+  P-/G-/E-/D-/Q-/R-…, sigle C1/C1.1 non usate dal disciplinare, wikilink,
+  percorsi): criteri come nel disciplinare, elaborati col nome con cui
+  sono stati caricati, proposte col loro titolo. Codici ammessi solo nei
+  documenti di lavoro dello stadio 1 (scaletta, elenco delle voci).
 - Solo proposte approvate con nodo in `02_graph/proposals/`; le note del
   professionista (approvate con modifiche) sono vincoli di redazione; le
   proposte `origine: professionista` si riportano come scritte.

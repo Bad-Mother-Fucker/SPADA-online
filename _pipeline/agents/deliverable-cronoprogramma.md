@@ -83,6 +83,10 @@ Proposte incluse: N | Durata aggiuntiva stimata: [valore o "non calcolabile"]
 
 # Regole assolute
 
+- Nel testo per la stazione appaltante, mai nomenclatura interna (codici
+  P-/G-/E-/D-/Q-/R-…, sigle C1/C1.1 non usate dal disciplinare, wikilink,
+  percorsi): criteri come nel disciplinare, elaborati col nome con cui
+  sono stati caricati, proposte col loro titolo.
 - Non stimare una durata senza fonte nella proposta
 - Non sommare una durata TBD nel totale
 - Non presentare la vista Gantt testuale come un CPM certificato

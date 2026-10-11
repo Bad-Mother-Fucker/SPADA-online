@@ -28,6 +28,31 @@ La conversione in DOCX e PDF la fa il sistema dal definitivo, con font e
 corpo della Sezione A: **non scrivere script di conversione e non
 generare file Word**.
 
+## Regola di nomenclatura (vale per ogni deliverable)
+
+Nel testo che va alla stazione appaltante **è vietata la nomenclatura
+interna del sistema**: niente codici di proposte (P-C1-001), gap
+(G-C1-002), evidenze (E-…), domande (D-…, Q-…), rischi (R-…), tavole
+interne (TAV-M-…), sigle di criterio inventate dal sistema (C1, C1.1)
+se il disciplinare non le usa, wikilink `[[…]]`, nomi di cartelle o di
+file interni (`02_graph/…`, `Cx_output.md`).
+
+Si usano soltanto:
+- per criteri e sub-criteri, numerazione e denominazione **come nel
+  disciplinare** (es. «criterio 1 — Materiali ed impiantistica,
+  sub-criterio 1.1»: verifica la forma esatta nella tabella dei criteri
+  del disciplinare);
+- per gli elaborati, il **nome dell'elaborato così come è stato
+  caricato** (es. «9_CME_Computo_Metrico_Estimativo», «Relazione
+  Generale e Tecnica»), con voce, articolo, tavola o pagina;
+- per le proposte, il loro titolo descrittivo, mai il codice.
+
+Unica eccezione: nella **scaletta** e nell'**elenco delle voci** (stadio
+1, documenti di lavoro per il professionista) i codici interni si possono
+usare per brevità. Dalla bozza in poi, mai. Alla fine di ogni stadio il
+sistema controlla il testo: se trova codici interni ti chiede di
+toglierli, e l'esportazione in DOCX/PDF li rifiuta.
+
 ## Fonti (leggi prima di ogni stadio)
 
 | File | Cosa estrai |
@@ -66,7 +91,7 @@ Contenuto: [cosa dice, in una riga]
 ### C1.1 — [titolo subcriterio] ([facciate] facc · ~[parole] parole)
 1. **[Titolo paragrafo]** — P-C1-001 · ~[parole] parole
    Contenuto: [cosa si dichiara, su quali voci di computo/elaborati]
-   Evidenze da citare: [[codice-elaborato]] sez./p.
+   Evidenze da citare: [nome elaborato come caricato] sez./p.
    Indicatori: [valori misurabili da dichiarare]
    Vincolo del professionista: [nota, se approvata con modifiche]
 2. …
@@ -83,13 +108,17 @@ Sezione B assenti.
 Segui la scaletta approvata punto per punto: stessi titoli, stesso
 ordine, parole obiettivo rispettate (±15%).
 
-- `#` = criterio («# Criterio C1 — Materiali ed impiantistica»),
-  `##` = subcriterio, `###` = paragrafo/proposta. Ogni proposta dichiara
+- `#` = criterio, `##` = sub-criterio, `###` = paragrafo/proposta, con
+  numerazione e denominazione del disciplinare (es. «# Criterio 1 —
+  Materiali ed impiantistica»). Ogni proposta dichiara
   in chiaro il criterio a cui si riferisce (lo chiede il disciplinare).
 - Prima persona plurale, registro tecnico, prosa continua; elenchi solo
   per indicatori e sequenze operative.
-- Cita gli elaborati con la loro nomenclatura (es. «voce 116 del
-  computo metrico estimativo», «tav. 22»), mai con i nomi dei file.
+- Cita gli elaborati con il nome con cui sono stati caricati, più voce,
+  tavola, articolo o pagina (es. «voce 116 di 9_CME_Computo_Metrico_Estimativo»);
+  mai wikilink, codici di nodo o percorsi interni (vedi «Regola di nomenclatura»).
+- Titoli di criterio e sub-criterio come nel disciplinare; i paragrafi
+  hanno il titolo descrittivo della proposta, mai il suo codice.
 - Mai prezzi, importi, ribassi o elementi economici.
 - Nessun fatto che non stia nei nodi proposta o nelle loro evidenze.
   Dove manca un dato: `%%DR_START: motivo%%` … `%%DR_END%%` (nel DOCX

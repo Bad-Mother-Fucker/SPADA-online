@@ -20,6 +20,31 @@ segue fedelmente quello approvato (modifiche a mano comprese).
 
 Non generare file Word né script: la conversione la fa il sistema.
 
+## Regola di nomenclatura (vale per ogni deliverable)
+
+Nel testo che va alla stazione appaltante **è vietata la nomenclatura
+interna del sistema**: niente codici di proposte (P-C1-001), gap
+(G-C1-002), evidenze (E-…), domande (D-…, Q-…), rischi (R-…), tavole
+interne (TAV-M-…), sigle di criterio inventate dal sistema (C1, C1.1)
+se il disciplinare non le usa, wikilink `[[…]]`, nomi di cartelle o di
+file interni (`02_graph/…`, `Cx_output.md`).
+
+Si usano soltanto:
+- per criteri e sub-criteri, numerazione e denominazione **come nel
+  disciplinare** (es. «criterio 1 — Materiali ed impiantistica,
+  sub-criterio 1.1»: verifica la forma esatta nella tabella dei criteri
+  del disciplinare);
+- per gli elaborati, il **nome dell'elaborato così come è stato
+  caricato** (es. «9_CME_Computo_Metrico_Estimativo», «Relazione
+  Generale e Tecnica»), con voce, articolo, tavola o pagina;
+- per le proposte, il loro titolo descrittivo, mai il codice.
+
+Unica eccezione: nella **scaletta** e nell'**elenco delle voci** (stadio
+1, documenti di lavoro per il professionista) i codici interni si possono
+usare per brevità. Dalla bozza in poi, mai. Alla fine di ogni stadio il
+sistema controlla il testo: se trova codici interni ti chiede di
+toglierli, e l'esportazione in DOCX/PDF li rifiuta.
+
 ## Prima di tutto: quale computo, e se ha prezzi
 
 Dai dati del deliverable (nome, `vincolo_formato`, `fonte`):
@@ -74,12 +99,14 @@ stesse voci toccate da più proposte).
 
 Per ogni voce dell'elenco approvato una riga:
 
-| N. | Voce | Descrizione della lavorazione offerta | U.M. | Quantità | Rif. progetto | Proposta |
+| N. | Voce | Descrizione della lavorazione offerta | U.M. | Quantità | Rif. progetto | Criterio / sub-criterio (come nel disciplinare) |
 |---|---|---|---|---|---|---|
 
 - La descrizione dice cosa si offre in più rispetto al progetto (marca,
   classe, prestazione, controllo), coerente con la relazione tecnica e
   senza nomi commerciali se non richiesti.
+- «Rif. progetto» = voce e nome dell'elaborato come caricato; nessun
+  codice di proposta: la proposta si riconosce dalla descrizione.
 - Quantità = quella di progetto, salvo che la proposta la modifichi in
   modo documentato.
 - Estimativo: aggiungi Prezzo unitario, Importo, Fonte prezzo.
@@ -93,11 +120,11 @@ Per ogni voce dell'elenco approvato una riga:
 [Premessa di 2-3 righe: riferimento all'articolo del disciplinare e,
 se non estimativo, «Il presente computo non contiene prezzi né importi».]
 
-## Criterio C1 — [titolo]
+## Criterio [n] — [denominazione del disciplinare]
 [tabella]
 
 ## Riepilogo
-| Criterio | Proposte | Voci |
+| Criterio (come nel disciplinare) | Lavorazioni migliorate | Voci |
 ```
 
 Nessun contenuto nuovo rispetto alla bozza approvata; controlla che

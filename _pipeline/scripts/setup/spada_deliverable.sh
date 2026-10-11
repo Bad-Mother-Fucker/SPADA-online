@@ -216,6 +216,30 @@ elif [ -n "$FILE_STADIO" ]; then
 elif [ -z "$(ls -A "$OUTPUT_DIR" 2>/dev/null)" ]; then
   ESITO="errore"; ERRORE="$OUTPUT_DIR/ e' vuota: il deliverable non ha prodotto output."
 fi
+# ── Nomenclatura interna vietata dalla bozza in poi: una correzione nella
+#    stessa sessione, poi errore con l'elenco dei codici rimasti ─────────
+if [ "$ESITO" = "completato" ]; then
+  set +e
+  INTERNI="$(python3 "$OFFERTA_PY" controlla "$DELIVERABLE_ID" "$STADIO")"
+  if [ $? -eq 4 ]; then
+    warn "Nomenclatura interna nel testo, chiedo la correzione: $INTERNI"
+    CORREZIONE="Nel testo che hai scritto ci sono riferimenti con la nomenclatura interna del sistema, vietata nei documenti per la stazione appaltante:
+$INTERNI
+Riscrivi quei passaggi: criteri e sub-criteri con numerazione e denominazione del disciplinare, elaborati con il nome con cui sono stati caricati (più voce, tavola, articolo o pagina), proposte con il loro titolo descrittivo. Niente codici P-/G-/E-/D-/Q-/R-/X-, TAV-M-, wikilink [[…]] o percorsi interni. Non cambiare nient'altro."
+    # shellcheck disable=SC2046
+    bash "$SPADA_CLAUDE" -p "$CORREZIONE" --resume "$SESSIONE" \
+      --model "$(modello_cli "$MODELLO")" $(effort_cli "$EFFORT") \
+      --permission-mode "$SPADA_PERMISSION_MODE" \
+      --output-format stream-json --verbose \
+      >> "_state/run_${RUN_ID}.stream.jsonl" 2>&1
+    [ "$INTERROTTO" = 1 ] && { ESITO="interrotto"; ERRORE="Interrotto durante la correzione della nomenclatura."; }
+    INTERNI="$(python3 "$OFFERTA_PY" controlla "$DELIVERABLE_ID" "$STADIO")"
+    if [ $? -eq 4 ] && [ "$ESITO" = "completato" ]; then
+      ESITO="errore"; ERRORE="Restano riferimenti con la nomenclatura interna, vietata nei documenti per la stazione appaltante: $INTERNI. Correggili nel testo o chiedi modifiche."
+    fi
+  fi
+  set -e
+fi
 if [ "$ESITO" = "errore" ]; then
   DIAGNOSI="$(diagnosi_stream "_state/run_${RUN_ID}.stream.jsonl" || true)"
   [ -z "$DIAGNOSI" ] || ERRORE="$ERRORE $DIAGNOSI"

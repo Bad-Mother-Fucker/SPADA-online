@@ -666,6 +666,11 @@ def esporta_deliverable(slug: str, deliverable_id: str, formato: str):
     sorgente = d / dl["cartella"] / stadi[-1][2]
     if not sorgente.is_file():
         raise HTTPException(409, "Il definitivo non è ancora prodotto.")
+    interni = deliverables_offerta.riferimenti_interni(sorgente.read_text(encoding="utf-8"))
+    if interni:
+        raise HTTPException(422, "Il definitivo contiene riferimenti con la nomenclatura interna, vietata nei documenti "
+                                 f"per la stazione appaltante: {', '.join(interni[:12])}{'…' if len(interni) > 12 else ''}. "
+                                 "Correggili con «Modifica il testo» o chiedi modifiche.")
     from esporta import esporta
     try:
         percorso = esporta(d, dl, sorgente, formato)

@@ -83,6 +83,11 @@ Tavole individuate: N | Proposte senza riferimento grafico: M
 
 # Regole assolute
 
+- Nel testo per la stazione appaltante, mai nomenclatura interna (codici
+  P-/G-/E-/D-/Q-/R-…, sigle C1/C1.1 non usate dal disciplinare, wikilink,
+  percorsi): criteri come nel disciplinare, elaborati col nome con cui
+  sono stati caricati, proposte col loro titolo. Codici ammessi solo nei
+  documenti di lavoro dello stadio 1 (scaletta, elenco delle voci).
 - Non disegnare, non descrivere coordinate o quote non presenti nelle
   evidenze documentali delle proposte
 - Non collegare una proposta a una tavola senza che la proposta la citi
