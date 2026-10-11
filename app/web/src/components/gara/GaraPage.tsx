@@ -10,10 +10,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { AppBar } from "@/components/comuni/AppBar"
 import { StatoErrore } from "@/components/stati/Stati"
-import { GaraContext, type DecisioneRegistrata } from "./GaraContext"
+import { GaraContext } from "./GaraContext"
 import { AvvisoPrezzario, Stepper, TestataGara } from "./Testata"
 import { Assistente } from "./Assistente"
-import { useDettaglioGara, useOutput, useRegistraDecisione, useRunLog } from "@/hooks/useGaraDati"
+import { useApprovazioni, useDettaglioGara, useOutput, useRegistraDecisione, useRunLog } from "@/hooks/useGaraDati"
 import { useStreamGara, type StatoStream } from "@/hooks/useStreamGara"
 import { comeApiError, risorsa } from "@/lib/risorsa"
 import { quandoRelativo } from "@/lib/formato"
@@ -80,8 +80,18 @@ export function GaraPage() {
   const stream = useStreamGara(slug, dettaglio.isSuccess)
   const r = risorsa(dettaglio, { percorso: `/gare/${slug}` })
   const registra = useRegistraDecisione(slug)
-  const [decisioni, setDecisioni] = useState<Record<string, Decisione>>({})
-  const [storicoDecisioni, setStorico] = useState<DecisioneRegistrata[]>([])
+  // Le decisioni stanno nel database: lo stato locale tiene solo quelle
+  // appena cliccate (ottimistiche) finché il server non le restituisce.
+  const approvazioni = useApprovazioni(slug)
+  const [ottimistiche, setDecisioni] = useState<Record<string, Decisione>>({})
+  const storicoDecisioni = useMemo(() => (approvazioni.data || [])
+    .filter((a) => a.tipo === "proposta" && a.riferimento && a.decisione)
+    .map((a) => ({ riferimento: a.riferimento!, decisione: a.decisione!, nota: a.nota, quando: a.creato_il })), [approvazioni.data])
+  const decisioni = useMemo(() => {
+    const d: Record<string, Decisione> = {}
+    for (const x of storicoDecisioni) d[x.riferimento] = x.decisione
+    return { ...d, ...ottimistiche }
+  }, [storicoDecisioni, ottimistiche])
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -114,13 +124,10 @@ export function GaraPage() {
       storicoDecisioni,
       // Decisione ottimistica: una spunta che resta dopo un errore è peggio di nessuna spunta.
       decidi: (id: string, decisione: Decisione, nota?: string | null) => {
-        const precedente = decisioni[id]
+        const precedente = ottimistiche[id]
         setDecisioni((d) => ({ ...d, [id]: decisione }))
         registra.mutate({ id, decisione, nota }, {
-          onSuccess: () => {
-            setStorico((s) => [...s, { riferimento: id, decisione, nota: nota || null, quando: new Date().toISOString() }])
-            toast.success(`${id}: decisione registrata.`)
-          },
+          onSuccess: () => toast.success(`${id}: decisione registrata.`),
           onError: (e) => {
             setDecisioni((d) => { const n = { ...d }; if (precedente) n[id] = precedente; else delete n[id]; return n })
             toast.error("Decisione non registrata", { description: comeApiError(e).message })
@@ -128,7 +135,7 @@ export function GaraPage() {
         })
       },
     }
-  }, [slug, dettaglio.data, output.data, runLog.data, stream, decisioni, storicoDecisioni, registra])
+  }, [slug, dettaglio.data, output.data, runLog.data, stream, decisioni, ottimistiche, storicoDecisioni, registra])
 
   if (r.stato === "caricamento" || !ctx) {
     return (

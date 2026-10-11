@@ -147,6 +147,15 @@ export interface StatoLoginClaude extends StatoAuth {
   login: { fase: "inattivo" | "in_attesa" | "concluso" | "fallito"; url: string | null; codice_inviato: boolean; messaggio: string }
 }
 
+export interface ApprovazioneRegistrata {
+  riferimento: string | null
+  tipo: "direttive" | "proposta" | "offerta"
+  fase: number
+  decisione: "approvata" | "da_modificare" | "scartata" | null
+  nota: string | null
+  creato_il: string
+}
+
 export interface Documento {
   nome_file: string
   percorso: string
@@ -194,6 +203,9 @@ export const Api = {
   /** «Interrompi» una fase o un deliverable: in coda la toglie, in corso la
       ferma. Rieseguirla con `esegui` riprende da dove si era fermata. */
   interrompiJob: (slug: string, jobId: number) => richiesta(`/gare/${s(slug)}/job/${jobId}/interrompi`, { method: "POST" }),
+  /** Storico delle decisioni, dalla più vecchia: per riferimento vale l'ultima. */
+  elencoApprovazioni: (slug: string, fase: number, o?: Opzioni) =>
+    richiesta<ApprovazioneRegistrata[]>(`/gare/${s(slug)}/approvazioni?fase=${fase}`, o),
   registraApprovazione: (slug: string, body: unknown) =>
     richiesta(`/gare/${s(slug)}/approvazioni`, { method: "POST", body: JSON.stringify(body) }),
 

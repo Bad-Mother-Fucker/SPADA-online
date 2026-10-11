@@ -25,7 +25,9 @@ export function useEsegui() {
     esegui: (n: number) => az.esegui.mutate(n, esito(`Fase ${n} avviata: la vedi «in avvio» nello stepper.`, "Avvio non riuscito")),
     riprendi: (n: number) => az.esegui.mutate(n, esito(`Fase ${n} ripresa: continua da dove si era fermata.`, "Ripresa non riuscita")),
     riesegui: (n: number) => az.riesegui.mutate(n, esito(`Riesecuzione della Fase ${n} accodata.`, "Riesecuzione non riuscita")),
-    approva: (n: number) => az.approva.mutate(n, esito(`Checkpoint della Fase ${n} approvato.`, "Approvazione non riuscita")),
+    approva: (n: number) => az.approva.mutate(n, n === 6
+      ? esito("Conferma accodata: le decisioni vengono scritte ed elaborate un criterio alla volta.", "Conferma non riuscita")
+      : esito(`Checkpoint della Fase ${n} approvato.`, "Approvazione non riuscita")),
     inCorso: az.esegui.isPending || az.riesegui.isPending || az.approva.isPending,
   }
 }

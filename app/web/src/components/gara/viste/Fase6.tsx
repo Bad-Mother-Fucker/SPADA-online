@@ -9,7 +9,7 @@ import { BadgeStato, Chip } from "@/components/gare/BadgeStato"
 import { PannelloFase } from "../PannelloFase"
 import { TestataVista } from "../TestataVista"
 import { useGara } from "../GaraContext"
-import { useEsegui } from "../AzioniFase"
+import { useEsegui, type AzionePrimaria } from "../AzioniFase"
 import { ETICHETTA_SEV, Prove, TONO_SEV } from "./Fase5"
 import { useDettaglioProposta, useGap, useProposte } from "@/hooks/useGaraDati"
 import { quandoBreve } from "@/lib/formato"
@@ -52,20 +52,35 @@ function RigaProposta({ p, d }: { p: Proposta; d: Decisione | null }) {
 }
 
 export function Fase6Elenco() {
-  const { slug, decisioni } = useGara()
+  const { slug, gara, decisioni, storicoDecisioni } = useGara()
   const q = useProposte(slug)
   const r = risorsa(q, { vuoto: (d) => !d || d.length === 0, percorso: "06_registers/proposal_register.md" })
   const { approva, inCorso } = useEsegui()
   const [tutte, setTutte] = useState(false)
   const righe = q.data || []
-  const decisioneDi = (p: Proposta) => decisioni[p.id] || p.decisione || null
+  // Solo le decisioni del professionista: lo «stato audit» del registro
+  // (approvata, con riserva) è il giudizio dell'auditor, non una decisione.
+  const decisioneDi = (p: Proposta) => decisioni[p.id] || null
+  const notaDi = (id: string) => [...storicoDecisioni].reverse().find((x) => x.riferimento === id)?.nota?.trim() || ""
   const decise = righe.filter((p) => decisioneDi(p)).length
-  const tutteDecise = righe.length > 0 && decise === righe.length
+  const senzaNota = righe.filter((p) => decisioneDi(p) === "da_modificare" && !notaDi(p.id)).map((p) => p.id)
+  const pronta = righe.length > 0 && decise === righe.length && senzaNota.length === 0
   const pct = righe.length ? Math.round((decise / righe.length) * 100) : 0
   const mostrate = tutte ? righe : righe.slice(0, 4)
+  const st6 = statoFase(gara.fasi, 6)
+  const occupata = st6 === "in_esecuzione"
+  const motivo = decise < righe.length
+    ? `Mancano ${righe.length - decise} decisioni: ogni proposta deve essere approvata, da modificare o scartata.`
+    : senzaNota.length ? `Scrivi nel dettaglio cosa cambiare per ${senzaNota.join(", ")}.` : ""
+  const conferma: AzionePrimaria = {
+    etichetta: st6 === "completata" ? "Conferma di nuovo le decisioni" : "Conferma l'approvazione delle proposte",
+    onClick: () => approva(6),
+    disabilitata: !pronta || occupata,
+    titolo: motivo,
+  }
 
   return (
-    <Split aside={<PannelloFase n={6} />}>
+    <Split aside={<PannelloFase n={6} azionePrimaria={occupata ? undefined : conferma} />}>
       {r.stato === "caricamento" && <Scheletro righe={5} />}
       {r.stato === "errore" && r.errore && <StatoErrore titolo="Registro delle proposte non leggibile" errore={r.errore} percorso="06_registers/proposal_register.md" onRiprova={r.riprova} />}
       {r.stato === "vuoto" && <Card><VuotoInline titolo="Nessuna proposta da rivedere" testo="Il registro delle proposte si popola in Fase 6, a partire dai gap trattati in Fase 5. L'azione per questa fase è nel pannello a destra." /></Card>}
@@ -76,8 +91,11 @@ export function Fase6Elenco() {
               <div className="mb-1 flex justify-between text-xs"><span className="text-foreground-2">Proposte decise</span><span className="font-mono font-medium">{decise} / {righe.length}</span></div>
               <div className="h-1 overflow-hidden rounded-[1px] bg-muted"><div className="h-full bg-status-ok transition-[width] duration-(--d-move) ease-(--e-move)" style={{ width: `${pct}%` }} /></div>
             </div>
-            <Button disabled={!tutteDecise || inCorso} title={tutteDecise ? "" : "Ogni proposta deve avere una decisione prima di procedere"} onClick={() => approva(6)}>Conferma revisione e avvia Fase 7</Button>
+            <Button disabled={conferma.disabilitata || inCorso} title={motivo} onClick={conferma.onClick}>{occupata ? "Conferma in corso" : conferma.etichetta}</Button>
           </div>
+          <p className="mb-3 text-xs text-foreground-2">
+            {motivo || "La conferma scrive le tue decisioni nelle schede dei criteri e aggiorna grafo, registri e brief, un criterio alla volta (qualche minuto ciascuno). La Fase 7 non parte da sola: la avvii tu quando la conferma è conclusa."}
+          </p>
           <p className="mb-3 text-micro text-muted-foreground">Le azioni per riga servono ai casi ovvi; per leggere il contenuto completo, i gap di origine e lo storico delle note, apri il dettaglio.</p>
           <div className="space-y-2">{mostrate.map((p) => <RigaProposta key={p.id} p={p} d={decisioneDi(p)} />)}</div>
           {righe.length > 4 && <Button size="sm" variant="outline" className="mt-3" onClick={() => setTutte((v) => !v)}>{tutte ? "Mostra solo le prime 4" : righe.length - 4 === 1 ? "Mostra l'altra proposta" : `Mostra le altre ${righe.length - 4} proposte`}</Button>}
@@ -108,7 +126,7 @@ export function Fase6Dettaglio() {
     if (proposte.isPending || nodo.isPending) return <>{testata}<Scheletro righe={4} /></>
     return <>{testata}<Card><VuotoInline titolo="Proposta non trovata" testo={`Nessuna proposta con identificativo ${id}, né nel registro né fra i nodi del grafo.`} azione={<Button variant="outline" asChild><Link to="../fase/6">Torna a tutte le proposte</Link></Button>} /></Card></>
   }
-  const d = decisioni[p.id] || p.decisione || null
+  const d = decisioni[p.id] || null
   const g = (gap.data || []).find((x) => x.id === p!.riferimento || x.proposta === p!.id)
   const corpo6 = corpoFase(gara.fasi, 6) || {}
   const voci = [

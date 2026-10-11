@@ -6,9 +6,11 @@
 #     dall'interfaccia quando vuole; eseguire la fase = inviare le
 #     risposte, che solo allora entrano nel contesto (memoria, grafo,
 #     brief). Ha un agente, come le fasi ordinarie.
-#   - Fasi 6 e 8 (checkpoint senza agente): si sbloccano con --approva
-#     dopo che l'intervento e' avvenuto (decisioni sulle proposte,
-#     approvazione del plico).
+#   - Fasi 6 e 8 (checkpoint umani): si chiudono con --approva dopo che
+#     l'intervento e' avvenuto. Fase 6: --approva scrive le decisioni
+#     sulle proposte nei Cx_output.md e le fa elaborare a
+#     feedback-processor, un criterio alla volta. Fase 8: approvazione
+#     del plico, senza agente.
 #
 # Uso:
 #   spada-fase <slug> <numero_fase>              — esegue la fase
@@ -17,7 +19,8 @@
 #                                                    marca le fasi a
 #                                                    valle "da_rivedere"
 #   spada-fase <slug> <numero_fase> --approva     — solo per fasi 6/8:
-#                                                    marca "completata"
+#                                                    6 elabora le decisioni,
+#                                                    8 marca "completata"
 #                                                    senza invocare claude
 #
 # Variabili di ambiente:
@@ -85,6 +88,138 @@ for chiave, corpo in data["fasi"].items():
 with open("_state/fasi.json", "w") as f:
     json.dump(data, f, ensure_ascii=False, indent=2)
 PY
+fi
+
+# ── Fase 6 --approva: conferma della revisione delle proposte ────────
+# Le decisioni prese nell'interfaccia (tabella approvazioni) si scrivono
+# parola per parola nei Cx_output.md (decisioni_proposte.py), poi
+# feedback-processor le elabora un criterio alla volta: nodi in
+# 02_graph/proposals/, index, registri, brief, stato_feedback. Non avvia
+# la Fase 7. Rieseguita, salta i criteri già elaborati le cui decisioni
+# non sono cambiate: dopo un'interruzione riprende dal criterio rimasto.
+if [ "$FLAG" = "--approva" ] && [ "$FASE" = "6" ]; then
+  DECISIONI_PY="$(dirname "$_SELF")/decisioni_proposte.py"
+  MODELLO="$(python3 -c "import json;print(json.load(open('manifest.json'))['esecuzione']['modello'])")"
+  EFFORT="$(python3 -c "import json;print(json.load(open('manifest.json'))['esecuzione']['effort'])")"
+
+  segna_fase6() {  # $1 = stato, $2 = sintesi
+    python3 - "$1" "$2" <<'PY'
+import json, sys
+from datetime import datetime, timezone
+stato, sintesi = sys.argv[1:3]
+now = datetime.now(timezone.utc).isoformat()
+with open("_state/fasi.json") as f:
+    fasi = json.load(f)
+corpo = fasi["fasi"]["6_revisione_proposte"]
+corpo["stato"], corpo["sintesi"] = stato, sintesi
+if stato == "in_esecuzione":
+    fasi["fase_corrente"] = 6
+    corpo["iniziata_il"] = now
+    corpo.pop("conclusa_il", None)
+else:
+    corpo["conclusa_il"] = now
+if stato == "completata":
+    corpo["richiede_approvazione"] = False
+    # I deliverable già scritti non conoscevano queste decisioni.
+    f7 = fasi["fasi"].get("7_stesura_offerta", {})
+    if f7.get("stato") not in (None, "da_eseguire"):
+        f7["stato"] = "da_rivedere"
+        f7["sintesi"] = "Da rivedere: la revisione delle proposte (Fase 6) è stata confermata dopo questi deliverable."
+with open("_state/fasi.json", "w") as f:
+    json.dump(fasi, f, ensure_ascii=False, indent=2)
+PY
+  }
+
+  segna_fase6 in_esecuzione "Scrittura delle decisioni nelle schede dei criteri."
+  set +e
+  CRITERI="$(python3 "$DECISIONI_PY" scrivi "$GARA_DIR" "$SPADA_DB_PATH" 2>"_state/decisioni.err")"
+  CODICE=$?
+  set -e
+  if [ $CODICE -ne 0 ]; then
+    MOTIVO="$(cat "_state/decisioni.err")"; rm -f "_state/decisioni.err"
+    segna_fase6 errore "${MOTIVO:-Decisioni non scritte.}"
+    error "${MOTIVO:-Decisioni non scritte nelle schede dei criteri.}"
+  fi
+  rm -f "_state/decisioni.err"
+  info "Decisioni scritte nelle schede. Criteri da elaborare: ${CRITERI:-nessuno}"
+
+  INTERROTTO=0
+  trap 'INTERROTTO=1' TERM INT
+  for CRITERIO in $CRITERI; do
+    RUN_ID="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+    AVVIATO_IL="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    segna_fase6 in_esecuzione "Elaborazione delle decisioni: criterio $CRITERIO (feedback-processor)."
+    python3 - "$RUN_ID" "$AVVIATO_IL" "$PIPELINE_VERSION_FULL" "$PREZZARIO_VERSION" "$MODELLO" "$EFFORT" "$CRITERIO" <<'PY'
+import json, sys
+run_id, avviato_il, pv, pzv, modello, effort, criterio = sys.argv[1:8]
+with open("_state/run_log.json") as f:
+    log = json.load(f)
+log["runs"].append({
+    "run_id": run_id, "fase": 6, "riesecuzione": False,
+    "avviato_il": avviato_il, "concluso_il": None,
+    "pipeline_version": pv, "prezzario_version": json.loads(pzv) if pzv != "null" else None,
+    "modello": modello, "effort": effort, "esito": "in_corso", "errore": None,
+    "session_id": run_id, "ripresa": False, "criterio": criterio,
+})
+with open("_state/run_log.json", "w") as f:
+    json.dump(log, f, ensure_ascii=False, indent=2)
+PY
+    PROMPT="Stai elaborando il feedback del professionista sul criterio $CRITERIO della gara $SLUG come invocazione a se' stante (Fase 6, revisione delle proposte).
+Segui esattamente le istruzioni in _pipeline/comandi/process_feedback.md (risolto da $SPADA_CLAUDE_DIR/commands/process_feedback.md) con argomento $CRITERIO, usando l'agente feedback-processor.
+Le decisioni sono già scritte nei campi **Decisione** e **Note** delle schede in output/05_criteria_outputs/${CRITERIO}_output.md: le ha scritte il sistema dall'interfaccia, parola per parola, e sono definitive. Non chiedere conferme: nessuno risponde in questa sessione. «Approva con modifiche» significa che la nota del professionista dice cosa cambiare: riportala nel nodo come vincolo di redazione. Una proposta senza decisione resta in sospeso e va solo segnalata.
+
+$(nota_percorsi)"
+    set +e
+    # shellcheck disable=SC2046  # effort_cli e' vuoto o "--effort <livello>"
+    bash "$SPADA_CLAUDE" -p "$PROMPT" --session-id "$RUN_ID" \
+      --model "$(modello_cli "$MODELLO")" $(effort_cli "$EFFORT") \
+      --permission-mode "$SPADA_PERMISSION_MODE" \
+      --output-format stream-json --verbose \
+      > "_state/run_${RUN_ID}.stream.jsonl" 2>&1
+    ESITO_CODICE=$?
+    set -e
+    ESITO="completato"; ERRORE=""
+    if [ "$INTERROTTO" = 1 ]; then
+      ESITO="interrotto"; ERRORE="Interrotta durante il criterio $CRITERIO: confermando di nuovo riprende da questo criterio."
+    elif [ $ESITO_CODICE -ne 0 ]; then
+      ESITO="errore"; ERRORE="Criterio $CRITERIO: claude -p e' uscito con codice $ESITO_CODICE."
+    elif ! grep -q "^stato_feedback: completato" "output/05_criteria_outputs/${CRITERIO}_output.md"; then
+      ESITO="errore"; ERRORE="Criterio $CRITERIO: feedback-processor non ha chiuso la scheda (stato_feedback non completato)."
+    fi
+    if [ "$ESITO" = "errore" ]; then
+      DIAGNOSI="$(diagnosi_stream "_state/run_${RUN_ID}.stream.jsonl" || true)"
+      [ -z "$DIAGNOSI" ] || ERRORE="$ERRORE $DIAGNOSI"
+    fi
+    chiudi_agenti_rimasti "$ESITO" || true
+    python3 - "$RUN_ID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ESITO" "$ERRORE" <<'PY'
+import json, sys
+run_id, concluso_il, esito, errore = sys.argv[1:5]
+with open("_state/run_log.json") as f:
+    log = json.load(f)
+for run in reversed(log["runs"]):
+    if run["run_id"] == run_id:
+        run.update(concluso_il=concluso_il, esito=esito, errore=errore or None)
+        break
+with open("_state/run_log.json", "w") as f:
+    json.dump(log, f, ensure_ascii=False, indent=2)
+PY
+    if [ "$ESITO" = "interrotto" ]; then
+      segna_fase6 interrotta "$ERRORE"
+      warn "$ERRORE"
+      exit 143
+    fi
+    if [ "$ESITO" = "errore" ]; then
+      segna_fase6 errore "$ERRORE"
+      warn "Stream completo: _state/run_${RUN_ID}.stream.jsonl"
+      error "$ERRORE"
+    fi
+    info "Criterio $CRITERIO: decisioni elaborate — run $RUN_ID"
+  done
+
+  python3 "$DECISIONI_PY" memoria "$GARA_DIR" "$SPADA_DB_PATH" || warn "Memoria di gara non aggiornata con la Fase 6."
+  segna_fase6 completata "Revisione confermata: decisioni elaborate nel grafo, nei registri e nel brief."
+  info "Fase 6 completata: revisione delle proposte confermata. La Fase 7 si avvia a parte."
+  exit 0
 fi
 
 # ── --approva: solo gate umani, nessuna invocazione claude ───────────

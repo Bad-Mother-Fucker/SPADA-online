@@ -21,10 +21,12 @@ from models import (
     IntegraDocumentoRequest, InformazioneProfessionistaRequest, InterventoRequest,
     ProposaOperatoreRequest,
 )
-from paths import PIPELINE_DIR, SlugNonValido, gara_dir, percorso_sotto_gara, valida_slug
+from paths import DB_PATH, PIPELINE_DIR, SlugNonValido, gara_dir, percorso_sotto_gara, valida_slug
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "_pipeline" / "scripts" / "domande"))
 import domande as registro_domande  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "_pipeline" / "scripts" / "setup"))
+import decisioni_proposte  # noqa: E402
 from prezzario import edizioni_installate, regione_canonica, stato_prezzario
 
 router = APIRouter(prefix="/gare", tags=["gare"])
@@ -414,18 +416,21 @@ def interrompi_job(slug: str, job_id: int):
     Una richiesta ripetuta non cambia nulla."""
     _gara_o_404(slug)
     with get_conn() as con:
-        job = con.execute("SELECT id, stato, tipo, operazione FROM job WHERE id=? AND gara_slug=?",
+        job = con.execute("SELECT id, fase, stato, tipo, operazione FROM job WHERE id=? AND gara_slug=?",
                           (job_id, slug)).fetchone()
         if job is None:
             raise HTTPException(404, f"Attività {job_id} non trovata per questa gara.")
-        if job["operazione"] or job["tipo"] == "approva":
-            raise HTTPException(409, "Questa attività non si può interrompere: dura pochi istanti o non si riprende.")
         if job["stato"] == "in_coda":
             con.execute("UPDATE job SET stato='annullato', errore=?, concluso_il=? WHERE id=?",
                         ("Tolta dalla coda prima di partire.", now(), job_id))
             return {"job_id": job_id, "stato": "annullato"}
         if job["stato"] != "in_esecuzione":
             raise HTTPException(409, "L'attività è già conclusa: non c'è nulla da interrompere.")
+        # In coda si toglie sempre; in corso si fermano solo le attività
+        # lunghe. La conferma della Fase 6 lo è (feedback-processor per
+        # ogni criterio) e riprende dal criterio rimasto.
+        if job["operazione"] or (job["tipo"] == "approva" and job["fase"] != 6):
+            raise HTTPException(409, "Questa attività non si può interrompere: dura pochi istanti o non si riprende.")
         con.execute("UPDATE job SET interruzione_richiesta=1 WHERE id=?", (job_id,))
     return {"job_id": job_id, "stato": "in_esecuzione", "interruzione_richiesta": True}
 
@@ -442,6 +447,17 @@ def riesegui_fase(slug: str, fase: int):
 
 @router.post("/{slug}/fasi/{fase}/approva", status_code=202)
 def approva_fase(slug: str, fase: int):
+    """Fasi 6 e 8: conferma del checkpoint umano. La Fase 6 (conferma
+    della revisione) si accoda solo con una decisione per ogni proposta
+    del registro e una nota su ogni «da modificare»: il job le scrive nei
+    Cx_output.md e le fa elaborare a feedback-processor. Non avvia la
+    Fase 7."""
+    if fase == 6:
+        d = _gara_o_404(slug)
+        motivi = decisioni_proposte.mancanti(d, decisioni_proposte.decisioni(d, str(DB_PATH)))
+        if motivi:
+            raise HTTPException(409, "Revisione incompleta: " + "; ".join(motivi[:5])
+                                + (f" e altre {len(motivi) - 5}." if len(motivi) > 5 else "."))
     return _accoda_job(slug, fase, "approva")
 
 
@@ -653,6 +669,20 @@ def leggi_output(slug: str, percorso: str):
 def run_log(slug: str):
     d = _gara_o_404(slug)
     return _leggi_json(d / "_state" / "run_log.json", {"runs": []})
+
+
+@router.get("/{slug}/approvazioni")
+def elenco_approvazioni(slug: str, fase: int | None = None):
+    """Storico delle decisioni, dalla più vecchia: per ogni riferimento
+    vale l'ultima. Serve all'interfaccia per ritrovarle dopo un ricarico."""
+    _gara_o_404(slug)
+    query = "SELECT riferimento, tipo, fase, decisione, nota, creato_il FROM approvazioni WHERE gara_slug=?"
+    parametri: list = [slug]
+    if fase is not None:
+        query += " AND fase=?"
+        parametri.append(fase)
+    with get_conn() as con:
+        return [dict(r) for r in con.execute(query + " ORDER BY id", parametri).fetchall()]
 
 
 @router.post("/{slug}/approvazioni", status_code=201)

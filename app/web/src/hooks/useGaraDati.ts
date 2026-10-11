@@ -23,6 +23,7 @@ export const chiaviGara = {
   runLog: (slug: string) => ["gara", slug, "run-log"] as const,
   proposteOperatore: (slug: string) => ["gara", slug, "proposte-operatore"] as const,
   proposta: (slug: string, id: string) => ["gara", slug, "proposta", id] as const,
+  approvazioni: (slug: string, fase: number) => ["gara", slug, "approvazioni", fase] as const,
   domande: (slug: string) => ["gara", slug, "domande"] as const,
   assistente: (slug: string) => ["gara", slug, "assistente"] as const,
   interventi: (slug: string) => ["gara", slug, "interventi"] as const,
@@ -259,10 +260,17 @@ export function useDeliverableAzioni(slug: string) {
   return { esegui, riesegui }
 }
 
+/** Decisioni della Fase 6 salvate nel database: sopravvivono al ricarico della pagina. */
+export function useApprovazioni(slug: string, fase = 6) {
+  return useQuery({ queryKey: chiaviGara.approvazioni(slug, fase), queryFn: ({ signal }) => Api.elencoApprovazioni(slug, fase, { signal }) })
+}
+
 export function useRegistraDecisione(slug: string) {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: (v: { id: string; decisione: Md.Decisione; nota?: string | null }) =>
       Api.registraApprovazione(slug, { fase: 6, tipo: "proposta", riferimento: v.id, decisione: v.decisione, nota: v.nota || null }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: chiaviGara.approvazioni(slug, 6) }),
   })
 }
 
