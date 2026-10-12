@@ -293,6 +293,9 @@ export const Api = {
     richiesta<{ job_id?: number | null; successivo?: string }>(`/gare/${s(slug)}/deliverables/${s(id)}/stadi/${s(stadio)}/approva`, { method: "POST" }),
   modificaStadio: (slug: string, id: string, stadio: string, nota: string) =>
     richiesta(`/gare/${s(slug)}/deliverables/${s(id)}/stadi/${s(stadio)}/modifica`, { method: "POST", body: JSON.stringify({ nota }) }),
+  /** Rifà da zero un solo stadio con i dati attuali; i successivi tornano da produrre. */
+  rifaiStadio: (slug: string, id: string, stadio: string) =>
+    richiesta(`/gare/${s(slug)}/deliverables/${s(id)}/stadi/${s(stadio)}/rifai`, { method: "POST" }),
   salvaStadio: (slug: string, id: string, stadio: string, testo: string) =>
     richiesta(`/gare/${s(slug)}/deliverables/${s(id)}/stadi/${s(stadio)}`, { method: "PUT", body: JSON.stringify({ testo }) }),
   esportaDeliverable: (slug: string, id: string, formato: "docx" | "pdf") =>

@@ -611,6 +611,7 @@ def esegui_deliverable(slug: str, deliverable_id: str):
 def riesegui_deliverable(slug: str, deliverable_id: str):
     """Da capo, dal primo stadio: l'output precedente si archivia."""
     _deliverable_o_404(slug, deliverable_id)
+    _deliverable_libero(slug, deliverable_id)
     return _accoda_job(slug, 7, "riesegui", deliverable_id=deliverable_id)
 
 
@@ -639,6 +640,24 @@ def modifica_stadio(slug: str, deliverable_id: str, stadio: str, body: Richiesta
         raise HTTPException(409, f"«{voce[1]}» non è ancora prodotto: non c'è nulla da modificare.")
     return _accoda_job(slug, 7, "esegui", deliverable_id=deliverable_id,
                        argomento=json.dumps({"stadio": stadio, "nota": body.nota.strip()}, ensure_ascii=False))
+
+
+@router.post("/{slug}/deliverables/{deliverable_id}/stadi/{stadio}/rifai", status_code=202)
+def rifai_stadio(slug: str, deliverable_id: str, stadio: str):
+    """Rifà da zero un solo stadio, con i dati attuali (decisioni della
+    Fase 6 comprese) e gli stadi precedenti così come approvati. La
+    versione attuale e quelle degli stadi successivi si archiviano; i
+    successivi tornano da produrre. Lo stadio 1 equivale a «da capo»."""
+    d, dl, voce = _stadio_o_404(slug, deliverable_id, stadio)
+    _deliverable_libero(slug, deliverable_id)
+    stadi = deliverables_offerta.stato_deliverable(d, dl)["stadi"]
+    i = next(k for k, x in enumerate(stadi) if x["id"] == stadio)
+    da_approvare = next((x for x in stadi[:i] if x["stato"] != "approvato"), None)
+    if da_approvare:
+        raise HTTPException(409, f"«{voce[1]}» si produce da «{da_approvare['etichetta']}» approvato: "
+                                 "approvalo prima, oppure rifai quello stadio.")
+    return _accoda_job(slug, 7, "riesegui", deliverable_id=deliverable_id,
+                       argomento=json.dumps({"stadio": stadio}))
 
 
 @router.put("/{slug}/deliverables/{deliverable_id}/stadi/{stadio}")

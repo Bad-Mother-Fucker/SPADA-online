@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Link, useParams } from "react-router"
 import { toast } from "sonner"
-import { CheckIcon, DownloadSimpleIcon, FilePdfIcon, FileDocIcon, PencilSimpleIcon } from "@phosphor-icons/react"
+import { ArrowCounterClockwiseIcon, CheckIcon, DownloadSimpleIcon, FilePdfIcon, FileDocIcon, PencilSimpleIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
@@ -63,11 +63,11 @@ function useAzioni() {
     az,
     avvia: (d: Deliverable) => az.esegui.mutate(d.id, esito(`${d.nome}: ${etichettaStadio(d, prossimoDaProdurre(d)?.id)} accodato.`, "Avvio non riuscito")),
     daCapo: (d: Deliverable) => setConferma({
-      titolo: `Rifare da capo «${d.nome}»?`, descrizione: aStadi(d) ? "Si riparte dal primo stadio. Il lavoro già fatto, comprese le tue modifiche, viene archiviato, non cancellato." : "Il documento viene rigenerato; quello attuale viene archiviato.", etichetta: "Rifai da capo",
+      titolo: `Rifare da capo «${d.nome}»?`, descrizione: aStadi(d) ? "Si riparte dal primo stadio, con le decisioni e i dati attuali. Il lavoro già fatto, comprese le tue modifiche, viene archiviato, non cancellato." : "Il documento viene rigenerato con le decisioni e i dati attuali; quello attuale viene archiviato.", etichetta: "Rifai da capo",
       onConferma: () => az.riesegui.mutate(d.id, esito(`${d.nome}: riesecuzione accodata.`, "Riesecuzione non riuscita")),
     }),
     dialogo: <DialogoConferma conferma={conferma} onChiudi={() => setConferma(null)} />,
-    occupato: az.esegui.isPending || az.riesegui.isPending || az.approva.isPending || az.modifica.isPending || az.salva.isPending,
+    occupato: az.esegui.isPending || az.riesegui.isPending || az.approva.isPending || az.modifica.isPending || az.salva.isPending || az.rifai.isPending,
   }
 }
 
@@ -216,6 +216,19 @@ function PannelloStadio({ d, s, blocco }: { d: Deliverable; s: StadioDeliverable
     })
     else fatto()
   }
+  // Stadi precedenti non approvati: lo stadio non si può rifare (parte da quelli).
+  const precedenteAperto = d.stadi.slice(0, i).find((x) => x.stato !== "approvato") || null
+  const rifai = () => {
+    const dopo = d.stadi.slice(i + 1).filter((x) => x.stato !== "da_produrre")
+    setConferma({
+      titolo: `Rifare «${s.etichetta}» da zero?`, etichetta: `Rifai ${s.etichetta.toLowerCase()}`,
+      descrizione: `L'agente lo riscrive da capo con le decisioni e i dati attuali${i > 0 ? `, seguendo ${d.stadi.slice(0, i).map((x) => `«${x.etichetta}»`).join(" e ")} come approvat${i > 1 ? "i" : "a"}` : ""}. La versione attuale${s.prodotto_il && s.stato !== "da_produrre" ? ", con le tue eventuali modifiche," : ""} viene archiviata, non cancellata.${dopo.length ? ` ${dopo.map((x) => `«${x.etichetta}»`).join(" e ")} ${dopo.length === 1 ? "viene archiviato e torna" : "vengono archiviati e tornano"} da produrre.` : ""}`,
+      onConferma: () => az.rifai.mutate({ id: d.id, stadio: s.id }, {
+        onSuccess: () => toast.success(`${s.etichetta}: nuova versione accodata.`),
+        onError: toastKo("Riesecuzione non riuscita"),
+      }),
+    })
+  }
   const esporta = (formato: "docx" | "pdf") => {
     // Si rigenera sempre dal definitivo attuale: il testo può essere cambiato a mano.
     const t = toast.loading(`Preparo il ${formato.toUpperCase()}…`)
@@ -299,6 +312,7 @@ function PannelloStadio({ d, s, blocco }: { d: Deliverable; s: StadioDeliverable
             </>
           )}
           <Button variant="outline" disabled={!!blocco || occupato} onClick={() => setModo("nota")}>Chiedi modifiche</Button>
+          <Button variant="ghost" disabled={!!blocco || occupato || !!precedenteAperto} title={precedenteAperto ? `Prima approva «${precedenteAperto.etichetta}»` : "Riscrive questo stadio da zero con i dati attuali"} onClick={rifai}><ArrowCounterClockwiseIcon aria-hidden="true" />Rifai {s.etichetta.toLowerCase()}</Button>
           <span className="text-micro text-muted-foreground">{s.prodotto_il && `Prodotto ${quandoBreve(s.prodotto_il)}`}{s.approvato_il && s.stato === "approvato" && !finale ? `, approvato ${quandoBreve(s.approvato_il)}` : ""}</span>
         </div>
       )}
@@ -360,11 +374,16 @@ export function Fase7Workspace() {
             {d.vincolo_formato && <p className="mt-3 text-micro text-foreground-2"><span className="font-medium text-foreground">Vincoli del disciplinare: </span>{d.vincolo_formato}</p>}
           </Card>
           {blocco && <Nota tono="neu" titolo="Produzione bloccata">{blocco}</Nota>}
+          {d.stato === "da_rivedere" && !lavora(d) && (
+            <Nota tono="attn" titolo="Da aggiornare">
+              {d.nota || "Scritto prima delle ultime decisioni sulle proposte."} Rifallo da capo per ripartire dalle decisioni attuali, oppure rifai un solo stadio dal suo pannello.
+            </Nota>
+          )}
           {d.errore && d.stato === "errore" && <Nota tono="crit" titolo="Ultima esecuzione non riuscita" role="alert">{d.errore}</Nota>}
           {!lavora(d) && d.stadi.some((s) => s.stato !== "da_produrre") && (
             <Card>
               <TitoloSezione>Da capo</TitoloSezione>
-              <p className="mb-2 text-micro text-foreground-2">Riparte dal primo stadio; quanto fatto finora viene archiviato.</p>
+              <p className="mb-2 text-micro text-foreground-2">{aStadi(d) ? "Riparte dal primo stadio con le decisioni e i dati attuali; quanto fatto finora viene archiviato. Per rifare un solo stadio usa «Rifai» nel suo pannello." : "Rigenera il documento con le decisioni e i dati attuali; quello attuale viene archiviato."}</p>
               <Button size="sm" variant="outline" className="w-full" disabled={!!blocco} onClick={() => daCapo(d)}>Rifai da capo</Button>
             </Card>
           )}

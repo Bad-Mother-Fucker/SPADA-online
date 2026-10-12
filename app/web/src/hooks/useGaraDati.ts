@@ -119,7 +119,7 @@ export interface StadioDeliverable { id: string; etichetta: string; file: string
     quelli che copre. `job.stadio` = stadio accodato o in lavorazione. */
 export interface Deliverable {
   id: string; criterio: string; criteri: string[]; trasversale: boolean; nome: string; vincolo_formato: string; fonte: string; tipo: string
-  agente: string; skill: string | null; cartella: string; stato?: string; prodotto?: boolean; errore?: string | null
+  agente: string; skill: string | null; cartella: string; stato?: string; prodotto?: boolean; errore?: string | null; nota?: string | null
   stadi: StadioDeliverable[]; esportazioni: { docx?: string; pdf?: string }; job?: JobFase & { stadio?: string | null }
 }
 export function useDeliverables(slug: string, attivo = true) {
@@ -279,8 +279,9 @@ export function useDeliverableAzioni(slug: string) {
   const approva = useMutation({ mutationFn: (v: { id: string; stadio: string }) => Api.approvaStadio(slug, v.id, v.stadio), onSettled: invalida })
   const modifica = useMutation({ mutationFn: (v: { id: string; stadio: string; nota: string }) => Api.modificaStadio(slug, v.id, v.stadio, v.nota), onSettled: invalida })
   const salva = useMutation({ mutationFn: (v: { id: string; stadio: string; testo: string }) => Api.salvaStadio(slug, v.id, v.stadio, v.testo), onSettled: invalida })
+  const rifai = useMutation({ mutationFn: (v: { id: string; stadio: string }) => Api.rifaiStadio(slug, v.id, v.stadio), onSettled: invalida })
   const esporta = useMutation({ mutationFn: (v: { id: string; formato: "docx" | "pdf" }) => Api.esportaDeliverable(slug, v.id, v.formato), onSettled: invalida })
-  return { esegui, riesegui, approva, modifica, salva, esporta }
+  return { esegui, riesegui, approva, modifica, salva, rifai, esporta }
 }
 
 /** Decisioni della Fase 6 salvate nel database: sopravvivono al ricarico della pagina. */

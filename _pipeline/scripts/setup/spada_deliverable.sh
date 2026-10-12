@@ -16,6 +16,9 @@
 #     senza argomento   → produce il primo stadio non ancora prodotto
 #     --riesegui        → riparte dal primo stadio; l'output precedente
 #                         si archivia, non si cancella
+#     --riesegui --argomento '{"stadio": "bozza"}'
+#                       → rifa' da zero solo quello stadio (i successivi
+#                         tornano da produrre); archiviati anche loro
 #     --argomento '{"stadio": "bozza", "nota": "…"}'
 #                       → rifa' quello stadio applicando la nota del
 #                         professionista (richiesta di modifiche)
@@ -51,33 +54,22 @@ source "$(dirname "$_SELF")/spada_comune.sh"
 cd "$GARA_DIR"
 mkdir -p _state
 
-# ── Deliverable e stadio da eseguire ────────────────────────────────
+# ── Riesecuzione: prima si archivia (copia, mai cancellato senza copia)
+#    e si azzera lo stadio da rifare, con i successivi; senza stadio
+#    nell'argomento si riparte da capo ───────────────────────────────
 [ "$FLAG" = "--riesegui" ] && [ -z "$ARGOMENTO" ] && ARGOMENTO='{"da_capo": true}'
+if [ "$FLAG" = "--riesegui" ]; then
+  ARCHIVIO="$(python3 "$OFFERTA_PY" rifai "$DELIVERABLE_ID" "$ARGOMENTO")" || error "Deliverable '$DELIVERABLE_ID' non trovato fra i documenti dell'offerta."
+  [ -z "$ARCHIVIO" ] || info "Riesecuzione di $DELIVERABLE_ID: versione precedente archiviata in $ARCHIVIO (non cancellata)."
+fi
+
+# ── Deliverable e stadio da eseguire ────────────────────────────────
 DL_JSON="$(python3 "$OFFERTA_PY" risolvi "$DELIVERABLE_ID" "$ARGOMENTO")" || error "$(python3 "$OFFERTA_PY" risolvi "$DELIVERABLE_ID" "$ARGOMENTO" 2>&1 >/dev/null || true)"
 campo() { echo "$DL_JSON" | python3 -c "import json,sys; v=json.load(sys.stdin).get('$1'); print(v if v is not None else '')"; }
 TIPO="$(campo tipo)"; NOME="$(campo nome)"; AGENTE="$(campo agente)"; SKILL="$(campo skill)"
 OUTPUT_DIR="$(campo cartella)"; STADIO="$(campo stadio)"; STADIO_ETICHETTA="$(campo stadio_etichetta)"
 FILE_STADIO="$(campo file_stadio)"; NOTA="$(campo nota)"
 COMANDO_FILE="_pipeline/comandi/deliverables/${TIPO}.md"
-
-# ── --riesegui: archivia l'output precedente, non lo cancella ───────
-if [ "$FLAG" = "--riesegui" ] && [ -d "$OUTPUT_DIR" ] && [ -n "$(ls -A "$OUTPUT_DIR" 2>/dev/null)" ]; then
-  ARCHIVIO="output/_archivio/$(date -u +%Y%m%dT%H%M%SZ)/deliverables/$DELIVERABLE_ID"
-  mkdir -p "$(dirname "$ARCHIVIO")"
-  mv "$OUTPUT_DIR" "$ARCHIVIO"
-  python3 - "$DELIVERABLE_ID" <<'PY'
-import json, sys
-try:
-    with open("_state/deliverables.json") as f:
-        stato = json.load(f)
-except (OSError, ValueError):
-    stato = {}
-stato.pop(sys.argv[1], None)
-with open("_state/deliverables.json", "w") as f:
-    json.dump(stato, f, ensure_ascii=False, indent=2)
-PY
-  info "Riesecuzione di $DELIVERABLE_ID da capo: output precedente archiviato in $ARCHIVIO (non cancellato)."
-fi
 mkdir -p "$OUTPUT_DIR"
 
 # ── Versione pipeline (stesso principio di spada_fase.sh) ───────────
@@ -166,6 +158,9 @@ trap 'rm -f "$PROMPT_FILE"' EXIT
     echo "RICHIESTA DI MODIFICHE del professionista su questo stadio. Il file attuale ($FILE_STADIO) è la versione da correggere: rileggilo e riscrivilo applicando questa nota, senza toccare ciò che la nota non chiede di cambiare:"
     echo "> $NOTA"
   fi
+  echo ""
+  echo "Proposte da usare: solo quelle approvate dal professionista nella Fase 6, secondo lo stato dei nodi in 02_graph/proposals/ (vale sopra registri, schede, memoria e stadi precedenti, che possono riportare decisioni superate):"
+  python3 "$OFFERTA_PY" proposte
   echo ""
   nota_percorsi
   echo ""

@@ -23,6 +23,9 @@ Uso da riga di comando (cwd = cartella della gara):
       Stampa il JSON del deliverable con lo stadio da eseguire.
   deliverables_offerta.py concludi <id> <stadio> <esito> <run_id> <avviato_il>
       Registra l'esito dello stadio e ricalcola lo stato della Fase 7.
+  deliverables_offerta.py rifai <id> [<argomento_json>]
+      Archivia e azzera lo stadio di argomento.stadio e i successivi
+      (senza stadio: tutto, da capo). Stampa la cartella d'archivio.
 """
 import json
 import re
@@ -254,6 +257,78 @@ def salva_testo(gara: Path, dl: dict, stadio: str, testo: str):
     _aggiorna(gara, dl["id"], fn)
 
 
+def _file_dello_stadio(dl: dict, stadio: str, ultimo: bool) -> list[str]:
+    """File della cartella prodotti da uno stadio: il suo testo, il suo
+    controllo (controllo_bozza.md, …) e, per l'ultimo, le esportazioni."""
+    voce = next(s for s in stadi_di(dl["tipo"]) if s[0] == stadio)
+    nomi = [voce[2], f"controllo_{stadio}.md"] if voce[2] else []
+    return nomi + (["*.docx", "*.pdf"] if ultimo else [])
+
+
+def rifai_da(gara: Path, dl: dict, stadio: str | None) -> str | None:
+    """Prepara la riesecuzione da uno stadio (None o il primo = da capo).
+    Quanto c'era si copia in output/_archivio/<ora>/deliverables/<id>/,
+    mai cancellato senza copia; poi si tolgono i file di quello stadio e
+    dei successivi e il loro stato, così lo stadio riparte da zero e i
+    successivi tornano da produrre. Restituisce la cartella d'archivio."""
+    import shutil
+    ordine = [s[0] for s in stadi_di(dl["tipo"])]
+    stadio = stadio or ordine[0]
+    cartella = gara / dl["cartella"]
+    archivio = None
+    if cartella.is_dir() and any(cartella.iterdir()):
+        base = gara / "output" / "_archivio" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        archivio, n = base / "deliverables" / dl["id"], 2
+        while archivio.exists():  # due riesecuzioni nello stesso secondo
+            archivio, n = base / "deliverables" / f"{dl['id']}-{n}", n + 1
+        archivio.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(cartella, archivio)
+    da_capo = stadio == ordine[0]
+    if da_capo and cartella.is_dir():
+        shutil.rmtree(cartella)
+    elif cartella.is_dir():
+        da_togliere = ordine[ordine.index(stadio):]
+        for s in da_togliere:
+            for modello in _file_dello_stadio(dl, s, s == ordine[-1]):
+                for f in cartella.glob(modello):
+                    f.unlink()
+
+    def fn(v):
+        if da_capo:
+            v.clear()
+            return
+        for s in ordine[ordine.index(stadio):]:
+            v.get("stadi", {}).pop(s, None)
+        v.update(stato="pronto", errore=None)
+        v.pop("nota", None)
+    _aggiorna(gara, dl["id"], fn)
+    ricalcola_fase7(gara)
+    return str(archivio.relative_to(gara)) if archivio else None
+
+
+def proposte_decise(gara: Path) -> dict:
+    """Proposte per decisione del professionista, dallo stato dei nodi in
+    02_graph/proposals/ (la fonte che la conferma della Fase 6 aggiorna).
+    Registri e schede possono portare righe storiche: qui vale il nodo."""
+    out = {"approvate": [], "scartate": [], "altre": []}
+    for f in sorted((gara / "02_graph" / "proposals").glob("P-*.md")):
+        meta = {}
+        righe = f.read_text(encoding="utf-8").splitlines()
+        if righe and righe[0].strip() == "---":
+            for r in righe[1:]:
+                if r.strip() == "---":
+                    break
+                if ":" in r and not r.startswith(" "):
+                    k, v = r.split(":", 1)
+                    meta[k.strip()] = v.split(" #", 1)[0].strip().strip('"')
+        pid = meta.get("id") or f.name.split("_", 1)[0]
+        voce = {"id": pid, "titolo": meta.get("titolo", ""), "sottocriterio": meta.get("sottocriterio", "")}
+        stato = meta.get("stato", "")
+        chiave = "approvate" if stato.startswith("approvata") else "scartate" if stato == "scartata" else "altre"
+        out[chiave].append(voce)
+    return out
+
+
 def ricalcola_fase7(gara: Path):
     manifest = _leggi(gara / "manifest.json", {})
     elenco = raggruppa(manifest)
@@ -338,7 +413,34 @@ def _cli_risolvi(did: str, argomento: str) -> int:
         "stadi_precedenti": [f"{dl['cartella']}/{s[2]}" for s in ordine[:i] if s[2]],
         "file_attuale_esiste": bool(ordine[i][2] and (gara / dl["cartella"] / ordine[i][2]).is_file()),
         "nota": (arg.get("nota") or "").strip() or None,
+        "proposte": proposte_decise(gara),
     }, ensure_ascii=False))
+    return 0
+
+
+def _cli_proposte() -> int:
+    """Elenco per il prompt: approvate da usare, scartate da escludere."""
+    p = proposte_decise(Path.cwd())
+    riga = lambda x: f"- {x['id']} ({x['sottocriterio']}) {x['titolo']}"
+    print("\n".join(map(riga, p["approvate"])) or "- (nessuna)")
+    if p["scartate"]:
+        print("Proposte SCARTATE dal professionista: non entrano nel documento in nessuna forma, nemmeno come "
+              "richiamo da un altro paragrafo. Se uno stadio già approvato le cita, omettile e ridistribuisci "
+              "lo spazio sulle approvate:")
+        print("\n".join(map(riga, p["scartate"])))
+    return 0
+
+
+def _cli_rifai(did: str, argomento: str) -> int:
+    """Archivia e azzera lo stadio indicato in argomento (o tutto, da capo)."""
+    gara = Path.cwd()
+    dl = trova(_leggi(gara / "manifest.json", {}), did)
+    if dl is None:
+        print(f"Deliverable '{did}' non trovato fra i documenti dell'offerta.", file=sys.stderr)
+        return 1
+    stadio = (json.loads(argomento) if argomento else {}).get("stadio")
+    archivio = rifai_da(gara, dl, stadio)
+    print(archivio or "")
     return 0
 
 
@@ -369,6 +471,10 @@ def _cli_controlla(did: str, stadio: str) -> int:
 if __name__ == "__main__":
     if len(sys.argv) >= 4 and sys.argv[1] == "controlla":
         sys.exit(_cli_controlla(sys.argv[2], sys.argv[3]))
+    if len(sys.argv) >= 2 and sys.argv[1] == "proposte":
+        sys.exit(_cli_proposte())
+    if len(sys.argv) >= 3 and sys.argv[1] == "rifai":
+        sys.exit(_cli_rifai(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else ""))
     if len(sys.argv) >= 3 and sys.argv[1] == "risolvi":
         sys.exit(_cli_risolvi(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else ""))
     if len(sys.argv) >= 5 and sys.argv[1] == "concludi":
