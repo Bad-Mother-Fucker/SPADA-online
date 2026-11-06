@@ -107,6 +107,10 @@ cat /tmp/raw_extract.txt
 ```
 
 5. Aggiorna manifest: `Stato` → `estratto`, `File estratto` → percorso .md
+   La cella `Stato` deve INIZIARE con la parola `estratto`; note e dettagli
+   vanno tra parentesi dopo (es. `estratto (p7m aperto + testo; 17 pag)`).
+   Mai `p7m aperto + testo estratto (...)`: il gate prima della Fase 3
+   (`verifica_completezza.py`) legge solo l'inizio della cella e blocca.
 6. Appendi voce in `output/01_extracted/extraction_log.md`
 
 ---

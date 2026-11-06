@@ -12,7 +12,8 @@ prima di far girare strategy-auditor.
 Legge input/_manifest_input.md (scritto da document-preprocessor,
 Fase 1) e blocca se un documento non di tipo "tavola" non risulta
 Stato=estratto (anche con una nota tra parentesi, es. "estratto (OCR)"). Le tavole sono lette da drawing-reader, non da
-estrazione testuale: esenti da questo gate.
+estrazione testuale: esenti da questo gate. Esenti anche i modelli BIM
+IFC (tipo "modello_bim_ifc"): testo STEP, non documenti da estrarre.
 
 Uso:
   python3 verifica_completezza.py <cartella_gara>
@@ -25,6 +26,8 @@ prosecuzione con conoscenza del rischio.
 import re
 import sys
 from pathlib import Path
+
+TIPI_ESENTI = {"tavola", "modello_bim_ifc"}
 
 
 def parse_manifest(path: Path):
@@ -64,7 +67,7 @@ def main():
         r for r in righe
         # "estratto (parziale: …)", "estratto (OCR)": il testo c'è, la nota
         # dice solo cosa manca (immagini, diagrammi) o come è stato ottenuto.
-        if r["tipo"].lower() != "tavola" and not r["stato"].strip().lower().startswith("estratto")
+        if r["tipo"].lower() not in TIPI_ESENTI and not r["stato"].strip().lower().startswith("estratto")
     ]
 
     if incompleti:
@@ -78,7 +81,7 @@ def main():
               "Completa l'estrazione (document-preprocessor, OCR per le scansioni: ocr_scansioni.py) prima di procedere.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"✓ Estrazione completa: {len(righe)} documenti censiti, tutti estratti o di tipo tavola.")
+    print(f"✓ Estrazione completa: {len(righe)} documenti censiti, tutti estratti o di tipo esente (tavola, IFC).")
     sys.exit(0)
 
 
