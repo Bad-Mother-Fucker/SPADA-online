@@ -9,6 +9,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { urlGara } from "./CardGara"
+import { Suggerimento } from "@/components/comuni/Primitivi"
+import { NOTA_BACKGROUND } from "@/components/comuni/CaricaPrezzario"
+import { useCaricaPrezzario, useImportPrezzarioInCorso } from "@/hooks/useGaraDati"
 import { useCreaGara, usePrezzari } from "@/hooks/useGare"
 import type { Prezzario } from "@/lib/api"
 import { slugify } from "@/lib/formato"
@@ -32,13 +35,6 @@ interface Form {
 
 const FORM_VUOTO: Form = { nome: "", slug: "", slugAuto: true, regione: "", anno: ANNO_CORRENTE, altro: false, modello: MODELLI[0].id, effort: "high" }
 
-function Suggerimento({ children, tono = "neu", id }: { children: React.ReactNode; tono?: "neu" | "crit" | "attn"; id?: string }) {
-  return (
-    <p id={id} className={cn("text-micro", tono === "crit" ? "text-status-crit" : tono === "attn" ? "text-status-attn" : "text-muted-foreground")}>
-      {children}
-    </p>
-  )
-}
 
 /** Il pannello laterale "Nuova gara": l'elenco resta visibile dietro, con i
     nomi delle gare esistenti che aiutano a scegliere slug e nome. */
@@ -49,6 +45,9 @@ export function PannelloNuovaGara({ aperto, onApertoChange, slugPresi }: { apert
   const [erroreServer, setErroreServer] = useState<{ messaggio: string; campo?: "slug" } | null>(null)
   const prezzari = usePrezzari(aperto)
   const crea = useCreaGara()
+  const caricaPrezzario = useCaricaPrezzario()
+  // File PriMus del prezzario mancante: si importa in background dopo la creazione.
+  const [dcf, setDcf] = useState<File | null>(null)
   const refErrore = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
@@ -59,7 +58,7 @@ export function PannelloNuovaGara({ aperto, onApertoChange, slugPresi }: { apert
 
   // Ogni apertura è un modulo nuovo.
   useEffect(() => {
-    if (aperto) { setForm(FORM_VUOTO); setToccato({}); setErroreServer(null); crea.reset() }
+    if (aperto) { setForm(FORM_VUOTO); setToccato({}); setErroreServer(null); setDcf(null); crea.reset() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aperto])
 
@@ -104,16 +103,18 @@ export function PannelloNuovaGara({ aperto, onApertoChange, slugPresi }: { apert
   /* Il prezzario serve alle valutazioni economiche, non per registrare né
      per eseguire la gara: senza, le fasi girano lo stesso. Regione e anno
      restano obbligatori, perché dicono quale prezzario manca. */
+  const importInCorso = useImportPrezzarioInCorso(regione, Number(anno))
   const validazionePrezzario = (() => {
     const r = regione.trim()
     const a = Number(anno)
-    if (!r) return { ok: false, msg: "Indica la regione del prezzario di riferimento.", avviso: false }
-    if (!Number.isInteger(a) || a < 2000 || a > 2100) return { ok: false, msg: "L'anno deve essere fra 2000 e 2100.", avviso: false }
+    if (!r) return { ok: false, msg: "Indica la regione del prezzario di riferimento.", avviso: false, mancante: false }
+    if (!Number.isInteger(a) || a < 2000 || a > 2100) return { ok: false, msg: "L'anno deve essere fra 2000 e 2100.", avviso: false, mancante: false }
     if (prezzari.isSuccess && !elenco.some((p) => p.regione.toLowerCase() === r.toLowerCase() && p.anno === a)) {
-      return { ok: true, avviso: true, msg: `Il prezzario ${r} ${a} non è presente: la gara si crea e si esegue lo stesso, ma senza valutazioni economiche. Te lo segnalerò nella pagina della gara finché non lo importi.` }
+      if (importInCorso) return { ok: true, avviso: false, mancante: false, msg: `Il prezzario ${r} ${a} è in importazione: sarà disponibile fra poco, puoi creare la gara.` }
+      return { mancante: true, ok: true, avviso: true, msg: `Il prezzario ${r} ${a} non è presente: la gara si crea e si esegue lo stesso, ma senza valutazioni economiche. Se hai il file .dcf della regione puoi caricarlo qui sotto.` }
     }
     const voci = elenco.find((p) => p.regione.toLowerCase() === r.toLowerCase() && p.anno === a)?.totale_voci
-    return { ok: true, avviso: false, msg: voci ? `Prezzario ${r} ${a} presente, ${voci.toLocaleString("it-IT")} voci.` : "" }
+    return { ok: true, avviso: false, mancante: false, msg: voci ? `Prezzario ${r} ${a} presente, ${voci.toLocaleString("it-IT")} voci.` : "" }
   })()
 
   const valido = validazioneNome.ok && validazioneSlug.ok && validazionePrezzario.ok && !crea.isPending
@@ -128,6 +129,10 @@ export function PannelloNuovaGara({ aperto, onApertoChange, slugPresi }: { apert
       {
         onSuccess: () => {
           toast.success("Gara creata", { description: "Il prossimo passo è caricare i documenti." })
+          // Dopo la creazione, non prima: un modulo da correggere non deve
+          // lanciare due volte lo stesso import. Non si aspetta: va in
+          // background e la notifica arriva da useCaricaPrezzario.
+          if (dcf && validazionePrezzario.mancante) caricaPrezzario.mutate({ regione: regione.trim(), anno: Number(anno), file: dcf })
           onApertoChange(false)
           // Si atterra sulla Fase 1: la gara appena creata non ha altro da
           // mostrare che la zona di caricamento.
@@ -234,6 +239,13 @@ export function PannelloNuovaGara({ aperto, onApertoChange, slugPresi }: { apert
               )}
               {validazionePrezzario.msg && (validazionePrezzario.ok || toccato.invio) && (
                 <Suggerimento tono={!validazionePrezzario.ok ? "crit" : validazionePrezzario.avviso ? "attn" : "neu"}>{validazionePrezzario.msg}</Suggerimento>
+              )}
+              {validazionePrezzario.mancante && (
+                <div className="mt-1 grid gap-1.5">
+                  <Label htmlFor={`${id}-dcf`}>File del prezzario (.dcf), facoltativo</Label>
+                  <Input id={`${id}-dcf`} type="file" accept=".dcf,.DCF" onChange={(e) => setDcf(e.target.files?.[0] || null)} />
+                  <Suggerimento>Il file PriMus pubblicato dalla regione. {NOTA_BACKGROUND} Intanto puoi caricare i documenti della gara.</Suggerimento>
+                </div>
               )}
             </div>
 

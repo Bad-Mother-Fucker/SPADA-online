@@ -63,6 +63,16 @@ sezione 4: Approva o Approva con modifiche):
 **Proposte recuperate** (Decisione: Recupera nella sezione scartate):
 Trattale come approvate con nota "recuperata da scarto".
 
+**Proposte del professionista** (sottosezione "### Proposte del
+professionista", scheda con `**Origine:** professionista`): le ha
+scritte il professionista in Fase 6 e sono approvate per definizione.
+Il testo e' il paragrafo "**La proposta.**", il sottocriterio e' il
+campo **Sottocriterio** della scheda (se manca, lascialo vuoto). Non
+hanno evidenze raccolte dal sistema: nel nodo `evidence_documents: []`,
+`confidence: TBD` (nessuna evidenza da pesare), `origine: professionista` e, nella sezione
+"Evidenze collegate", la frase "Nessuna evidenza raccolta dal sistema:
+proposta del professionista." Non inventare evidenze e non cercarle.
+
 **Proposte scartate definitivamente o senza decisione**: ignora.
 
 **Risposte alle domande strategiche**: estrai il testo del campo

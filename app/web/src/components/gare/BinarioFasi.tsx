@@ -5,6 +5,7 @@ const CLASSE: Record<StatoFase, string> = {
   completata: "bg-foreground-2",
   da_rivedere: "bg-status-attn",
   in_esecuzione: "barra-in-corso",
+  interrotta: "bg-status-attn",
   errore: "bg-status-crit",
   in_coda: "bg-border-strong",
 }

@@ -1,9 +1,11 @@
-import { StarFourIcon, ArrowSquareOutIcon, MonitorIcon, CheckIcon, SignInIcon, SignOutIcon, UserIcon } from "@phosphor-icons/react"
+import { ArrowSquareOutIcon, FileArrowUpIcon, MonitorIcon, CheckIcon, SignInIcon, SignOutIcon, UserIcon } from "@phosphor-icons/react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { Link } from "react-router"
 import { toast } from "sonner"
 import { CHIAVE_LOGIN, DialogoLoginClaude, useLoginClaude } from "./LoginClaude"
+import { DialogoCaricaPrezzario } from "./CaricaPrezzario"
+import { usePrezzari } from "@/hooks/useGare"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useStatoBackend, type StatoBackend } from "@/hooks/useStatoBackend"
 import { useTema } from "@/hooks/useTema"
@@ -31,7 +33,7 @@ function BadgeBackend() {
       className={cn("inline-flex h-7 items-center gap-2 rounded-md px-2 text-xs transition-colors duration-(--d-fast) hover:bg-muted", b.classe)}
     >
       <i className={cn("size-1.5 rounded-full", b.punto)} aria-hidden="true" />
-      {b.testo}
+      <span className="max-md:sr-only">{b.testo}</span>
     </button>
   )
 }
@@ -40,7 +42,8 @@ function ControlloTema() {
   const { tema, effettivo, scegli } = useTema()
   const voci = [["light", "Chiaro"], ["dark", "Scuro"]] as const
   return (
-    <div role="group" aria-label="Tema" className="inline-flex overflow-hidden rounded-md border border-border-strong">
+    // Su schermi stretti il tema resta nel menu del profilo.
+    <div role="group" aria-label="Tema" className="inline-flex shrink-0 overflow-hidden rounded-md border border-border-strong max-md:hidden">
       {voci.map(([id, label]) => {
         const attivo = tema === id || (tema === "auto" && effettivo === id)
         return (
@@ -77,6 +80,8 @@ function MenuAvatar() {
   const qc = useQueryClient()
   const { data: claude } = useLoginClaude()
   const [loginAperto, setLoginAperto] = useState(false)
+  const [prezzarioAperto, setPrezzarioAperto] = useState(false)
+  const prezzari = usePrezzari()
   const collegato = !!claude?.disponibile
   const conToken = claude?.metodo === "oauth_token"
   const esci = () => Api.esciClaude()
@@ -94,7 +99,7 @@ function MenuAvatar() {
         {claude && !collegato && <i className="absolute -top-0.5 -right-0.5 size-2 rounded-full border border-card bg-status-crit" aria-hidden="true" />}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-64">
-        <DropdownMenuLabel>Claude per SPADA</DropdownMenuLabel>
+        <DropdownMenuLabel>Claude per Prometheus - S.P.A.D.A.</DropdownMenuLabel>
         <p className="px-2 pb-1.5 text-xs text-muted-foreground">
           {!claude ? "Verifica in corso…"
             : collegato ? (claude.account ? `Collegato come ${claude.nome ? `${claude.nome}, ` : ""}${claude.account}${claude.abbonamento ? ` (${claude.abbonamento})` : ""}` : conToken ? "Collegato con token OAuth" : "Collegato")
@@ -115,7 +120,16 @@ function MenuAvatar() {
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Tema</DropdownMenuLabel>
+        <DropdownMenuLabel>Prezzari</DropdownMenuLabel>
+        <p className="px-2 pb-1.5 text-xs text-muted-foreground">
+          {prezzari.isPending ? "Lettura in corso…"
+            : prezzari.data?.length ? prezzari.data.map((p) => `${p.regione} ${p.anno}`).join(", ")
+            : "Nessun prezzario installato."}
+        </p>
+        <DropdownMenuItem onSelect={() => setPrezzarioAperto(true)}>
+          <FileArrowUpIcon aria-hidden="true" />Aggiungi prezzario (.dcf)
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuLabel>Tema</DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => scegli("auto")}>
           <MonitorIcon aria-hidden="true" />
@@ -129,7 +143,23 @@ function MenuAvatar() {
       </DropdownMenuContent>
     </DropdownMenu>
     <DialogoLoginClaude aperto={loginAperto} onChiudi={() => setLoginAperto(false)} />
+    <DialogoCaricaPrezzario aperto={prezzarioAperto} onChiudi={() => setPrezzarioAperto(false)} />
     </>
+  )
+}
+
+/** Marchio del prodotto: la spada di public/favicon.svg, a tinta unita
+    (currentColor) per seguire testo e tema. */
+function IconaSpada({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" fill="currentColor" aria-hidden="true" className={className}>
+      <g transform="translate(32 32) scale(1.25) rotate(45) translate(-32 -32.6)">
+        <path d="M32 3 L36.5 9.5 V40 H27.5 V9.5 Z" />
+        <rect x="18" y="40" width="28" height="5" rx="2.5" />
+        <rect x="29.3" y="45" width="5.4" height="10.5" rx="1.2" />
+        <circle cx="32" cy="58.5" r="3.8" />
+      </g>
+    </svg>
   )
 }
 
@@ -137,13 +167,13 @@ function MenuAvatar() {
     del backend, tema, operatore. */
 export interface Briciola { a?: string; etichetta: string; mono?: boolean }
 
-export function AppBar({ sezione = "Gare", briciole, badge, larga }: { sezione?: string; briciole?: Briciola[]; badge?: React.ReactNode; larga?: boolean }) {
+export function AppBar({ sezione, briciole, badge, larga, piena }: { sezione?: string; briciole?: Briciola[]; badge?: React.ReactNode; larga?: boolean; piena?: boolean }) {
   return (
     <header className="sticky top-0 z-20 border-b bg-card">
-      <div className={cn("mx-auto flex h-12 items-center gap-3.5 px-6 max-md:px-4", larga ? "max-w-[1280px]" : "max-w-[1200px]")}>
+      <div className={cn("mx-auto flex h-12 items-center gap-3.5 px-6 max-md:px-4", piena ? "max-w-none" : larga ? "max-w-[1280px]" : "max-w-[1200px]")}>
         <Link to="/" className="flex shrink-0 items-center gap-1.5 rounded-sm font-semibold tracking-[0.01em]">
-          <StarFourIcon size={14} weight="fill" aria-hidden="true" />
-          SPADA
+          <IconaSpada className="size-5" />
+          <span className="max-sm:sr-only">Prometheus - S.P.A.D.A.</span>
         </Link>
         {briciole ? (
           <nav aria-label="Percorso" className="flex min-w-0 items-center gap-2 text-muted-foreground">
@@ -154,9 +184,9 @@ export function AppBar({ sezione = "Gare", briciole, badge, larga }: { sezione?:
               </span>
             ))}
           </nav>
-        ) : (
+        ) : sezione ? (
           <span className="text-muted-foreground">{sezione}</span>
-        )}
+        ) : null}
         <span className="flex-1" />
         {badge ?? <BadgeBackend />}
         <ControlloTema />

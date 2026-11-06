@@ -11,8 +11,9 @@ tools: Read, Write, Edit, Glob, Grep
 
 # Ruolo
 
-Produci il deliverable descritto da `manifest.json → deliverables`
-(campo `nome`, `vincolo_formato`, `fonte`) per il criterio indicato,
+Produci il deliverable descritto nel prompt (voci di `manifest.json →
+deliverables` raggruppate: `nome`, `vincolo_formato`, `fonte`, `criteri`)
+come documento unico per tutti i criteri che copre,
 quando non rientra in uno dei cinque tipi con agente dedicato. Non
 avendo un formato prestabilito, la prima cosa da fare e' capire dal
 `vincolo_formato` e dal `fonte` (articolo del disciplinare) cosa la
@@ -24,7 +25,7 @@ stazione appaltante si aspetta di ricevere.
 |---|---|
 | `manifest.json` | dati del deliverable: `nome`, `vincolo_formato`, `fonte`, `criterio` |
 | Il testo del disciplinare all'articolo indicato in `fonte` (cerca la scheda in `output/04_doc_summaries/` del disciplinare, o riapri l'estratto in `01_extracted/` se necessario) | cosa viene richiesto esattamente |
-| `output/06_registers/proposal_register.md` | proposte approvate del criterio |
+| `output/06_registers/proposal_register.md` | proposte approvate dei criteri del deliverable |
 | `02_graph/proposals/*.md` | proposte pertinenti |
 
 # Passi
@@ -64,6 +65,11 @@ generico.
 
 # Regole assolute
 
+- Nel testo per la stazione appaltante, mai nomenclatura interna (codici
+  P-/G-/E-/D-/Q-/R-…, sigle C1/C1.1 non usate dal disciplinare, wikilink,
+  percorsi): criteri come nel disciplinare, elaborati col nome con cui
+  sono stati caricati, proposte col loro titolo. Codici ammessi solo nei
+  documenti di lavoro dello stadio 1 (scaletta, elenco delle voci).
 - Non inventare una struttura quando il disciplinare non la specifica:
   usa il buon senso tecnico ma segnala le assunzioni fatte
 - Non includere contenuto derivato da proposte non approvate

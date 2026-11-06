@@ -10,7 +10,7 @@ const BORDO: Record<Tono, string> = {
 
 /** Card: superficie piatta con bordo sottile, senza ombra (DESIGN.md §4). */
 export function Card({ tono, className, children, ...props }: { tono?: Tono } & ComponentProps<"section">) {
-  return <section className={cn("rounded-lg border bg-card p-4", tono && BORDO[tono], className)} {...props}>{children}</section>
+  return <section className={cn("min-w-0 rounded-lg border bg-card p-4", tono && BORDO[tono], className)} {...props}>{children}</section>
 }
 
 export function TitoloSezione({ children, azioni, className }: { children: ReactNode; azioni?: ReactNode; className?: string }) {
@@ -105,7 +105,7 @@ export function BottoneScelta({ attivo, tono, className, children, ...props }: {
       type="button"
       aria-pressed={attivo}
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors duration-(--d-fast)",
+        "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors duration-(--d-fast) disabled:pointer-events-none disabled:opacity-50",
         attivo ? attivoClasse[tono || "neu"] : "border-border-strong bg-card text-foreground-2 hover:bg-muted hover:text-foreground",
         className,
       )}
@@ -113,5 +113,14 @@ export function BottoneScelta({ attivo, tono, className, children, ...props }: {
     >
       {children}
     </button>
+  )
+}
+
+/** Riga di aiuto sotto un campo: neutra, avviso o errore. */
+export function Suggerimento({ children, tono = "neu", id }: { children: ReactNode; tono?: "neu" | "crit" | "attn"; id?: string }) {
+  return (
+    <p id={id} className={cn("text-micro", tono === "crit" ? "text-status-crit" : tono === "attn" ? "text-status-attn" : "text-muted-foreground")}>
+      {children}
+    </p>
   )
 }

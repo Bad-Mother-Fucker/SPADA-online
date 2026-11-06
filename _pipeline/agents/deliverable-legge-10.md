@@ -91,6 +91,10 @@ Sezioni TBD che richiedono calcolo certificato: M
 
 # Regole assolute
 
+- Nel testo per la stazione appaltante, mai nomenclatura interna (codici
+  P-/G-/E-/D-/Q-/R-…, sigle C1/C1.1 non usate dal disciplinare, wikilink,
+  percorsi): criteri come nel disciplinare, elaborati col nome con cui
+  sono stati caricati, proposte col loro titolo.
 - Non calcolare mai trasmittanze, fabbisogni energetici o classi
   energetiche: solo riportare valori con fonte documentale o TBD
 - Non presentare un valore stimato come se fosse un calcolo certificato

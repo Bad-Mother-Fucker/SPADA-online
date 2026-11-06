@@ -2,12 +2,16 @@
 // dominio.js del frontend precedente, oggi rimosso. Le viste non devono mai conoscere le chiavi
 // della pipeline: la mappa sta qui, in un posto solo.
 
-export type StatoFase = "completata" | "da_rivedere" | "in_esecuzione" | "errore" | "in_coda"
+export type StatoFase = "completata" | "da_rivedere" | "in_esecuzione" | "interrotta" | "errore" | "in_coda"
 export type StatoGara = StatoFase
 
 /** Job della coda sovrapposto dal backend (routers/gare.py::_fasi_con_job):
     c'è finché la fase è accodata o gira. "in_coda" = in avvio. */
-export interface JobFase { id: number; stato: "in_coda" | "in_esecuzione"; creato_il: string; iniziato_il?: string | null; deliverable_id?: string | null }
+export interface JobFase {
+  id: number; stato: "in_coda" | "in_esecuzione"; creato_il?: string; iniziato_il?: string | null; deliverable_id?: string | null
+  /** «Interrompi» chiesto e non ancora applicato dal worker (pochi secondi). */
+  interruzione_richiesta?: boolean
+}
 
 export interface CorpoFase {
   stato?: string
@@ -43,7 +47,7 @@ export const FASI: readonly Fase[] = [
   { n: 6, num: "06", chiave: "6_revisione_proposte", titolo: "Revisione proposte", kicker: "Fase 6, checkpoint umano", testata: "Revisione delle proposte tecniche",
     sottotitolo: "Decisione proposta per proposta: approvate entrano nei deliverable, rimandate tornano agli agenti con la tua nota, scartate restano nello storico." },
   { n: 7, num: "07", chiave: "7_stesura_offerta", titolo: "Deliverables", kicker: "Fase 7, deliverables", testata: "Deliverable richiesti",
-    sottotitolo: "Elenco ricavato dal disciplinare di questa gara, non un modello fisso. Ogni deliverable ha agente e skill propri e può girare in parallelo." },
+    sottotitolo: "Elenco ricavato dal disciplinare di questa gara, non un modello fisso. Si sbloccano a revisione delle proposte confermata e ognuno si avvia, si segue e si interrompe per conto suo." },
   { n: 8, num: "08", chiave: "8_approvazione_finale", titolo: "Audit e consegna", kicker: "Fase 8, audit di consegna", testata: "Audit formale del plico",
     sottotitolo: "Verifica di completezza e consegnabilità, non una seconda verifica delle prove, già svolta in Fase 5 e 6." },
 ]
@@ -59,6 +63,7 @@ export const STATO: Record<StatoFase, { tono: Tono; etichetta: string; breve: st
   completata:    { tono: "ok",   etichetta: "Completata",               breve: "completata" },
   da_rivedere:   { tono: "attn", etichetta: "Richiede la tua decisione", breve: "da rivedere" },
   in_esecuzione: { tono: "run",  etichetta: "In esecuzione",            breve: "in esecuzione" },
+  interrotta:    { tono: "attn", etichetta: "Interrotta",               breve: "interrotta" },
   errore:        { tono: "crit", etichetta: "Errore",                   breve: "errore" },
   in_coda:       { tono: "neu",  etichetta: "Non ancora eseguita",      breve: "in coda" },
 }
@@ -67,6 +72,7 @@ export const STATO: Record<StatoFase, { tono: Tono; etichetta: string; breve: st
 export const STATO_GARA: Record<StatoGara, { tono: Tono; etichetta: string }> = {
   da_rivedere:   { tono: "attn", etichetta: "Da rivedere" },
   in_esecuzione: { tono: "run",  etichetta: "In esecuzione" },
+  interrotta:    { tono: "attn", etichetta: "Interrotta" },
   completata:    { tono: "ok",   etichetta: "Completata" },
   errore:        { tono: "crit", etichetta: "Errore" },
   in_coda:       { tono: "neu",  etichetta: "In coda" },
@@ -108,6 +114,9 @@ export function inAvvio(fasi: Fasi | null | undefined, n: number): boolean {
 /** Ogni fase sblocca la successiva. Stesso vincolo applicato dal backend. */
 export function sbloccata(fasi: Fasi | null | undefined, n: number): boolean {
   if (n <= 1) return true
+  // I deliverable dipendono dalle decisioni della Fase 6, e uno stato
+  // rimasto appeso sulla Fase 7 non deve bastare ad aprirli.
+  if (n === 7) return statoFase(fasi, 6) === "completata"
   if (statoFase(fasi, n) !== "in_coda") return true
   return statoFase(fasi, n - 1) === "completata"
 }
@@ -116,14 +125,26 @@ export function sbloccata(fasi: Fasi | null | undefined, n: number): boolean {
     le domande arrivano già dalla Fase 1 (sopralluogo, quesiti con scadenza)
     e il professionista deve poter rispondere in bozza prima che l'analisi
     strategica sia finita. Eseguirla resta legato a `sbloccata`. */
-export function consultabile(fasi: Fasi | null | undefined, n: number): boolean {
+export function consultabile(fasi: Fasi | null | undefined, n: number, manifest?: Record<string, unknown> | null): boolean {
   if (sbloccata(fasi, n)) return true
+  if (n === 7 && deliverablesIndividuati(manifest)) return true
   return n === 4 && statoFase(fasi, 1) === "completata"
+}
+
+/** La Fase 7 si apre in lettura appena l'analisi del disciplinare ha scritto
+    nel manifesto l'elenco dei deliverable: lo si legge subito, mentre
+    produrli resta legato a `sbloccata` (stesso vincolo del backend). */
+export function deliverablesIndividuati(manifest?: Record<string, unknown> | null): boolean {
+  const d = manifest?.deliverables
+  return !!d && typeof d === "object" && Object.values(d as Record<string, unknown>).some((v) => Array.isArray(v) && v.length > 0)
 }
 
 /** Perché la fase n è chiusa, in una frase: null se è aperta. */
 export function motivoBlocco(fasi: Fasi | null | undefined, n: number): string | null {
   if (sbloccata(fasi, n)) return null
+  if (n === 7) return statoFase(fasi, 6) === "in_esecuzione"
+    ? "Si sblocca quando la conferma delle decisioni della Fase 6 ha finito di aggiornare grafo e registri."
+    : "Si sblocca quando confermi le decisioni della Fase 6 (Revisione proposte) e la loro elaborazione è conclusa."
   const prec = fase(n - 1)
   return statoFase(fasi, n - 1) === "da_rivedere"
     ? `Si sblocca quando approvi il checkpoint della Fase ${n - 1} (${prec.titolo}).`
@@ -145,6 +166,7 @@ export function statoGara(fasi: Fasi | null | undefined): StatoGara {
   if (stati.includes("errore")) return "errore"
   if (stati.includes("da_rivedere")) return "da_rivedere"
   if (stati.includes("in_esecuzione")) return "in_esecuzione"
+  if (stati.includes("interrotta")) return "interrotta"
   if (stati.every((s) => s === "completata")) return "completata"
   return "in_coda"
 }

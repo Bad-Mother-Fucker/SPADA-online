@@ -10,7 +10,7 @@
 // "sembra a posto" ma logga errori non è a posto.
 
 import { spawn } from "node:child_process"
-import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -27,7 +27,12 @@ const js = opt("eval", null)
 // così più scatti in parallelo non si contendono la stessa porta.
 let porta = 0
 const profilo = mkdtempSync(join(tmpdir(), "spada-chrome-"))
-const CHROME = process.env.CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+// CHROME vince; altrimenti il primo Chrome/Chromium installato (macOS o Linux).
+const CHROME = process.env.CHROME || [
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser",
+].find((p) => existsSync(p))
+if (!CHROME) { console.error("Chrome non trovato: indica il percorso con CHROME=..."); process.exit(2) }
 const chrome = spawn(CHROME, [
   "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
   "--remote-debugging-port=0", `--user-data-dir=${profilo}`, `--window-size=${w},${h}`, "about:blank",

@@ -153,3 +153,45 @@ with os.fdopen(fd, "w", encoding="utf-8") as f:
 os.replace(tmp, p)
 PY
 }
+
+# ── Interruzione e ripresa ─────────────────────────────────────────
+# Ogni run è una sessione di Claude Code con id = run_id (--session-id),
+# salvata nella config dedicata. «Interrompi» (o l'arresto di SPADA)
+# manda SIGTERM al gruppo del job: lo script lo intercetta, registra il
+# run "interrotto" con la sua sessione e la fase/il deliverable
+# "interrotta". La prossima esecuzione senza --riesegui riprende quella
+# sessione con --resume: Claude ha nel contesto tutto il lavoro già
+# fatto e continua da lì. Senza la sessione salvata si riparte da capo.
+
+# Stampa la sessione da riprendere, o niente. Cwd = radice della gara.
+# $1 = numero di fase (per le fasi), $2 = deliverable_id (per i deliverable).
+sessione_interrotta() {
+  python3 - "$1" "$2" "$SPADA_CLAUDE_DIR" <<'PY'
+import glob, json, os, sys
+fase, deliverable_id, config = sys.argv[1:4]
+try:
+    with open("_state/run_log.json", encoding="utf-8") as f:
+        runs = json.load(f).get("runs", [])
+except (OSError, ValueError):
+    sys.exit(0)
+for run in reversed(runs):
+    if deliverable_id:
+        if run.get("deliverable_id") != deliverable_id:
+            continue
+    elif run.get("deliverable_id") or str(run.get("fase")) != fase:
+        continue
+    if str(run.get("modello", "")).startswith("n/a"):
+        continue  # job scartato prima di partire: non ha toccato la sessione
+    sessione = run.get("session_id")
+    if run.get("esito") == "interrotto" and sessione and \
+            glob.glob(os.path.join(config, "projects", "*", sessione + ".jsonl")):
+        print(sessione)
+    break
+PY
+}
+
+prompt_ripresa() {
+  cat <<'PROMPT'
+L'esecuzione è stata interrotta (dall'utente o per lo spegnimento del sistema) e ora riprende. Hai nel contesto tutto quello che avevi fatto fino all'interruzione; le istruzioni sono le stesse. Un'operazione o un subagente in corso al momento dell'interruzione può aver lasciato un file incompleto o non averlo scritto: prima di proseguire controlla sul disco cosa c'è già, poi continua da dove eri rimasto senza rifare il lavoro già concluso.
+PROMPT
+}

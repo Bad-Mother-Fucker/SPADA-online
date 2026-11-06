@@ -9,19 +9,31 @@ const {
   WidthType, ShadingType, PageNumber, PageBreak, LevelFormat
 } = require('docx');
 
-// ── Percorsi ──────────────────────────────────────────────────────────────────
+// ── Percorsi e parametri ──────────────────────────────────────────────────────
+// Uso: node md_to_docx.js [input.md output.docx] [--font F] [--size PT]
+//        [--interlinea 1.15] [--titolo T] [--gara N] [--cig C] [--sa S] [--data D]
+//        [--senza-numeri-riga]
+// Senza argomenti: percorsi storici di offer-writer (bozza_contenuto.md).
+// Font e corpo vengono dalla Sezione A di vincoli_offerta_tecnica.md
+// (li passa il backend): i default valgono solo se il disciplinare tace.
+const ARGS = process.argv.slice(2);
+const opt = (n, d) => { const i = ARGS.indexOf('--' + n); return i >= 0 && ARGS[i + 1] !== undefined ? ARGS[i + 1] : d; };
+const flag = (n) => ARGS.includes('--' + n);
+const POS = ARGS.slice(0, 2).filter((a) => !a.startsWith('--'));
 const ROOT        = process.cwd();
-const INPUT_FILE  = path.join(ROOT, 'output/10_offer/bozza_contenuto.md');
-const OUTPUT_FILE = path.join(ROOT, 'output/10_offer/bozza_offerta_tecnica.docx');
+const INPUT_FILE  = POS[0] ? path.resolve(POS[0]) : path.join(ROOT, 'output/10_offer/bozza_contenuto.md');
+const OUTPUT_FILE = POS[1] ? path.resolve(POS[1]) : path.join(ROOT, 'output/10_offer/bozza_offerta_tecnica.docx');
+const TITOLO      = opt('titolo', 'Relazione Tecnico-Illustrativa');
+const NUMERI_RIGA = !flag('senza-numeri-riga');
 
 // ── Configurazione tipografica ─────────────────────────────────────────────────
-const FONT        = 'Times New Roman';
-const SIZE_BODY   = 24;
-const SIZE_H1     = 28;
-const SIZE_H2     = 24;
-const SIZE_H3     = 24;
-const SIZE_HEADER = 20;
-const LINE_SPACE  = 276;
+const FONT        = opt('font', 'Times New Roman');
+const SIZE_BODY   = Math.round(parseFloat(opt('size', '12')) * 2);
+const SIZE_H1     = SIZE_BODY + 4;
+const SIZE_H2     = SIZE_BODY;
+const SIZE_H3     = SIZE_BODY;
+const SIZE_HEADER = Math.max(SIZE_BODY - 4, 16);
+const LINE_SPACE  = Math.round(parseFloat(opt('interlinea', '1.15')) * 240);
 const MARGIN      = 1134;
 const PAGE_W      = 11906;
 const PAGE_H      = 16838;
@@ -302,7 +314,7 @@ function makeCoverSection(meta) {
       new Paragraph({ alignment: AlignmentType.CENTER, spacing: { ...sp, before: 1800, after: 600 },
         children: [run('OFFERTA TECNICA', { size: 40, bold: true })] }),
       new Paragraph({ alignment: AlignmentType.CENTER, spacing: { ...sp, before: 0, after: 300 },
-        children: [run('Relazione Tecnico-Illustrativa', { size: 28 })] }),
+        children: [run(TITOLO, { size: 28 })] }),
       new Paragraph({ alignment: AlignmentType.CENTER, spacing: { ...sp, before: 600, after: 200 },
         children: [run(meta.nomeGara, { size: 24, bold: true })] }),
       new Paragraph({ alignment: AlignmentType.CENTER, spacing: { ...sp, before: 0, after: 120 },
@@ -322,7 +334,7 @@ const sections = parseMd(raw);
 const metaLine = raw.match(/<!--\s*GARA:\s*nome="([^"]+)"\s+CIG="([^"]+)"\s+SA="([^"]+)"\s+data="([^"]+)"\s*-->/);
 const meta = metaLine
   ? { nomeGara: metaLine[1], CIG: metaLine[2], SA: metaLine[3], data: metaLine[4] }
-  : { nomeGara: 'Offerta Tecnica', CIG: '', SA: '', data: new Date().toLocaleDateString('it-IT') };
+  : { nomeGara: opt('gara', 'Offerta Tecnica'), CIG: opt('cig', ''), SA: opt('sa', ''), data: opt('data', new Date().toLocaleDateString('it-IT')) };
 
 const docSections = [makeCoverSection(meta)];
 
@@ -333,7 +345,7 @@ for (const sec of sections) {
       // Numerazione righe nel margine sinistro — dimostra rispetto vincoli disciplinare
       // restart: 'newPage' → riparte da 1 a ogni facciata (verifica limite righe/facciata)
       // distance: 500 DXA (~0,88 cm) dal testo → rientra nel margine sinistro da 2 cm
-      lineNumbers: { countBy: 1, start: 1, restart: 'newPage', distance: 500 },
+      ...(NUMERI_RIGA ? { lineNumbers: { countBy: 1, start: 1, restart: 'newPage', distance: 500 } } : {}),
     },
     headers: { default: makeHeader(sec.headerTitle + ' — ' + meta.nomeGara) },
     footers: { default: makeFooter() },

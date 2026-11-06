@@ -67,6 +67,12 @@ class AssistenteRequest(BaseModel):
     messaggio: str
 
 
+class AssistenteStreamRequest(BaseModel):
+    messaggio: str = Field(min_length=1)
+    # rapida: risposta breve dai dati già noti; approfondita: ricerca e verifiche.
+    modalita: Literal["rapida", "approfondita"] = "rapida"
+
+
 class ProposaOperatoreRequest(BaseModel):
     """Sprint 10.2 — proposta suggerita dal professionista in Ricerca
     soluzioni, valutata dal sistema insieme alle proprie (criterion-agent
@@ -75,6 +81,28 @@ class ProposaOperatoreRequest(BaseModel):
     gap_id: Optional[str] = Field(default=None, pattern=r"^G-C[0-9]+-[0-9]+$")
     titolo: str
     descrizione: str
+
+
+class PropostaProfessionistaRequest(BaseModel):
+    """Fase 6 — proposta scritta dal professionista, approvata per
+    definizione: alla conferma entra nel Cx_output.md del criterio e
+    feedback-processor ne fa un nodo del grafo."""
+    criterio: str = Field(pattern=r"^C[0-9]+$")
+    sottocriterio: Optional[str] = Field(default=None, pattern=r"^C[0-9]+\.[0-9]+$")
+    gap_id: Optional[str] = Field(default=None, pattern=r"^G-C[0-9]+-[0-9]+$")
+    titolo: str = Field(min_length=3, max_length=200)
+    descrizione: str = Field(min_length=10, max_length=8000)
+
+
+class RichiestaModificheRequest(BaseModel):
+    """Fase 7 — cosa cambiare in uno stadio di un deliverable (scaletta,
+    bozza, definitivo): l'agente lo riscrive applicando la nota."""
+    nota: str = Field(min_length=3, max_length=4000)
+
+
+class TestoStadioRequest(BaseModel):
+    """Fase 7 — testo di uno stadio modificato a mano dal professionista."""
+    testo: str = Field(min_length=1, max_length=400_000)
 
 
 class InterventoRequest(BaseModel):

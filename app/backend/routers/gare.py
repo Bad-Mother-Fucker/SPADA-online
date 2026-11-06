@@ -16,14 +16,18 @@ from deliverables import elenca_deliverables, trova_deliverable
 from grafo import estrai_grafo, leggi_corpo, leggi_frontmatter
 from interventi import InterventoGiaInCorso, invoca_intervento
 from models import (
+    AssistenteStreamRequest,
     ApprovazioneRequest, AssistenteRequest, BozzaDomandeRequest, CreaGaraRequest,
     IntegraDocumentoRequest, InformazioneProfessionistaRequest, InterventoRequest,
-    ProposaOperatoreRequest,
+    ProposaOperatoreRequest, PropostaProfessionistaRequest, RichiestaModificheRequest, TestoStadioRequest,
 )
-from paths import PIPELINE_DIR, SlugNonValido, gara_dir, percorso_sotto_gara, valida_slug
+from paths import DB_PATH, PIPELINE_DIR, SlugNonValido, gara_dir, percorso_sotto_gara, valida_slug
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "_pipeline" / "scripts" / "domande"))
 import domande as registro_domande  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "_pipeline" / "scripts" / "setup"))
+import decisioni_proposte  # noqa: E402
+import deliverables_offerta  # noqa: E402
 from prezzario import edizioni_installate, regione_canonica, stato_prezzario
 
 router = APIRouter(prefix="/gare", tags=["gare"])
@@ -47,7 +51,7 @@ def _job_attivi(slug: str) -> dict:
     fase (il più vecchio vince: è quello che il worker prenderà per primo)."""
     with get_conn() as con:
         righe = con.execute(
-            "SELECT id, fase, stato, creato_il, iniziato_il, deliverable_id FROM job "
+            "SELECT id, fase, stato, creato_il, iniziato_il, deliverable_id, interruzione_richiesta FROM job "
             "WHERE gara_slug=? AND stato IN ('in_coda','in_esecuzione') AND operazione IS NULL "
             "ORDER BY id", (slug,)).fetchall()
     out = {}
@@ -77,7 +81,8 @@ def _fasi_con_job(d: Path, slug: str) -> dict:
             corpo["stato"] = "in_esecuzione"
             corpo.pop("richiede_approvazione", None)
         corpo["job"] = {"id": job["id"], "stato": job["stato"], "creato_il": job["creato_il"],
-                        "iniziato_il": job["iniziato_il"], "deliverable_id": job["deliverable_id"]}
+                        "iniziato_il": job["iniziato_il"], "deliverable_id": job["deliverable_id"],
+                        "interruzione_richiesta": bool(job["interruzione_richiesta"])}
         corpi[k] = corpo
     return {**fasi, "fasi": corpi}
 
@@ -89,10 +94,20 @@ def elenco_gare():
     installate = {(e["regione"].lower(), e["anno"]) for e in edizioni_installate()}
     risultato = []
     for r in righe:
-        fasi = _fasi_con_job(gara_dir(r["slug"]), r["slug"])
-        risultato.append({**dict(r), "fase_corrente": fasi.get("fase_corrente"),
-                           "fasi": fasi.get("fasi", {}),
-                           "prezzario_disponibile": ((r["regione"] or "").lower(), r["anno_prezzario"]) in installate})
+        d = gara_dir(r["slug"])
+        fasi = _fasi_con_job(d, r["slug"])
+        # Il manifesto è la fonte: nome e prezzario possono cambiare dopo la
+        # creazione (la Fase 1 corregge regione/anno dal disciplinare), la
+        # riga in tabella resta quella scritta alla creazione.
+        manifest = _leggi_json(d / "manifest.json", {}) or {}
+        prezzario = manifest.get("prezzario") or {}
+        gara = {**dict(r),
+                "nome": manifest.get("nome") or r["nome"],
+                "regione": prezzario.get("regione") or r["regione"],
+                "anno_prezzario": prezzario.get("anno") or r["anno_prezzario"]}
+        risultato.append({**gara, "fase_corrente": fasi.get("fase_corrente"),
+                          "fasi": fasi.get("fasi", {}),
+                          "prezzario_disponibile": ((gara["regione"] or "").lower(), gara["anno_prezzario"]) in installate})
     return risultato
 
 
@@ -112,6 +127,7 @@ def crea_gara(body: CreaGaraRequest):
     if not body.regione:
         raise HTTPException(400, "Indica la regione del prezzario di riferimento.")
 
+    preesistente = gara_dir(body.slug).exists()
     proc = subprocess.run(
         ["bash", str(script),
          "--slug", body.slug, "--nome", body.nome,
@@ -120,6 +136,11 @@ def crea_gara(body: CreaGaraRequest):
         capture_output=True, text=True,
     )
     if proc.returncode != 0:
+        # Una cartella lasciata a metà bloccherebbe ogni nuovo tentativo
+        # con lo stesso slug, e la gara risulterebbe esistere senza riga
+        # in `gare`.
+        if not preesistente:
+            shutil.rmtree(gara_dir(body.slug), ignore_errors=True)
         raise HTTPException(500, f"new_gara.sh fallito: {proc.stderr.strip() or proc.stdout.strip()}")
 
     with get_conn() as con:
@@ -328,7 +349,7 @@ def _corpo_fase(fasi: dict, n: int) -> dict:
     return next((v for k, v in fasi.items() if k.startswith(f"{n}_")), {})
 
 
-def _verifica_sequenza(d: Path, fase: int, tipo: str):
+def _verifica_sequenza(d: Path, fase: int, tipo: str, deliverable_id: str | None = None):
     """Ogni fase sblocca la successiva (stessa regola di
     Dominio.sbloccata nel frontend): si esegue la fase n solo con la n-1
     completata e, se è un checkpoint, approvata. I checkpoint di 6 e 8
@@ -347,6 +368,12 @@ def _verifica_sequenza(d: Path, fase: int, tipo: str):
         if not chiusa(fase - 1):
             raise HTTPException(409, f"Il checkpoint della Fase {fase} si sblocca al completamento della Fase {fase - 1} ({NOMI_FASI_UI[fase - 1]}).")
         return
+    if fase == 7 and deliverable_id is None:
+        raise HTTPException(409, "La Fase 7 non si avvia in blocco: ogni deliverable si avvia, "
+                                 "si segue e si interrompe per conto suo dall'elenco dei deliverable.")
+    if fase == 7 and not chiusa(6):
+        raise HTTPException(409, "I deliverable si sbloccano quando confermi le decisioni della Fase 6 "
+                                 "(Revisione proposte) e la loro elaborazione nel grafo è conclusa.")
     if fase > 1 and not chiusa(fase - 1):
         prec = _corpo_fase(fasi, fase - 1)
         motivo = ("quando approvi il checkpoint" if prec.get("richiede_approvazione")
@@ -365,7 +392,7 @@ def _accoda_job(slug: str, fase: int, tipo: str, deliverable_id: str | None = No
     if not (1 <= fase <= 8):
         raise HTTPException(400, "fase deve essere 1-8")
     if operazione is None:
-        _verifica_sequenza(d, fase, tipo)
+        _verifica_sequenza(d, fase, tipo, deliverable_id)
         # Un secondo clic su «Avvia» non deve accodare un secondo job: la
         # stessa fase (o lo stesso deliverable) eseguita due volte di fila
         # costa due volte e scrive due volte sugli stessi file.
@@ -387,6 +414,34 @@ def _accoda_job(slug: str, fase: int, tipo: str, deliverable_id: str | None = No
     return {"job_id": job_id, "stato": "in_coda"}
 
 
+@router.post("/{slug}/job/{job_id}/interrompi", status_code=202)
+def interrompi_job(slug: str, job_id: int):
+    """«Interrompi» su una fase o un deliverable. In coda: si toglie dalla
+    coda e basta. In esecuzione: il worker termina i processi entro pochi
+    secondi e lo script registra l'interruzione; rieseguirla (esegui, non
+    riesegui) riprende la sessione di Claude da dove si era fermata.
+    Una richiesta ripetuta non cambia nulla."""
+    _gara_o_404(slug)
+    with get_conn() as con:
+        job = con.execute("SELECT id, fase, stato, tipo, operazione FROM job WHERE id=? AND gara_slug=?",
+                          (job_id, slug)).fetchone()
+        if job is None:
+            raise HTTPException(404, f"Attività {job_id} non trovata per questa gara.")
+        if job["stato"] == "in_coda":
+            con.execute("UPDATE job SET stato='annullato', errore=?, concluso_il=? WHERE id=?",
+                        ("Tolta dalla coda prima di partire.", now(), job_id))
+            return {"job_id": job_id, "stato": "annullato"}
+        if job["stato"] != "in_esecuzione":
+            raise HTTPException(409, "L'attività è già conclusa: non c'è nulla da interrompere.")
+        # In coda si toglie sempre; in corso si fermano solo le attività
+        # lunghe. La conferma della Fase 6 lo è (feedback-processor per
+        # ogni criterio) e riprende dal criterio rimasto.
+        if job["operazione"] or (job["tipo"] == "approva" and job["fase"] != 6):
+            raise HTTPException(409, "Questa attività non si può interrompere: dura pochi istanti o non si riprende.")
+        con.execute("UPDATE job SET interruzione_richiesta=1 WHERE id=?", (job_id,))
+    return {"job_id": job_id, "stato": "in_esecuzione", "interruzione_richiesta": True}
+
+
 @router.post("/{slug}/fasi/{fase}/esegui", status_code=202)
 def esegui_fase(slug: str, fase: int):
     return _accoda_job(slug, fase, "esegui")
@@ -399,6 +454,17 @@ def riesegui_fase(slug: str, fase: int):
 
 @router.post("/{slug}/fasi/{fase}/approva", status_code=202)
 def approva_fase(slug: str, fase: int):
+    """Fasi 6 e 8: conferma del checkpoint umano. La Fase 6 (conferma
+    della revisione) si accoda solo con una decisione per ogni proposta
+    del registro e una nota su ogni «da modificare»: il job le scrive nei
+    Cx_output.md e le fa elaborare a feedback-processor. Non avvia la
+    Fase 7."""
+    if fase == 6:
+        d = _gara_o_404(slug)
+        motivi = decisioni_proposte.mancanti(d, decisioni_proposte.decisioni(d, str(DB_PATH)))
+        if motivi:
+            raise HTTPException(409, "Revisione incompleta: " + "; ".join(motivi[:5])
+                                + (f" e altre {len(motivi) - 5}." if len(motivi) > 5 else "."))
     return _accoda_job(slug, fase, "approva")
 
 
@@ -473,8 +539,34 @@ def elimina_informazione(slug: str, id_domanda: str):
 # ── Sprint 10.3 — deliverables come workspace separati ──────────────
 @router.get("/{slug}/deliverables")
 def elenco_deliverables(slug: str):
+    """L'elenco esiste da quando l'analisi del disciplinare lo scrive nel
+    manifesto: si consulta subito, la produzione resta legata alla
+    sequenza delle fasi (_verifica_sequenza). Sopra lo stato registrato
+    dallo script si mette quello della coda, come per le fasi: un
+    deliverable accodato risulta in coda, uno partito porta il suo job
+    (per «Interrompi») prima ancora che lo script scriva lo stato."""
     d = _gara_o_404(slug)
-    return elenca_deliverables(d)
+    elenco = elenca_deliverables(d)
+    with get_conn() as con:
+        righe = con.execute(
+            "SELECT id, stato, deliverable_id, interruzione_richiesta, argomento FROM job "
+            "WHERE gara_slug=? AND deliverable_id IS NOT NULL AND stato IN ('in_coda','in_esecuzione') "
+            "ORDER BY id", (slug,)).fetchall()
+    attivi = {}
+    for r in righe:
+        attivi.setdefault(r["deliverable_id"], r)
+    for dl in elenco:
+        job = attivi.get(dl["id"])
+        if job is None:
+            continue
+        dl["stato"] = job["stato"]
+        try:
+            stadio = (json.loads(job["argomento"]) if job["argomento"] else {}).get("stadio")
+        except ValueError:
+            stadio = None
+        dl["job"] = {"id": job["id"], "stato": job["stato"], "stadio": stadio,
+                     "interruzione_richiesta": bool(job["interruzione_richiesta"])}
+    return elenco
 
 
 def _deliverable_o_404(slug: str, deliverable_id: str):
@@ -485,16 +577,125 @@ def _deliverable_o_404(slug: str, deliverable_id: str):
     return dl
 
 
+def _stadio_o_404(slug: str, deliverable_id: str, stadio: str):
+    d = _gara_o_404(slug)
+    dl = _deliverable_o_404(slug, deliverable_id)
+    voce = next((x for x in deliverables_offerta.stadi_di(dl["tipo"]) if x[0] == stadio), None)
+    if voce is None:
+        raise HTTPException(404, f"Il deliverable {deliverable_id} non ha lo stadio «{stadio}».")
+    return d, dl, voce
+
+
+def _deliverable_libero(slug: str, deliverable_id: str):
+    with get_conn() as con:
+        if con.execute("SELECT 1 FROM job WHERE gara_slug=? AND deliverable_id=? AND stato IN ('in_coda','in_esecuzione')",
+                       (slug, deliverable_id)).fetchone():
+            raise HTTPException(409, f"Il deliverable {deliverable_id} è in lavorazione: aspetta che finisca o interrompilo.")
+
+
 @router.post("/{slug}/deliverables/{deliverable_id}/esegui", status_code=202)
 def esegui_deliverable(slug: str, deliverable_id: str):
-    _deliverable_o_404(slug, deliverable_id)
+    """Produce il primo stadio non ancora prodotto (o l'unico)."""
+    d = _gara_o_404(slug)
+    dl = _deliverable_o_404(slug, deliverable_id)
+    st = deliverables_offerta.stato_deliverable(d, dl)
+    attesa = next((x for x in st["stadi"] if x["stato"] == "da_approvare"), None)
+    if attesa:
+        raise HTTPException(409, f"«{attesa['etichetta']}» aspetta la tua approvazione: approvalo o chiedi modifiche.")
+    if st["stato"] == "completata":
+        raise HTTPException(409, "Il deliverable è già prodotto: chiedi modifiche al definitivo o rieseguilo da capo.")
     return _accoda_job(slug, 7, "esegui", deliverable_id=deliverable_id)
 
 
 @router.post("/{slug}/deliverables/{deliverable_id}/riesegui", status_code=202)
 def riesegui_deliverable(slug: str, deliverable_id: str):
+    """Da capo, dal primo stadio: l'output precedente si archivia."""
     _deliverable_o_404(slug, deliverable_id)
+    _deliverable_libero(slug, deliverable_id)
     return _accoda_job(slug, 7, "riesegui", deliverable_id=deliverable_id)
+
+
+@router.post("/{slug}/deliverables/{deliverable_id}/stadi/{stadio}/approva", status_code=202)
+def approva_stadio(slug: str, deliverable_id: str, stadio: str):
+    """Approva lo stadio e accoda subito la produzione del successivo
+    (la scaletta approvata produce la bozza, la bozza il definitivo)."""
+    d, dl, voce = _stadio_o_404(slug, deliverable_id, stadio)
+    _deliverable_libero(slug, deliverable_id)
+    st = next(x for x in deliverables_offerta.stato_deliverable(d, dl)["stadi"] if x["id"] == stadio)
+    if st["stato"] not in ("da_approvare", "approvato"):
+        raise HTTPException(409, f"«{voce[1]}» non è ancora prodotto: non c'è nulla da approvare.")
+    successivo = deliverables_offerta.approva(d, dl, stadio)
+    if successivo is None:
+        return {"approvato": stadio, "job_id": None}
+    job = _accoda_job(slug, 7, "esegui", deliverable_id=deliverable_id, argomento=json.dumps({"stadio": successivo}))
+    return {"approvato": stadio, "successivo": successivo, **job}
+
+
+@router.post("/{slug}/deliverables/{deliverable_id}/stadi/{stadio}/modifica", status_code=202)
+def modifica_stadio(slug: str, deliverable_id: str, stadio: str, body: RichiestaModificheRequest):
+    """L'agente riscrive lo stadio applicando la nota del professionista."""
+    d, dl, voce = _stadio_o_404(slug, deliverable_id, stadio)
+    st = next(x for x in deliverables_offerta.stato_deliverable(d, dl)["stadi"] if x["id"] == stadio)
+    if st["stato"] == "da_produrre":
+        raise HTTPException(409, f"«{voce[1]}» non è ancora prodotto: non c'è nulla da modificare.")
+    return _accoda_job(slug, 7, "esegui", deliverable_id=deliverable_id,
+                       argomento=json.dumps({"stadio": stadio, "nota": body.nota.strip()}, ensure_ascii=False))
+
+
+@router.post("/{slug}/deliverables/{deliverable_id}/stadi/{stadio}/rifai", status_code=202)
+def rifai_stadio(slug: str, deliverable_id: str, stadio: str):
+    """Rifà da zero un solo stadio, con i dati attuali (decisioni della
+    Fase 6 comprese) e gli stadi precedenti così come approvati. La
+    versione attuale e quelle degli stadi successivi si archiviano; i
+    successivi tornano da produrre. Lo stadio 1 equivale a «da capo»."""
+    d, dl, voce = _stadio_o_404(slug, deliverable_id, stadio)
+    _deliverable_libero(slug, deliverable_id)
+    stadi = deliverables_offerta.stato_deliverable(d, dl)["stadi"]
+    i = next(k for k, x in enumerate(stadi) if x["id"] == stadio)
+    da_approvare = next((x for x in stadi[:i] if x["stato"] != "approvato"), None)
+    if da_approvare:
+        raise HTTPException(409, f"«{voce[1]}» si produce da «{da_approvare['etichetta']}» approvato: "
+                                 "approvalo prima, oppure rifai quello stadio.")
+    return _accoda_job(slug, 7, "riesegui", deliverable_id=deliverable_id,
+                       argomento=json.dumps({"stadio": stadio}))
+
+
+@router.put("/{slug}/deliverables/{deliverable_id}/stadi/{stadio}")
+def salva_stadio(slug: str, deliverable_id: str, stadio: str, body: TestoStadioRequest):
+    """Modifica a mano del testo di uno stadio: torna da approvare, e gli
+    stadi successivi già prodotti vanno rifatti."""
+    d, dl, voce = _stadio_o_404(slug, deliverable_id, stadio)
+    if voce[2] is None:
+        raise HTTPException(409, "Questo deliverable non ha un testo modificabile dall'interfaccia.")
+    _deliverable_libero(slug, deliverable_id)
+    deliverables_offerta.salva_testo(d, dl, stadio, body.testo)
+    return {"salvato": stadio}
+
+
+@router.post("/{slug}/deliverables/{deliverable_id}/esporta")
+def esporta_deliverable(slug: str, deliverable_id: str, formato: str):
+    """Definitivo → DOCX (formato della Sezione A dei vincoli) o PDF (dal DOCX)."""
+    if formato not in ("docx", "pdf"):
+        raise HTTPException(400, "formato deve essere docx o pdf")
+    d = _gara_o_404(slug)
+    dl = _deliverable_o_404(slug, deliverable_id)
+    stadi = deliverables_offerta.stadi_di(dl["tipo"])
+    if stadi[-1][2] is None:
+        raise HTTPException(409, "Questo deliverable non ha un definitivo da convertire.")
+    sorgente = d / dl["cartella"] / stadi[-1][2]
+    if not sorgente.is_file():
+        raise HTTPException(409, "Il definitivo non è ancora prodotto.")
+    interni = deliverables_offerta.riferimenti_interni(sorgente.read_text(encoding="utf-8"))
+    if interni:
+        raise HTTPException(422, "Il definitivo contiene riferimenti con la nomenclatura interna, vietata nei documenti "
+                                 f"per la stazione appaltante: {', '.join(interni[:12])}{'…' if len(interni) > 12 else ''}. "
+                                 "Correggili con «Modifica il testo» o chiedi modifiche.")
+    from esporta import esporta
+    try:
+        percorso = esporta(d, dl, sorgente, formato)
+    except RuntimeError as e:
+        raise HTTPException(422, str(e))
+    return {"percorso": str(percorso.relative_to(d / "output"))}
 
 
 PROPOSTA_ID_RE = re.compile(r"^P-C[0-9]+-[0-9]+$")
@@ -566,6 +767,48 @@ def crea_proposta_operatore(slug: str, body: ProposaOperatoreRequest):
     return {"id": proposta_id, "creato": True}
 
 
+# ── Fase 6 — proposte scritte dal professionista ────────────────────
+# Fonte di verità: output/06_registers/proposte_professionista.json
+# (decisioni_proposte.py). Approvate per definizione: alla conferma
+# diventano schede del loro Cx_output.md e poi nodi del grafo.
+def _con_stato_propria(d: Path, p: dict) -> dict:
+    return {**p, "elaborata": decisioni_proposte.elaborata(d, p["id"])}
+
+
+@router.get("/{slug}/proposte-professionista")
+def elenco_proposte_professionista(slug: str):
+    d = _gara_o_404(slug)
+    return [_con_stato_propria(d, p) for p in decisioni_proposte.proposte_proprie(d)]
+
+
+@router.post("/{slug}/proposte-professionista", status_code=201)
+def crea_proposta_professionista(slug: str, body: PropostaProfessionistaRequest):
+    d = _gara_o_404(slug)
+    if not (d / "output" / "05_criteria_outputs" / f"{body.criterio}_output.md").is_file():
+        raise HTTPException(409, f"Il criterio {body.criterio} non ha ancora una scheda di analisi (Fase 5): "
+                                 "la proposta non avrebbe dove essere scritta.")
+    if body.sottocriterio and not body.sottocriterio.startswith(body.criterio + "."):
+        raise HTTPException(422, f"Il sottocriterio {body.sottocriterio} non appartiene al criterio {body.criterio}.")
+    _conferma_fase6_in_corso(slug)
+    voce = decisioni_proposte.aggiungi_propria(d, body.criterio, body.sottocriterio, body.gap_id,
+                                               body.titolo, body.descrizione)
+    _riapri_fase6(d, f"Aggiunta la proposta {voce['id']} dopo la conferma.")
+    return _con_stato_propria(d, voce)
+
+
+@router.delete("/{slug}/proposte-professionista/{proposta_id}", status_code=204)
+def elimina_proposta_professionista(slug: str, proposta_id: str):
+    d = _gara_o_404(slug)
+    if not PROPOSTA_ID_RE.match(proposta_id):
+        raise HTTPException(400, f"id proposta non valido: {proposta_id!r}")
+    _conferma_fase6_in_corso(slug)
+    if decisioni_proposte.elaborata(d, proposta_id):
+        raise HTTPException(409, f"{proposta_id} è già un nodo del grafo: per toglierla dall'offerta scartala.")
+    if not decisioni_proposte.elimina_propria(d, proposta_id):
+        raise HTTPException(404, f"Proposta {proposta_id} non trovata fra quelle del professionista.")
+    _riapri_fase6(d, f"Tolta la proposta {proposta_id} dopo la conferma.")
+
+
 @router.get("/{slug}/output")
 def elenco_output(slug: str):
     d = _gara_o_404(slug)
@@ -584,15 +827,70 @@ def leggi_output(slug: str, percorso: str):
     return FileResponse(str(file_path))
 
 
+@router.get("/{slug}/avanzamento")
+def avanzamento_esecuzione(slug: str, fase: int | None = None, deliverable: str | None = None):
+    """Cosa sta facendo adesso la fase (o il deliverable) in esecuzione,
+    dagli ultimi passi del suo stream. null se non gira nulla."""
+    from avanzamento import avanzamento
+    return avanzamento(_gara_o_404(slug), fase, deliverable)
+
+
 @router.get("/{slug}/run-log")
 def run_log(slug: str):
     d = _gara_o_404(slug)
     return _leggi_json(d / "_state" / "run_log.json", {"runs": []})
 
 
+@router.get("/{slug}/approvazioni")
+def elenco_approvazioni(slug: str, fase: int | None = None):
+    """Storico delle decisioni, dalla più vecchia: per ogni riferimento
+    vale l'ultima. Serve all'interfaccia per ritrovarle dopo un ricarico."""
+    _gara_o_404(slug)
+    query = "SELECT riferimento, tipo, fase, decisione, nota, creato_il FROM approvazioni WHERE gara_slug=?"
+    parametri: list = [slug]
+    if fase is not None:
+        query += " AND fase=?"
+        parametri.append(fase)
+    with get_conn() as con:
+        return [dict(r) for r in con.execute(query + " ORDER BY id", parametri).fetchall()]
+
+
+def _conferma_fase6_in_corso(slug: str):
+    with get_conn() as con:
+        if con.execute("SELECT 1 FROM job WHERE gara_slug=? AND fase=6 AND tipo='approva' "
+                       "AND stato IN ('in_coda','in_esecuzione')", (slug,)).fetchone():
+            raise HTTPException(409, "La conferma delle decisioni è in corso: le modifiche si fanno a conferma conclusa.")
+
+
+def _riapri_fase6(d: Path, motivo: str):
+    """Una decisione cambiata (o una proposta aggiunta o tolta) dopo la
+    conferma non è ancora nel grafo né nei registri: la Fase 6 torna a
+    chiedere la conferma, e i deliverable restano bloccati finché non
+    arriva. Lo stato lo scrive il job alla conferma successiva."""
+    p = d / "_state" / "fasi.json"
+    dati = _leggi_json(p, {})
+    k = next((x for x in dati.get("fasi", {}) if x.startswith("6_")), None)
+    if k is None or dati["fasi"][k].get("stato") != "completata":
+        return
+    dati["fasi"][k].update(stato="da_rivedere", sintesi=f"{motivo} Conferma di nuovo per aggiornare grafo, registri e brief.")
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(dati, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(p)
+
+
 @router.post("/{slug}/approvazioni", status_code=201)
 def registra_approvazione(slug: str, body: ApprovazioneRequest):
-    _gara_o_404(slug)
+    d = _gara_o_404(slug)
+    if body.fase == 6 and body.tipo == "proposta":
+        if body.decisione == "da_modificare" and not (body.nota or "").strip():
+            raise HTTPException(422, "«Da modificare» richiede una nota che dica cosa cambiare.")
+        _conferma_fase6_in_corso(slug)
+        with get_conn() as con:
+            ultima = con.execute(
+                "SELECT decisione, nota FROM approvazioni WHERE gara_slug=? AND fase=6 AND tipo='proposta' "
+                "AND riferimento=? ORDER BY id DESC LIMIT 1", (slug, body.riferimento)).fetchone()
+        if ultima is None or ultima["decisione"] != body.decisione or (ultima["nota"] or "").strip() != (body.nota or "").strip():
+            _riapri_fase6(d, f"Decisione su {body.riferimento} cambiata dopo la conferma.")
     with get_conn() as con:
         cur = con.execute(
             "INSERT INTO approvazioni (gara_slug, fase, tipo, riferimento, decisione, nota, creato_il) "
@@ -602,8 +900,7 @@ def registra_approvazione(slug: str, body: ApprovazioneRequest):
     return {"id": cur.lastrowid}
 
 
-@router.post("/{slug}/assistente")
-def assistente(slug: str, body: AssistenteRequest):
+def _verifica_assistente(slug: str):
     d = _gara_o_404(slug)
     fasi = _leggi_json(d / "_state" / "fasi.json", {})
     fase2 = fasi.get("fasi", {}).get("2_costruzione_grafo", {})
@@ -622,6 +919,51 @@ def assistente(slug: str, body: AssistenteRequest):
     if in_corso:
         raise HTTPException(409, "Una fase è in esecuzione su questa gara: riprova a conversazione conclusa.")
 
+
+def _salva_messaggio(slug: str, ruolo: str, testo: str):
+    with get_conn() as con:
+        con.execute(
+            "INSERT INTO conversazioni (gara_slug, ruolo, testo, creato_il) VALUES (?,?,?,?)",
+            (slug, ruolo, testo, now()),
+        )
+
+
+@router.post("/{slug}/assistente/stream")
+def assistente_stream(slug: str, body: AssistenteStreamRequest):
+    """Come POST /assistente, ma la risposta arriva mentre viene scritta
+    (NDJSON, un evento per riga: vedi assistente.stream_assistente) e in
+    due modalità, rapida o approfondita. Gli stati mostrati vengono dagli
+    strumenti che l'assistente usa davvero."""
+    _verifica_assistente(slug)
+    from assistente import stream_assistente
+    _salva_messaggio(slug, "utente", body.messaggio)
+
+    def righe():
+        concluso = False
+        try:
+            for ev in stream_assistente(slug, body.messaggio, body.modalita):
+                if ev["tipo"] == "fine":
+                    _salva_messaggio(slug, "assistente", ev["risposta"])
+                    concluso = True
+                elif ev["tipo"] == "errore":
+                    concluso = True
+                yield json.dumps(ev, ensure_ascii=False) + "\n"
+        except Exception as e:  # noqa: BLE001 — l'interfaccia deve ricevere l'errore, non una riga troncata
+            concluso = True
+            yield json.dumps({"tipo": "errore", "messaggio": f"Assistente non disponibile: {e}"}, ensure_ascii=False) + "\n"
+        finally:
+            # Chiusa dall'interfaccia (Interrompi, pagina chiusa): la
+            # domanda resta in cronologia con l'esito, non senza risposta.
+            if not concluso:
+                _salva_messaggio(slug, "assistente", "_Risposta interrotta prima della fine._")
+
+    return StreamingResponse(righe(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@router.post("/{slug}/assistente")
+def assistente(slug: str, body: AssistenteRequest):
+    _verifica_assistente(slug)
     with get_conn() as con:
         con.execute(
             "INSERT INTO conversazioni (gara_slug, ruolo, testo, creato_il) VALUES (?,?,?,?)",

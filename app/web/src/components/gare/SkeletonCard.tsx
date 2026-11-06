@@ -33,7 +33,7 @@ export function SkeletonCard({ variante = 0 }: { variante?: number }) {
 
 export function SkeletonGriglia({ n = 3 }: { n?: number }) {
   return (
-    <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))]" aria-busy="true" aria-label="Caricamento dell'elenco delle gare">
+    <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr))]" aria-busy="true" aria-label="Caricamento dell'elenco delle gare">
       {Array.from({ length: n }, (_, i) => <SkeletonCard key={i} variante={i} />)}
     </div>
   )

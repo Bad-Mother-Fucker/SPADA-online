@@ -11,7 +11,9 @@ import { quandoBreve } from "@/lib/formato"
 import { STATO, corpoFase, statoFase } from "@/dominio/fasi"
 import { elaboratiDiFase, erroreUltimoRun } from "@/dominio/registri"
 
-export function PannelloFase({ n, prima, blocco, azionePrimaria }: { n: number; prima?: ReactNode; blocco?: string | null; azionePrimaria?: AzionePrimaria }) {
+/** `azioni` sostituisce i pulsanti di fase quando la fase non si esegue
+    in blocco (Fase 7: ogni deliverable ha il suo pulsante). */
+export function PannelloFase({ n, prima, blocco, azionePrimaria, azioni }: { n: number; prima?: ReactNode; blocco?: string | null; azionePrimaria?: AzionePrimaria; azioni?: ReactNode }) {
   const { slug, gara, output, runs } = useGara()
   const st = statoFase(gara.fasi, n)
   const meta = STATO[st]
@@ -32,7 +34,7 @@ export function PannelloFase({ n, prima, blocco, azionePrimaria }: { n: number; 
           ["Modello", gara.manifest.esecuzione?.modello || "non indicato", true],
           ["Effort", gara.manifest.esecuzione?.effort || "non indicato", true],
         ]} />
-        <AzioniFase n={n} blocco={blocco} azionePrimaria={azionePrimaria} />
+        {azioni ?? <AzioniFase n={n} blocco={blocco} azionePrimaria={azionePrimaria} />}
       </Card>
       {elaborati.length > 0 && (
         <Card>

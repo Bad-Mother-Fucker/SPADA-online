@@ -257,6 +257,16 @@
   * { @apply border-border outline-ring/50; }
   html { @apply font-sans text-sm; }
   body { @apply bg-background text-foreground; }
+  /* Sul testo statico niente cursore a «I» né cursore lampeggiante: freccia
+     del mouse ovunque. Restano solo dove si scrive. */
+  body { cursor: default; caret-color: transparent; }
+  /* Una parola o un codice più lunghi della riga vanno a capo invece di
+     uscire dal contenitore. break-word, non anywhere: non cambia la
+     larghezza minima dei contenuti, quindi le righe flex non si
+     stringono fino a una lettera per riga. Per i contenitori che devono
+     poter restringere i figli: min-w-0 (griglie: minmax(min(Npx,100%),1fr)). */
+  body { overflow-wrap: break-word; }
+  input, textarea, [contenteditable="true"] { cursor: auto; caret-color: auto; }
   button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
   :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
   .font-mono, code, kbd, samp { font-variant-numeric: tabular-nums; }

@@ -3,16 +3,17 @@
 // non dalle viste: cambiare fase non riapre la connessione.
 
 import { useEffect, useMemo, useState } from "react"
-import { Link, Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router"
+import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router"
+import { CaretLeftIcon } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { AppBar } from "@/components/comuni/AppBar"
 import { StatoErrore } from "@/components/stati/Stati"
-import { GaraContext, type DecisioneRegistrata } from "./GaraContext"
+import { GaraContext } from "./GaraContext"
 import { AvvisoPrezzario, Stepper, TestataGara } from "./Testata"
 import { Assistente } from "./Assistente"
-import { useDettaglioGara, useOutput, useRegistraDecisione, useRunLog } from "@/hooks/useGaraDati"
+import { useApprovazioni, useDettaglioGara, useOutput, useRegistraDecisione, useRunLog } from "@/hooks/useGaraDati"
 import { useStreamGara, type StatoStream } from "@/hooks/useStreamGara"
 import { comeApiError, risorsa } from "@/lib/risorsa"
 import { quandoRelativo } from "@/lib/formato"
@@ -53,6 +54,24 @@ function percorsoDaHash(hash: string): string | null {
   return null
 }
 
+/** Viste trasversali: pagine a sé, a tutta larghezza, fuori dal layout
+    della pipeline (testata, avviso prezzario, stepper). Restano figlie
+    della rotta della gara: stessi dati, stesso stream, link relativi. */
+const TRASVERSALI = [
+  { a: "brief", etichetta: "Brief di gara" },
+  { a: "grafo", etichetta: "Grafo" },
+  { a: "attivita", etichetta: "Attività" },
+  { a: "impostazioni", etichetta: "Impostazioni" },
+]
+const vistaTrasversale = (pathname: string) => TRASVERSALI.find((t) => new RegExp(`^/gara/[^/]+/${t.a}(/|$)`).test(pathname)) || null
+
+/** Dove riporta «Torna alla gara»: l'ultima vista della pipeline aperta
+    (fase, workspace di un deliverable, proposta), per gara e per scheda. */
+const chiaveRitorno = (slug: string) => `spada.gara.${slug}.ritorno`
+function leggiRitorno(slug: string): string | null {
+  try { return sessionStorage.getItem(chiaveRitorno(slug)) } catch { return null }
+}
+
 export function GaraPage() {
   const { slug = "" } = useParams()
   const dettaglio = useDettaglioGara(slug)
@@ -61,10 +80,26 @@ export function GaraPage() {
   const stream = useStreamGara(slug, dettaglio.isSuccess)
   const r = risorsa(dettaglio, { percorso: `/gare/${slug}` })
   const registra = useRegistraDecisione(slug)
-  const [decisioni, setDecisioni] = useState<Record<string, Decisione>>({})
-  const [storicoDecisioni, setStorico] = useState<DecisioneRegistrata[]>([])
+  // Le decisioni stanno nel database: lo stato locale tiene solo quelle
+  // appena cliccate (ottimistiche) finché il server non le restituisce.
+  const approvazioni = useApprovazioni(slug)
+  const [ottimistiche, setDecisioni] = useState<Record<string, Decisione>>({})
+  const storicoDecisioni = useMemo(() => (approvazioni.data || [])
+    .filter((a) => a.tipo === "proposta" && a.riferimento && a.decisione)
+    .map((a) => ({ riferimento: a.riferimento!, decisione: a.decisione!, nota: a.nota, quando: a.creato_il })), [approvazioni.data])
+  const decisioni = useMemo(() => {
+    const d: Record<string, Decisione> = {}
+    for (const x of storicoDecisioni) d[x.riferimento] = x.decisione
+    return { ...d, ...ottimistiche }
+  }, [storicoDecisioni, ottimistiche])
   const location = useLocation()
   const navigate = useNavigate()
+
+  const trasversale = vistaTrasversale(location.pathname)
+  useEffect(() => {
+    if (trasversale || !slug) return
+    try { sessionStorage.setItem(chiaveRitorno(slug), location.pathname + location.search) } catch { /* resta il ritorno alla fase corrente */ }
+  }, [trasversale, slug, location.pathname, location.search])
 
   useEffect(() => {
     const p = percorsoDaHash(location.hash)
@@ -72,7 +107,9 @@ export function GaraPage() {
   }, [location.hash, navigate])
 
   useEffect(() => {
-    document.title = `${dettaglio.data?.manifest.nome || slug}, SPADA`
+    document.title = `${dettaglio.data?.manifest.nome || slug}, Prometheus - S.P.A.D.A.`
+    // Tornando all'elenco la scheda non deve restare col nome della gara.
+    return () => { document.title = "Prometheus - S.P.A.D.A." }
   }, [dettaglio.data?.manifest.nome, slug])
 
   const ctx = useMemo(() => {
@@ -87,13 +124,10 @@ export function GaraPage() {
       storicoDecisioni,
       // Decisione ottimistica: una spunta che resta dopo un errore è peggio di nessuna spunta.
       decidi: (id: string, decisione: Decisione, nota?: string | null) => {
-        const precedente = decisioni[id]
+        const precedente = ottimistiche[id]
         setDecisioni((d) => ({ ...d, [id]: decisione }))
         registra.mutate({ id, decisione, nota }, {
-          onSuccess: () => {
-            setStorico((s) => [...s, { riferimento: id, decisione, nota: nota || null, quando: new Date().toISOString() }])
-            toast.success(`${id}: decisione registrata.`)
-          },
+          onSuccess: () => toast.success(`${id}: decisione registrata.`),
           onError: (e) => {
             setDecisioni((d) => { const n = { ...d }; if (precedente) n[id] = precedente; else delete n[id]; return n })
             toast.error("Decisione non registrata", { description: comeApiError(e).message })
@@ -101,7 +135,7 @@ export function GaraPage() {
         })
       },
     }
-  }, [slug, dettaglio.data, output.data, runLog.data, stream, decisioni, storicoDecisioni, registra])
+  }, [slug, dettaglio.data, output.data, runLog.data, stream, decisioni, ottimistiche, storicoDecisioni, registra])
 
   if (r.stato === "caricamento" || !ctx) {
     return (
@@ -124,6 +158,34 @@ export function GaraPage() {
           </main>
         )}
       </>
+    )
+  }
+
+  if (trasversale) {
+    return (
+      <GaraContext.Provider value={ctx}>
+        <AppBar piena briciole={[{ a: "/", etichetta: "Gare" }, { a: `/gara/${slug}`, etichetta: slug, mono: true }, { etichetta: trasversale.etichetta }]} badge={<BadgeStream {...stream} />} />
+        <main id="contenuto" className="px-6 pt-4 pb-24 max-md:px-4">
+          <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-b pb-3">
+            <Button variant="outline" asChild>
+              <Link to={leggiRitorno(slug) || `/gara/${slug}`}><CaretLeftIcon aria-hidden="true" />Torna alla gara</Link>
+            </Button>
+            <span className="min-w-0 truncate text-sm font-medium text-foreground-2">{ctx.gara.manifest.nome || slug}</span>
+            <span className="flex-1" />
+            <nav aria-label="Viste della gara" className="flex flex-wrap gap-1.5">
+              {TRASVERSALI.map((t) => (
+                <NavLink key={t.a} to={`/gara/${slug}/${t.a}`} className={({ isActive }) => cn("inline-flex h-8 items-center rounded-lg border px-2.5 text-sm font-medium transition-colors duration-(--d-fast)", isActive ? "border-foreground bg-foreground text-background" : "bg-card hover:bg-muted")}>
+                  {t.etichetta}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
+          <div key={location.pathname} className="animate-apparizione">
+            <Outlet />
+          </div>
+        </main>
+        <Assistente />
+      </GaraContext.Provider>
     )
   }
 

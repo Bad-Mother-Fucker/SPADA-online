@@ -214,6 +214,14 @@ fallback:
 | `tavole_tecniche` | Elaborati grafici, tavole, planimetrie delle migliorie |
 | `altro` | Non corrisponde a nessuno dei cinque — verra' prodotto da un agente generico che legge direttamente l'articolo del disciplinare |
 
+Un documento che vale per più criteri (la relazione tecnica, il computo
+delle migliorie, il quadro di raffronto…) è **un solo deliverable**
+dell'offerta: se lo elenchi sotto più criteri, scrivi in ogni voce la
+stessa `fonte` (es. «art. 16 lett. a, p. 28») e lo stesso `tipo`. Il
+sistema raggruppa le voci con la stessa fonte in un documento unico che
+copre tutti quei criteri; fonti diverse per lo stesso documento lo
+spezzerebbero in più deliverable.
+
 Non forzare una corrispondenza dubbia: un deliverable classificato
 `altro` per errore si corregge in un secondo momento (`/update_document`
 o intervento mirato); uno classificato con un tipo sbagliato finisce

@@ -28,6 +28,9 @@ export function avvisoGara(g: Gara, adesso = Date.now()): { testo: string; tono:
     if (statoFase(fasi, n) === "errore") return { testo: `errore in Fase ${n}`, tono: "crit" }
   }
   for (let n = 1; n <= FASI.length; n++) {
+    if (statoFase(fasi, n) === "interrotta") return { testo: `Fase ${n} interrotta, da riprendere`, tono: "attn" }
+  }
+  for (let n = 1; n <= FASI.length; n++) {
     if (statoFase(fasi, n) === "da_rivedere") {
       const da = corpoFase(fasi, n)?.conclusa_il
       const gg = da ? Math.floor((adesso - Date.parse(da)) / 86400000) : 0
@@ -56,7 +59,7 @@ export function CardGara({ gara, onElimina, inEliminazione }: { gara: Gara; onEl
     <article
       aria-busy={inEliminazione || undefined}
       className={cn(
-        "group relative flex flex-col gap-2.5 rounded-lg border bg-card p-3.5 pb-3",
+        "group relative flex min-w-0 flex-col gap-2.5 rounded-lg border bg-card p-3.5 pb-3",
         "transition-[border-color,box-shadow,opacity] duration-(--d-base) ease-(--e-enter)",
         "hover:border-border-strong hover:shadow-pop focus-within:border-border-strong",
         inEliminazione && "pointer-events-none opacity-40",

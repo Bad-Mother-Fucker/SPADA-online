@@ -14,20 +14,21 @@ const CLASSE: Record<Tono, string> = {
     compare solo quando pulsa, cioè solo in "in esecuzione" (DESIGN.md §5). */
 export function BadgeStato({ tono, pulsa, className, children }: { tono: Tono; pulsa?: boolean; className?: string; children: React.ReactNode }) {
   return (
-    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-sm px-2 py-0.5 text-xs font-medium", CLASSE[tono], className)}>
+    <span className={cn("inline-flex max-w-full items-center gap-1.5 rounded-sm px-2 py-0.5 text-xs font-medium", CLASSE[tono], className)}>
       {pulsa && <i className="size-1.5 rounded-full bg-current animate-pulsa" aria-hidden="true" />}
       {children}
     </span>
   )
 }
 
-/** Chip neutro per metadati (regione e anno, modello, effort). */
+/** Chip neutro per metadati (regione e anno, modello, effort). Come il badge
+    non supera mai il contenitore: un testo lungo va a capo dentro il chip. */
 export function Chip({ mono, tono, className, children, title }: { mono?: boolean; tono?: Tono; className?: string; children: React.ReactNode; title?: string }) {
   return (
     <span
       title={title}
       className={cn(
-        "inline-flex items-center whitespace-nowrap rounded-sm px-1.5 py-px text-xs",
+        "inline-flex max-w-full min-w-0 items-center rounded-sm px-1.5 py-px text-xs [overflow-wrap:anywhere]",
         tono ? cn(CLASSE[tono], "font-medium") : "bg-muted text-foreground-2",
         mono && "font-mono",
         className,

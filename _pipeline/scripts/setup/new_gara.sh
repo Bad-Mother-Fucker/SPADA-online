@@ -130,6 +130,13 @@ cat > "$GARA_PATH/_state/run_log.json" <<JSON
 JSON
 
 git -C "$GARA_PATH" init -q -b main
+# Su un'installazione nuova git può non avere un'identità: il commit
+# fallirebbe. Identità locale alla gara, la configurazione globale resta
+# com'è.
+if [ -z "$(git -C "$GARA_PATH" config user.email || true)" ]; then
+  git -C "$GARA_PATH" config user.name "SPADA"
+  git -C "$GARA_PATH" config user.email "spada@localhost"
+fi
 git -C "$GARA_PATH" add -A
 git -C "$GARA_PATH" commit -q -m "init: crea struttura dati gara $SLUG"
 

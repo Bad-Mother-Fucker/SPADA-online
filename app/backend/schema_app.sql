@@ -34,7 +34,12 @@ CREATE TABLE IF NOT EXISTS job (
                        -- (spada_deliverable.sh) invece della fase atomica (spada_fase.sh)
   operazione    TEXT,  -- integrazione fuori fase (spada_integra.sh): 'integra_documento'
                        -- (argomento = percorso sotto la gara) o 'riallinea_brief'
-  argomento     TEXT
+  argomento     TEXT,
+  -- «Interrompi» su un job in_esecuzione: l'API lo segna, il worker (che
+  -- possiede il processo) termina il gruppo e chiude il job 'annullato'.
+  -- Lo script registra la fase/il deliverable 'interrotta': rieseguirla
+  -- riprende la sessione di Claude da dove si era fermata.
+  interruzione_richiesta INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_job_stato ON job (stato, creato_il);
 CREATE INDEX IF NOT EXISTS idx_job_gara ON job (gara_slug);

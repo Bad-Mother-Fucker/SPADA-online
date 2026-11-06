@@ -79,7 +79,7 @@ export function DialogoLoginClaude({ aperto, onChiudi }: { aperto: boolean; onCh
     <Dialog open={aperto} onOpenChange={(o) => { if (!o) chiudi() }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Accedi a Claude per SPADA</DialogTitle>
+          <DialogTitle>Accedi a Claude per Prometheus - S.P.A.D.A.</DialogTitle>
           <DialogDescription>
             Le fasi della pipeline girano con questo account. È una configurazione dedicata: il Claude Code che usi nel terminale non cambia.
           </DialogDescription>

@@ -45,7 +45,8 @@ async function richiesta<T = unknown>(percorso: string, opzioni: Opzioni = {}): 
   let resp: Response
   try {
     resp = await fetch(base() + percorso, {
-      headers: { "Content-Type": "application/json", ...(headers || {}) },
+      // Con FormData il Content-Type (multipart, con boundary) lo mette il browser.
+      headers: resto.body instanceof FormData ? headers : { "Content-Type": "application/json", ...(headers || {}) },
       signal: segnale(signal, timeoutMs),
       ...resto,
     })
@@ -100,6 +101,15 @@ export interface Manifest {
   [k: string]: unknown
 }
 
+export type ModalitaAssistente = "rapida" | "approfondita"
+/** Eventi di /assistente/stream: «stato» viene da uno strumento davvero usato. */
+export type EventoAssistente =
+  | { tipo: "stato"; testo: string }
+  | { tipo: "nuovo" }
+  | { tipo: "testo"; delta: string }
+  | { tipo: "fine"; risposta: string }
+  | { tipo: "errore"; messaggio: string }
+
 export interface StatoPrezzario {
   regione?: string
   anno?: number
@@ -137,6 +147,26 @@ export interface StatoLoginClaude extends StatoAuth {
   login: { fase: "inattivo" | "in_attesa" | "concluso" | "fallito"; url: string | null; codice_inviato: boolean; messaggio: string }
 }
 
+export interface Avanzamento {
+  run_id: string; fase: number | null; criterio: string | null; deliverable_id: string | null
+  avviato_il: string | null; aggiornato_il: string | null
+  /** Passo in corso e i precedenti, dal più recente: frasi già leggibili. */
+  attuale: string | null; precedenti: string[]
+}
+
+export interface NuovaPropostaProfessionista { criterio: string; sottocriterio: string | null; gap_id: string | null; titolo: string; descrizione: string }
+/** `elaborata`: è già un nodo del grafo (dopo la conferma), non si toglie più. */
+export interface PropostaProfessionista extends NuovaPropostaProfessionista { id: string; creato_il: string; elaborata: boolean }
+
+export interface ApprovazioneRegistrata {
+  riferimento: string | null
+  tipo: "direttive" | "proposta" | "offerta"
+  fase: number
+  decisione: "approvata" | "da_modificare" | "scartata" | null
+  nota: string | null
+  creato_il: string
+}
+
 export interface Documento {
   nome_file: string
   percorso: string
@@ -166,6 +196,9 @@ export const Api = {
     richiesta<{ slug: string; creato: boolean }>("/gare", { ...o, method: "POST", body: JSON.stringify(dati), timeoutMs: 60_000 }),
   dettaglioGara: (slug: string, o?: Opzioni) => richiesta<DettaglioGara>(`/gare/${s(slug)}`, o),
   eliminaGara: (slug: string, o?: Opzioni) => richiesta<void>(`/gare/${s(slug)}`, { ...o, method: "DELETE" }),
+  /** Cosa sta facendo adesso una fase o un deliverable in esecuzione (null se nulla gira). */
+  avanzamento: (slug: string, q: { fase?: number; deliverable?: string }, o?: Opzioni) =>
+    richiesta<Avanzamento | null>(`/gare/${s(slug)}/avanzamento?${q.deliverable ? `deliverable=${encodeURIComponent(q.deliverable)}` : `fase=${q.fase}`}`, o),
   runLog: (slug: string, o?: Opzioni) => richiesta<{ runs?: unknown[] }>(`/gare/${s(slug)}/run-log`, o),
   elencoOutput: (slug: string, o?: Opzioni) => richiesta<string[]>(`/gare/${s(slug)}/output`, o),
   percorsoOutput: (slug: string, p: string) => `${base()}/gare/${s(slug)}/output/${p}`,
@@ -181,6 +214,12 @@ export const Api = {
   esegui: (slug: string, fase: number) => richiesta(`/gare/${s(slug)}/fasi/${fase}/esegui`, { method: "POST" }),
   riesegui: (slug: string, fase: number) => richiesta(`/gare/${s(slug)}/fasi/${fase}/riesegui`, { method: "POST" }),
   approva: (slug: string, fase: number) => richiesta(`/gare/${s(slug)}/fasi/${fase}/approva`, { method: "POST" }),
+  /** «Interrompi» una fase o un deliverable: in coda la toglie, in corso la
+      ferma. Rieseguirla con `esegui` riprende da dove si era fermata. */
+  interrompiJob: (slug: string, jobId: number) => richiesta(`/gare/${s(slug)}/job/${jobId}/interrompi`, { method: "POST" }),
+  /** Storico delle decisioni, dalla più vecchia: per riferimento vale l'ultima. */
+  elencoApprovazioni: (slug: string, fase: number, o?: Opzioni) =>
+    richiesta<ApprovazioneRegistrata[]>(`/gare/${s(slug)}/approvazioni?fase=${fase}`, o),
   registraApprovazione: (slug: string, body: unknown) =>
     richiesta(`/gare/${s(slug)}/approvazioni`, { method: "POST", body: JSON.stringify(body) }),
 
@@ -214,16 +253,65 @@ export const Api = {
   chiediAssistente: (slug: string, messaggio: string) =>
     richiesta(`/gare/${s(slug)}/assistente`, { method: "POST", body: JSON.stringify({ messaggio }), timeoutMs: 180_000 }),
   cronologiaAssistente: (slug: string, o?: Opzioni) => richiesta<unknown[]>(`/gare/${s(slug)}/assistente`, o),
+  /** Risposta dell'assistente mentre viene scritta (NDJSON, un evento per
+      riga). Nessun timeout: una ricerca approfondita può durare minuti; si
+      interrompe con `signal`. */
+  streamAssistente: async (slug: string, messaggio: string, modalita: ModalitaAssistente, onEvento: (e: EventoAssistente) => void, signal: AbortSignal) => {
+    const percorso = `/gare/${s(slug)}/assistente/stream`
+    let resp: Response
+    try {
+      resp = await fetch(base() + percorso, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messaggio, modalita }), signal })
+    } catch (e) {
+      if (signal.aborted) throw e
+      throw new ApiError("Servizio non raggiungibile", { percorso, dettaglio: "Connessione al servizio non riuscita: il backend potrebbe essere spento." })
+    }
+    if (!resp.ok || !resp.body) {
+      let dettaglio = ""
+      try { const c = await resp.json(); dettaglio = typeof c?.detail === "string" ? c.detail : "" } catch { /* corpo non JSON */ }
+      throw new ApiError(dettaglio || `${resp.status} ${resp.statusText}`, { stato: resp.status, percorso, dettaglio })
+    }
+    const lettore = resp.body.pipeThrough(new TextDecoderStream()).getReader()
+    let resto = ""
+    for (;;) {
+      const { value, done } = await lettore.read()
+      if (done) break
+      resto += value
+      const righe = resto.split("\n")
+      resto = righe.pop() || ""
+      for (const r of righe) if (r.trim()) onEvento(JSON.parse(r) as EventoAssistente)
+    }
+    if (resto.trim()) onEvento(JSON.parse(resto) as EventoAssistente)
+  },
 
   grafo: (slug: string, o?: Opzioni) => richiesta<{ nodi: unknown[]; archi: unknown[] }>(`/gare/${s(slug)}/grafo`, o),
   elencoDeliverables: (slug: string, o?: Opzioni) => richiesta<unknown[]>(`/gare/${s(slug)}/deliverables`, o),
   eseguiDeliverable: (slug: string, id: string) => richiesta(`/gare/${s(slug)}/deliverables/${s(id)}/esegui`, { method: "POST" }),
   rieseguiDeliverable: (slug: string, id: string) => richiesta(`/gare/${s(slug)}/deliverables/${s(id)}/riesegui`, { method: "POST" }),
+  /** Stadi di un deliverable (scaletta → bozza → definitivo): approvare
+      accoda lo stadio successivo; «modifica» lo fa riscrivere con la nota. */
+  approvaStadio: (slug: string, id: string, stadio: string) =>
+    richiesta<{ job_id?: number | null; successivo?: string }>(`/gare/${s(slug)}/deliverables/${s(id)}/stadi/${s(stadio)}/approva`, { method: "POST" }),
+  modificaStadio: (slug: string, id: string, stadio: string, nota: string) =>
+    richiesta(`/gare/${s(slug)}/deliverables/${s(id)}/stadi/${s(stadio)}/modifica`, { method: "POST", body: JSON.stringify({ nota }) }),
+  /** Rifà da zero un solo stadio con i dati attuali; i successivi tornano da produrre. */
+  rifaiStadio: (slug: string, id: string, stadio: string) =>
+    richiesta(`/gare/${s(slug)}/deliverables/${s(id)}/stadi/${s(stadio)}/rifai`, { method: "POST" }),
+  salvaStadio: (slug: string, id: string, stadio: string, testo: string) =>
+    richiesta(`/gare/${s(slug)}/deliverables/${s(id)}/stadi/${s(stadio)}`, { method: "PUT", body: JSON.stringify({ testo }) }),
+  esportaDeliverable: (slug: string, id: string, formato: "docx" | "pdf") =>
+    richiesta<{ percorso: string }>(`/gare/${s(slug)}/deliverables/${s(id)}/esporta?formato=${formato}`, { method: "POST", timeoutMs: 200_000 }),
   dettaglioProposta: (slug: string, id: string, o?: Opzioni) => richiesta<unknown>(`/gare/${s(slug)}/proposte/${s(id)}`, o),
   elencoProposteOperatore: (slug: string, criterio?: string, o?: Opzioni) =>
     richiesta<unknown[]>(`/gare/${s(slug)}/proposte-operatore${criterio ? `?criterio=${encodeURIComponent(criterio)}` : ""}`, o),
   creaPropostaOperatore: (slug: string, body: unknown) =>
     richiesta(`/gare/${s(slug)}/proposte-operatore`, { method: "POST", body: JSON.stringify(body) }),
+  /** Fase 6: proposte scritte dal professionista, approvate per definizione. */
+  elencoProposteProfessionista: (slug: string, o?: Opzioni) =>
+    richiesta<PropostaProfessionista[]>(`/gare/${s(slug)}/proposte-professionista`, o),
+  creaPropostaProfessionista: (slug: string, body: NuovaPropostaProfessionista) =>
+    richiesta<PropostaProfessionista>(`/gare/${s(slug)}/proposte-professionista`, { method: "POST", body: JSON.stringify(body) }),
+  eliminaPropostaProfessionista: (slug: string, id: string) =>
+    richiesta<void>(`/gare/${s(slug)}/proposte-professionista/${s(id)}`, { method: "DELETE" }),
   cronologiaInterventi: (slug: string, o?: Opzioni) => richiesta<unknown[]>(`/gare/${s(slug)}/interventi`, o),
   intervieni: (slug: string, messaggio: string) =>
     richiesta(`/gare/${s(slug)}/interventi`, { method: "POST", body: JSON.stringify({ messaggio }), timeoutMs: 600_000 }),
@@ -240,6 +328,14 @@ export const Api = {
   sistemaPipeline: (o?: Opzioni) => richiesta<{ versione: string; git_ref: string }>("/sistema/pipeline", o),
   importaPrezzario: (regione: string, anno: number) =>
     richiesta("/sistema/prezzari/importa", { method: "POST", body: JSON.stringify({ regione, anno }), timeoutMs: 600_000 }),
+  /** File PriMus (.dcf) pubblicato dalla regione: conversione e import lato server. */
+  caricaPrezzario: (regione: string, anno: number, file: File) => {
+    const corpo = new FormData()
+    corpo.append("regione", regione)
+    corpo.append("anno", String(anno))
+    corpo.append("file", file)
+    return richiesta("/sistema/prezzari/carica", { method: "POST", body: corpo, timeoutMs: 900_000 })
+  },
   // Fase 4, registro unico delle domande. Salvare non invia: le risposte
   // entrano nel contesto solo eseguendo la Fase 4.
   domande: (slug: string, o?: Opzioni) => richiesta<unknown>(`/gare/${s(slug)}/domande`, o),
