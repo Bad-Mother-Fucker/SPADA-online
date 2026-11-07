@@ -6,7 +6,8 @@ const path = require('path');
 const {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   Header, Footer, HeadingLevel, AlignmentType, BorderStyle,
-  WidthType, ShadingType, PageNumber, PageBreak, LevelFormat, ImageRun
+  WidthType, ShadingType, PageNumber, PageBreak, LevelFormat, ImageRun,
+  CommentRangeStart, CommentRangeEnd, CommentReference
 } = require('docx');
 
 // ── Percorsi e parametri ──────────────────────────────────────────────────────
@@ -151,7 +152,7 @@ function makeTableFromRows(rows) {
             margins: { top: 80, bottom: 80, left: 120, right: 120 },
             children: [new Paragraph({
               spacing: { line: LINE_SPACE, lineRule: 'auto' },
-              children: [new TextRun({ text: cell.trim(), font: FONT, size: SIZE_BODY, bold: ri === 0 })],
+              children: parseInline(cell.trim(), ri === 0 ? { bold: true } : {}),
             })],
           })
         ),
@@ -184,34 +185,106 @@ function makeFooter() {
   });
 }
 
-// ── Parser inline per **bold**, *italic* ──────────────────────────────────────
-function parseInline(text, forceHL = false) {
-  if (forceHL) return [runHL(text)];
+// ── Blocchi «da revisionare» ──────────────────────────────────────────────────
+// Gli agenti scrivono `%%DR_START: motivo%%testo provvisorio%%DR_END%%`, di
+// solito dentro la frase, a volte su righe proprie o a cavallo di paragrafi.
+// Nel DOCX il testo provvisorio è evidenziato in giallo e il motivo diventa
+// un commento Word ancorato a quel testo: nessuna sigla nel documento.
+const RE_DR = /%%DR_START:\s*(.*?)%%|%%DR_END%%/g;
+const DR_VUOTO = '[dato da inserire]';
+const commenti = [];          // { id, motivo } nell'ordine del testo
+const dr = { aperto: false, id: -1, vuoto: false };
+
+/** Righe con i marcatori isolati riattaccate al testo vicino e blocchi bilanciati. */
+function preparaDR(lines) {
+  const out = lines.slice();
+  const testo = (l) => l.trim() !== '' && !/^<!--/.test(l) && !/^\|[-:\s|]+\|$/.test(l);
+  const soloMarcatori = (l) => l.trim() !== '' && l.replace(RE_DR, '').trim() === '';
+  for (let i = 0; i < out.length; i++) {
+    if (!soloMarcatori(out[i])) continue;
+    const marc = out[i].trim();
+    const apre = /^%%DR_START/.test(marc) && !/%%DR_END%%$/.test(marc);
+    let j = i;
+    do { j += apre ? 1 : -1; } while (j >= 0 && j < out.length && !(testo(out[j]) && !soloMarcatori(out[j])));
+    if (j < 0 || j >= out.length) continue;          // niente testo vicino: resta, il bilanciamento ci pensa
+    out[j] = apre ? marc + out[j] : out[j] + marc;
+    out[i] = '';
+  }
+  // Bilanciamento: START dentro un blocco aperto chiude il precedente; END
+  // orfano si toglie; un blocco mai chiuso termina alla fine del suo paragrafo.
+  let aperto = -1;
+  for (let i = 0; i < out.length; i++) {
+    out[i] = out[i].replace(RE_DR, (m) => {
+      if (m.startsWith('%%DR_START')) {
+        if (aperto >= 0) { console.error(`⚠ DR_START alla riga ${i + 1} con il blocco della riga ${aperto + 1} ancora aperto: chiuso lì.`); return '%%DR_END%%' + m; }
+        aperto = i; return m;
+      }
+      if (aperto < 0) { console.error(`⚠ DR_END senza DR_START alla riga ${i + 1}: ignorato.`); return ''; }
+      aperto = -1; return m;
+    });
+  }
+  if (aperto >= 0) {
+    let k = aperto;
+    while (k + 1 < out.length && out[k + 1].trim() !== '') k++;
+    console.error(`⚠ DR_START alla riga ${aperto + 1} senza DR_END: chiuso a fine paragrafo (riga ${k + 1}).`);
+    out[k] += '%%DR_END%%';
+  }
+  return out;
+}
+
+// ── Parser inline per **bold**, *italic* e blocchi DR ─────────────────────────
+function parseInline(text, base = {}) {
+  const parts = [];
+  let last = 0, m;
+  const testo = (t) => {
+    if (!t) return;
+    if (dr.aperto) dr.vuoto = false;
+    parts.push(...formattato(t, dr.aperto ? { highlight: 'yellow', ...base } : base));
+  };
+  RE_DR.lastIndex = 0;
+  while ((m = RE_DR.exec(text)) !== null) {
+    testo(text.slice(last, m.index));
+    if (m[0].startsWith('%%DR_START')) {
+      dr.aperto = true; dr.vuoto = true; dr.id = commenti.length;
+      commenti.push({ id: dr.id, motivo: (m[1] || '').trim() || 'Da revisionare' });
+      parts.push(new CommentRangeStart(dr.id));
+    } else if (dr.aperto) {
+      if (dr.vuoto) parts.push(runHL(DR_VUOTO, base));
+      parts.push(new CommentRangeEnd(dr.id));
+      parts.push(new TextRun({ children: [new CommentReference(dr.id)] }));
+      dr.aperto = false;
+    }
+    last = RE_DR.lastIndex;
+  }
+  testo(text.slice(last));
+  return parts.length > 0 ? parts : [run('', base)];
+}
+
+function formattato(text, base) {
   const parts = [];
   const re = /\*\*(.+?)\*\*|\*(.+?)\*/g;
   let last = 0, m;
   while ((m = re.exec(text)) !== null) {
-    if (m.index > last) parts.push(run(text.slice(last, m.index)));
-    if (m[1]) parts.push(run(m[1], { bold: true }));
-    else if (m[2]) parts.push(run(m[2], { italics: true }));
+    if (m.index > last) parts.push(run(text.slice(last, m.index), base));
+    if (m[1]) parts.push(run(m[1], { ...base, bold: true }));
+    else if (m[2]) parts.push(run(m[2], { ...base, italics: true }));
     last = re.lastIndex;
   }
-  if (last < text.length) parts.push(run(text.slice(last)));
-  return parts.length > 0 ? parts : [run(text)];
+  if (last < text.length) parts.push(run(text.slice(last), base));
+  return parts;
 }
 
 // ── Parser Markdown ───────────────────────────────────────────────────────────
 function parseMd(content) {
-  const lines    = content.split('\n');
+  const lines    = preparaDR(content.split('\n'));
   const sections = [];
   let cur        = null;
-  let inDR       = false;
   let tableLines = [];
 
   function flushTable() {
     if (tableLines.length === 0) return;
     const dataRows = tableLines.filter(l => !l.match(/^\|[-:\s|]+\|$/));
-    const rows = dataRows.map(l => l.split('|').slice(1, -1));
+    const rows = dataRows.map(l => l.trim().split('|').slice(1, -1));
     if (rows.length > 0) {
       const tbl = makeTableFromRows(rows);
       if (tbl && cur) {
@@ -224,7 +297,7 @@ function parseMd(content) {
   }
 
   function addEl(el) {
-    if (!cur) { cur = { headerTitle: 'Offerta Tecnica', children: [], drBlocks: [] }; sections.push(cur); }
+    if (!cur) { cur = { headerTitle: 'Offerta Tecnica', children: [] }; sections.push(cur); }
     cur.children.push(el);
   }
 
@@ -238,26 +311,6 @@ function parseMd(content) {
     if (line.trim() === '<!-- PAGEBREAK -->') {
       flushTable();
       addEl(new Paragraph({ children: [new PageBreak()] }));
-      continue;
-    }
-
-    // DR_START
-    const drS = line.match(/^%%DR_START:\s*(.+)%%$/);
-    if (drS) {
-      flushTable();
-      inDR = true;
-      if (cur) cur.drBlocks = cur.drBlocks || [];
-      if (cur) cur.drBlocks.push({ reason: drS[1].trim(), startIdx: cur ? cur.children.length : 0 });
-      continue;
-    }
-
-    // DR_END
-    if (line.trim() === '%%DR_END%%') {
-      flushTable();
-      inDR = false;
-      if (cur && cur.drBlocks && cur.drBlocks.length > 0) {
-        cur.drBlocks[cur.drBlocks.length - 1].endIdx = cur.children.length;
-      }
       continue;
     }
 
@@ -276,13 +329,13 @@ function parseMd(content) {
     if (line.match(/^# (?!#)/)) {
       flushTable();
       const title = line.replace(/^#\s+/, '');
-      cur = { headerTitle: title, children: [], drBlocks: [] };
+      cur = { headerTitle: title, children: [] };
       sections.push(cur);
       cur.children.push(new Paragraph({
         heading: HeadingLevel.HEADING_1,
         pageBreakBefore: sections.length > 1,
         spacing: { before: 240, after: 160, line: LINE_SPACE },
-        children: [run(title, { size: SIZE_H1, bold: true })],
+        children: parseInline(title, { size: SIZE_H1, bold: true }),
       }));
       continue;
     }
@@ -294,7 +347,7 @@ function parseMd(content) {
       addEl(new Paragraph({
         heading: HeadingLevel.HEADING_2,
         spacing: { before: 240, after: 120, line: LINE_SPACE },
-        children: [run(title, { size: SIZE_H2, bold: true })],
+        children: parseInline(title, { size: SIZE_H2, bold: true }),
       }));
       continue;
     }
@@ -306,7 +359,7 @@ function parseMd(content) {
       addEl(new Paragraph({
         heading: HeadingLevel.HEADING_3,
         spacing: { before: 180, after: 80, line: LINE_SPACE },
-        children: [run(title, { bold: true, underline: {} })],
+        children: parseInline(title, { bold: true, underline: {} }),
       }));
       continue;
     }
@@ -315,7 +368,7 @@ function parseMd(content) {
     if (line.match(/^- /)) {
       flushTable();
       const text = line.replace(/^-\s+/, '');
-      addEl(makeBulletPara(parseInline(text, inDR)));
+      addEl(makeBulletPara(parseInline(text)));
       continue;
     }
 
@@ -323,7 +376,7 @@ function parseMd(content) {
     if (line.match(/^\d+\.\s/)) {
       flushTable();
       const text = line.replace(/^\d+\.\s+/, '');
-      addEl(makeNumberedPara(parseInline(text, inDR)));
+      addEl(makeNumberedPara(parseInline(text)));
       continue;
     }
 
@@ -394,7 +447,7 @@ function parseMd(content) {
 
     // Paragrafo normale
     flushTable();
-    addEl(bodyPara(parseInline(line, inDR)));
+    addEl(bodyPara(parseInline(line)));
   }
 
   flushTable();
@@ -486,6 +539,12 @@ if (ALLEGATI.length) {
 }
 
 const doc = new Document({
+  comments: {
+    children: commenti.map((c) => ({
+      id: c.id, author: 'SPADA – da revisionare', initials: 'DR', date: new Date(),
+      children: [new Paragraph({ children: [new TextRun(c.motivo)] })],
+    })),
+  },
   numbering: {
     config: [
       { reference: 'bullets',  levels: [{ level: 0, format: LevelFormat.BULLET,  text: '•', alignment: AlignmentType.LEFT,
@@ -520,10 +579,10 @@ Packer.toBuffer(doc).then(buf => {
       + (figureMancanti.length ? ' (senza immagine: ' + figureMancanti.join(', ') + ')' : ''));
   }
 
-  // Stima word count per sezione
+  // Stima word count: conta il testo provvisorio dei blocchi DR, non i motivi
   const wordCount = raw
     .replace(/^<!--.*-->$/gm, '')
-    .replace(/^%%DR_(START|END).*$/gm, '')
+    .replace(RE_DR, ' ')
     .replace(/^\|[-:\s|]+\|$/gm, '')
     .split(/\s+/).filter(Boolean).length;
 
@@ -536,8 +595,7 @@ Packer.toBuffer(doc).then(buf => {
   console.log('\nSezioni presenti:');
   subs.forEach(m => console.log('  - ' + m[1]));
 
-  // DR blocks
-  const drBlocks = [...raw.matchAll(/^%%DR_START:\s*(.+)%%$/gm)];
-  console.log('\nSezioni DA REVISIONARE (' + drBlocks.length + '):');
-  drBlocks.forEach((m, i) => console.log('  ' + i + '. ' + m[1]));
+  // Blocchi DR: uno per commento, con il motivo
+  console.log('\nSezioni DA REVISIONARE (' + commenti.length + '):');
+  commenti.forEach((c, i) => console.log('  ' + (i + 1) + '. ' + c.motivo));
 });

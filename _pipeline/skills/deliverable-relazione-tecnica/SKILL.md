@@ -126,8 +126,9 @@ ordine, parole obiettivo rispettate (±15%).
   hanno il titolo descrittivo della proposta, mai il suo codice.
 - Mai prezzi, importi, ribassi o elementi economici.
 - Nessun fatto che non stia nei nodi proposta o nelle loro evidenze.
-  Dove manca un dato: `%%DR_START: motivo%%` … `%%DR_END%%` (nel DOCX
-  diventa evidenziato giallo) e non inventarlo.
+  Dove manca un dato: `%%DR_START: motivo%%` … `%%DR_END%%` (nel DOCX il
+  testo diventa evidenziato giallo e il motivo un commento a margine) e non
+  inventarlo.
 - Figure: se il prompt elenca FIGURE scelte dal professionista, metti
   `[FIGURA: fig-NN]` su una riga a sé dopo il capoverso che la introduce
   e citala come «figura N» (N = ordine di comparsa nel documento); la
