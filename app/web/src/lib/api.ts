@@ -181,7 +181,65 @@ export interface Documento {
   errore_integrazione?: string | null
 }
 
+/** Grafiche della relazione tecnica (Fase 7), una o più per proposta approvata. */
+export interface PropostaPerGrafica { id: string; titolo: string; sottocriterio: string; criterio: string }
+export interface ErroreGrafica {
+  /** chiave, credito, rifiuto, rete, modello: errori di OpenAI; interrotta: riavvio di SPADA; altro. */
+  tipo: string
+  operazione: "prompt" | "immagine"
+  messaggio: string
+}
+export interface Grafica {
+  id: string
+  proposta_id: string
+  proposta_approvata: boolean
+  richiesta: string
+  prompt: string
+  didascalia: string
+  note_prompt: string
+  prompt_preparato_il: string | null
+  immagine: { origine: "openai" | "caricata"; modello: string | null; caricata_il: string; nome: string } | null
+  operazione: { tipo: "prompt" | "immagine"; avviata_il: string } | null
+  errore: ErroreGrafica | null
+  /** Per bozza e definitivo: true se il testo ha il segnaposto, null se il testo non c'è ancora. */
+  collocata: Record<string, boolean | null>
+  avvisi: string[]
+  creata_il: string
+}
+export interface ElencoGrafiche {
+  proposte: PropostaPerGrafica[]
+  grafiche: Grafica[]
+  openai: { configurata: boolean; modello: string }
+  testi: Record<string, boolean>
+}
+export interface StatoOpenAI { configurata: boolean; chiave: string | null; modello: string; origine: "impostazioni" | "ambiente" | null }
+
 const s = (slug: string) => encodeURIComponent(slug)
+
+/** POST multipart con avanzamento dell'upload: fetch non lo espone. */
+function inviaConProgresso<T>(percorso: string, form: FormData, suProgresso?: (frazione: number) => void, signal?: AbortSignal) {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open("POST", base() + percorso)
+    xhr.timeout = 120_000
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable && suProgresso) suProgresso(e.loaded / e.total) }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText)) } catch { resolve(undefined as T) }
+        return
+      }
+      let dettaglio = ""
+      try { dettaglio = JSON.parse(xhr.responseText)?.detail || "" } catch { /* corpo non JSON */ }
+      reject(new ApiError(dettaglio || `${xhr.status} ${xhr.statusText}`, { stato: xhr.status, percorso, dettaglio }))
+    }
+    xhr.onerror = () => reject(new ApiError("Servizio non raggiungibile", { percorso }))
+    xhr.ontimeout = () => reject(new ApiError("Il servizio non ha risposto in tempo", { percorso, timeout: true }))
+    xhr.onabort = () => reject(new DOMException("Caricamento annullato", "AbortError"))
+    signal?.addEventListener("abort", () => xhr.abort())
+    xhr.send(form)
+  })
+}
+const g = (slug: string, id: string) => `/gare/${s(slug)}/deliverables/${s(id)}/grafiche`
 
 // ---------------------------------------------------------------- client
 
@@ -349,4 +407,30 @@ export const Api = {
   integraDocumento: (slug: string, percorso: string) =>
     richiesta(`/gare/${s(slug)}/documenti/integra`, { method: "POST", body: JSON.stringify({ percorso }) }),
   riallineaBrief: (slug: string) => richiesta(`/gare/${s(slug)}/brief/riallinea`, { method: "POST" }),
+
+  // Grafiche della relazione tecnica. Prompt e immagine si preparano in
+  // background (202): l'elenco riporta l'operazione in corso e l'esito.
+  grafiche: (slug: string, id: string, o?: Opzioni) => richiesta<ElencoGrafiche>(g(slug, id), o),
+  creaGrafica: (slug: string, id: string, body: { proposta_id: string; richiesta: string }) =>
+    richiesta<{ id: string }>(g(slug, id), { method: "POST", body: JSON.stringify(body) }),
+  aggiornaGrafica: (slug: string, id: string, gid: string, body: Partial<Pick<Grafica, "richiesta" | "prompt" | "didascalia">>) =>
+    richiesta<{ id: string }>(`${g(slug, id)}/${s(gid)}`, { method: "PATCH", body: JSON.stringify(body) }),
+  eliminaGrafica: (slug: string, id: string, gid: string) => richiesta<void>(`${g(slug, id)}/${s(gid)}`, { method: "DELETE" }),
+  preparaPromptGrafica: (slug: string, id: string, gid: string) => richiesta(`${g(slug, id)}/${s(gid)}/prompt`, { method: "POST" }),
+  generaImmagineGrafica: (slug: string, id: string, gid: string) => richiesta(`${g(slug, id)}/${s(gid)}/genera`, { method: "POST" }),
+  caricaImmagineGrafica: (slug: string, id: string, gid: string, file: File, suProgresso?: (frazione: number) => void) => {
+    const form = new FormData()
+    form.append("file", file)
+    return inviaConProgresso<{ id: string }>(`${g(slug, id)}/${s(gid)}/immagine`, form, suProgresso)
+  },
+  /** `versione` (data dell'immagine) cambia l'URL a ogni immagine nuova. */
+  urlImmagineGrafica: (slug: string, id: string, gid: string, versione: string) =>
+    `${base()}${g(slug, id)}/${s(gid)}/immagine?v=${encodeURIComponent(versione)}`,
+
+  // Generazione immagini con OpenAI: la chiave torna sempre mascherata.
+  statoOpenAI: (o?: Opzioni) => richiesta<StatoOpenAI>("/sistema/openai", o),
+  salvaOpenAI: (body: { chiave?: string; modello?: string }) =>
+    richiesta<StatoOpenAI>("/sistema/openai", { method: "PUT", body: JSON.stringify(body) }),
+  rimuoviOpenAI: () => richiesta<StatoOpenAI>("/sistema/openai", { method: "DELETE" }),
+  verificaOpenAI: () => richiesta<{ ok: boolean; messaggio: string; tipo?: string }>("/sistema/openai/verifica", { method: "POST", timeoutMs: 30_000 }),
 }

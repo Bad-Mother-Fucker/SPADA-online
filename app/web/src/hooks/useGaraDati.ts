@@ -5,7 +5,7 @@
 
 import { useMutation, useMutationState, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Api, ApiError, type NuovaPropostaProfessionista, type DettaglioGara, type Documento as DocumentoApi, type Manifest, type StatoPrezzario } from "@/lib/api"
+import { Api, ApiError, type ElencoGrafiche, type Grafica, type NuovaPropostaProfessionista, type DettaglioGara, type Documento as DocumentoApi, type Manifest, type StatoPrezzario } from "@/lib/api"
 import type { Fasi, JobFase } from "@/dominio/fasi"
 import * as Md from "@/lib/md"
 import { comeApiError } from "@/lib/risorsa"
@@ -29,6 +29,7 @@ export const chiaviGara = {
   domande: (slug: string) => ["gara", slug, "domande"] as const,
   assistente: (slug: string) => ["gara", slug, "assistente"] as const,
   interventi: (slug: string) => ["gara", slug, "interventi"] as const,
+  grafiche: (slug: string, id: string) => ["gara", slug, "grafiche", id] as const,
   sistema: ["sistema"] as const,
 }
 
@@ -440,4 +441,71 @@ export function useAvanzamento(slug: string, q: { fase?: number; deliverable?: s
     refetchInterval: attivo ? 3_000 : false,
     retry: false,
   })
+}
+
+// ------------------------------------------------- grafiche della relazione
+
+/** Elenco delle figure: finché una preparazione o una generazione è in
+    corso si rilegge ogni 3 secondi, poi si ferma. */
+export function useGrafiche(slug: string, id: string, attivo = true) {
+  return useQuery({
+    queryKey: chiaviGara.grafiche(slug, id),
+    queryFn: ({ signal }) => Api.grafiche(slug, id, { signal }),
+    enabled: attivo,
+    refetchInterval: (q) => (q.state.data?.grafiche.some((x) => x.operazione) ? 3_000 : false),
+  })
+}
+
+export function useAzioniGrafiche(slug: string, id: string) {
+  const qc = useQueryClient()
+  const chiave = chiaviGara.grafiche(slug, id)
+  const rileggi = () => qc.invalidateQueries({ queryKey: chiave })
+  /** Segna subito l'operazione sulla card (UI ottimistica); l'elenco riletto la conferma o la toglie. */
+  const segna = (gid: string, tipo: "prompt" | "immagine") => {
+    const prima = qc.getQueryData<ElencoGrafiche>(chiave)
+    qc.setQueryData<ElencoGrafiche>(chiave, (d) => d && {
+      ...d, grafiche: d.grafiche.map((x) => x.id === gid ? { ...x, operazione: { tipo, avviata_il: new Date().toISOString() }, errore: null } : x),
+    })
+    return { prima }
+  }
+  const ripristina = (_e: unknown, _v: unknown, ctx?: { prima?: ElencoGrafiche }) => { if (ctx?.prima) qc.setQueryData(chiave, ctx.prima) }
+  const crea = useMutation({ mutationFn: (b: { proposta_id: string; richiesta: string }) => Api.creaGrafica(slug, id, b), onSettled: rileggi })
+  const aggiorna = useMutation({
+    mutationFn: (v: { gid: string } & Partial<Pick<Grafica, "richiesta" | "prompt" | "didascalia">>) => {
+      const { gid, ...campi } = v
+      return Api.aggiornaGrafica(slug, id, gid, campi)
+    },
+    onSettled: rileggi,
+  })
+  const elimina = useMutation({ mutationFn: (gid: string) => Api.eliminaGrafica(slug, id, gid), onSettled: rileggi })
+  const prompt = useMutation({
+    mutationFn: (gid: string) => Api.preparaPromptGrafica(slug, id, gid),
+    onMutate: (gid) => segna(gid, "prompt"), onError: ripristina, onSettled: rileggi,
+  })
+  const genera = useMutation({
+    mutationFn: (gid: string) => Api.generaImmagineGrafica(slug, id, gid),
+    onMutate: (gid) => segna(gid, "immagine"), onError: ripristina, onSettled: rileggi,
+  })
+  const carica = useMutation({
+    mutationFn: (v: { gid: string; file: File; suProgresso?: (f: number) => void }) => Api.caricaImmagineGrafica(slug, id, v.gid, v.file, v.suProgresso),
+    onSettled: rileggi,
+  })
+  return { crea, aggiorna, elimina, prompt, genera, carica }
+}
+
+export function useOpenAI(attivo = true) {
+  return useQuery({ queryKey: [...chiaviGara.sistema, "openai"], queryFn: ({ signal }) => Api.statoOpenAI({ signal }), enabled: attivo, staleTime: 60_000 })
+}
+
+/** Dopo un cambio della chiave si rileggono lo stato e gli elenchi delle figure (modalità automatica o manuale). */
+export function useAzioniOpenAI() {
+  const qc = useQueryClient()
+  const aggiorna = (d: unknown) => {
+    qc.setQueryData([...chiaviGara.sistema, "openai"], d)
+    void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "gara" && q.queryKey[2] === "grafiche" })
+  }
+  const salva = useMutation({ mutationFn: (b: { chiave?: string; modello?: string }) => Api.salvaOpenAI(b), onSuccess: aggiorna })
+  const rimuovi = useMutation({ mutationFn: () => Api.rimuoviOpenAI(), onSuccess: aggiorna })
+  const verifica = useMutation({ mutationFn: () => Api.verificaOpenAI() })
+  return { salva, rimuovi, verifica }
 }
