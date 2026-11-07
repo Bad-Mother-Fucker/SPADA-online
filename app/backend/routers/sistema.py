@@ -11,7 +11,8 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from auth import stato_autenticazione
 import login_claude
-from models import CodiceLoginRequest, ImportaPrezzarioRequest
+from models import CodiceLoginRequest, ImportaPrezzarioRequest, ImpostazioniOpenAIRequest
+import immagini_openai
 from paths import DATA_DIR, DB_PATH, PIPELINE_DIR
 from prezzario import ImportazioneNonRiuscita, importa, importa_da_file
 
@@ -139,3 +140,35 @@ def pipeline():
         capture_output=True, text=True,
     ).stdout.strip() or "n.d."
     return {"versione": versione, "git_ref": git_ref}
+
+
+# ── Generazione immagini (grafiche della relazione) ─────────────────
+@router.get("/openai")
+def stato_openai():
+    """Chiave sempre mascherata: il browser non la riceve mai per intero."""
+    return immagini_openai.stato()
+
+
+@router.put("/openai")
+def salva_openai(body: ImpostazioniOpenAIRequest):
+    if body.chiave is None and body.modello is None:
+        raise HTTPException(400, "Indica la chiave o il modello.")
+    immagini_openai.salva(body.chiave, body.modello)
+    return immagini_openai.stato()
+
+
+@router.delete("/openai")
+def rimuovi_openai():
+    if immagini_openai.configurazione()["origine"] == "ambiente":
+        raise HTTPException(409, "La chiave viene dalla variabile OPENAI_API_KEY dell'ambiente: toglila da lì.")
+    immagini_openai.rimuovi()
+    return immagini_openai.stato()
+
+
+@router.post("/openai/verifica")
+def verifica_openai():
+    """Controlla chiave e modello senza generare nulla (nessun costo)."""
+    try:
+        return immagini_openai.verifica()
+    except immagini_openai.ErroreOpenAI as e:
+        return {"ok": False, "tipo": e.tipo, "messaggio": str(e)}

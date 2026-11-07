@@ -91,8 +91,8 @@ def _cli_elenco(did: str) -> int:
     for g in figure:
         p = approvate[g["proposta_id"]]
         did_ = g.get("didascalia") or "(didascalia non ancora scritta)"
-        print(f"- {g['id']} — proposta {p['id']} «{p['titolo']}»: mostra {g.get('richiesta', '').strip()} "
-              f"Didascalia: {did_}")
+        richiesta = g.get("richiesta", "").strip().rstrip(".")
+        print(f"- {g['id']} — proposta {p['id']} «{p['titolo']}». Mostra: {richiesta}. Didascalia: {did_}")
     return 0
 
 

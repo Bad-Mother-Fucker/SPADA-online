@@ -6,10 +6,11 @@ import { Card, Nota } from "@/components/comuni/Primitivi"
 import { BadgeStato, Chip } from "@/components/gare/BadgeStato"
 import { TestataVista } from "../TestataVista"
 import { useGara } from "../GaraContext"
-import { useSistema } from "@/hooks/useGaraDati"
+import { useOpenAI, useSistema } from "@/hooks/useGaraDati"
 import { useTema } from "@/hooks/useTema"
 import { useState, type ReactNode } from "react"
 import { DialogoCaricaPrezzario } from "@/components/comuni/CaricaPrezzario"
+import { AzioniOpenAI, DialogoChiaveOpenAI } from "@/components/comuni/ImpostazioniOpenAI"
 import type { Tono } from "@/dominio/fasi"
 
 function Riga({ titolo, valore, tono, azione }: { titolo: string; valore: ReactNode; tono?: Tono; azione?: ReactNode }) {
@@ -31,6 +32,8 @@ export function Impostazioni() {
   const { auth, pipeline, prezzari } = useSistema()
   const { tema, scegli } = useTema()
   const [caricaAperto, setCaricaAperto] = useState(false)
+  const openai = useOpenAI()
+  const [chiaveAperta, setChiaveAperta] = useState(false)
   return (
     <>
       <TestataVista kicker="Vista trasversale" titolo="Impostazioni" sottotitolo="Due ambiti separati: i parametri di questa gara e le impostazioni di sistema che valgono per l'intera installazione." badge={{ tono: "neu", etichetta: "Sempre disponibile" }} />
@@ -61,11 +64,15 @@ export function Impostazioni() {
             {auth.isPending ? <Skeleton className="h-12" /> : <Riga titolo="Autenticazione Claude" tono={auth.data?.disponibile ? undefined : "crit"} valore={auth.data?.disponibile ? `Attiva${auth.data.stima_scadenza ? `, circa ${auth.data.stima_scadenza.giorni_alla_scadenza_stimata} giorni alla scadenza stimata` : ""}` : `Non disponibile: ${auth.data?.motivo || (auth.error ? "endpoint non raggiungibile" : "motivo non riportato")}`} />}
             {pipeline.isPending ? <Skeleton className="h-12" /> : <Riga titolo="Versione pipeline" valore={pipeline.data ? `spada-core ${pipeline.data.versione}, ${pipeline.data.git_ref}` : "non disponibile"} azione={pipeline.data && <BadgeStato tono="ok">installata</BadgeStato>} />}
             {prezzari.isPending ? <Skeleton className="h-12" /> : <Riga titolo="Prezzari installati" tono={prezzari.data?.length ? undefined : "attn"} valore={prezzari.data?.length ? `${new Set(prezzari.data.map((p) => p.regione)).size} regioni, ${prezzari.data.length} annualità` : "Nessun prezzario importato"} azione={<Button size="sm" variant="outline" onClick={() => setCaricaAperto(true)}>Aggiungi da file .dcf</Button>} />}
+            {openai.isPending ? <Skeleton className="h-12" /> : <Riga titolo="Generazione immagini (OpenAI)" tono={openai.isError ? "crit" : undefined}
+              valore={openai.isError ? "Stato non leggibile: riavvia SPADA se l'hai appena aggiornato" : openai.data?.configurata ? `Configurata, chiave ${openai.data.chiave}, modello ${openai.data.modello}${openai.data.origine === "ambiente" ? ", dall'ambiente" : ""}` : "Non configurata: le figure si fanno copiando il prompt in ChatGPT"}
+              azione={!openai.isError && <AzioniOpenAI stato={openai.data} onApri={() => setChiaveAperta(true)} />} />}
             <Riga titolo="Tema predefinito" valore={tema === "auto" ? "Segue il sistema operativo" : `Forzato su ${tema === "dark" ? "scuro" : "chiaro"}`} azione={tema !== "auto" && <Button size="sm" variant="outline" onClick={() => scegli("auto")}>Torna ad automatico</Button>} />
           </div>
         </Card>
       </div>
       <DialogoCaricaPrezzario aperto={caricaAperto} onChiudi={() => setCaricaAperto(false)} />
+      {chiaveAperta && <DialogoChiaveOpenAI aperto stato={openai.data} onChiudi={() => setChiaveAperta(false)} />}
     </>
   )
 }

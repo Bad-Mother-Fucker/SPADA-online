@@ -115,3 +115,63 @@ class CodiceLoginRequest(BaseModel):
     """Codice mostrato dalla pagina di accesso di Anthropic quando il
     ritorno automatico al login non riesce."""
     codice: str = Field(min_length=1, max_length=2000)
+
+
+class GraficaRequest(BaseModel):
+    """Fase 7 — nuova figura della relazione per una proposta approvata:
+    cosa deve mostrare, scritto dal professionista."""
+    proposta_id: str = Field(pattern=r"^P-C[0-9]+-[0-9]+$")
+    richiesta: str = Field(min_length=10, max_length=4000)
+
+
+class AggiornaGraficaRequest(BaseModel):
+    """Fase 7 — correzioni del professionista a richiesta, prompt o
+    didascalia di una figura. I campi assenti restano com'erano."""
+    richiesta: Optional[str] = Field(default=None, min_length=10, max_length=4000)
+    prompt: Optional[str] = Field(default=None, max_length=32000)
+    didascalia: Optional[str] = Field(default=None, max_length=400)
+    prompt_riferimento: Optional[str] = Field(default=None, max_length=4000)
+    usa_riferimento: Optional[bool] = None
+
+
+class RitaglioRiferimentoRequest(BaseModel):
+    """Riquadro del riferimento sulla pagina dell'elaborato, in frazioni
+    (x0, y0, x1, y1; origine in alto a sinistra)."""
+    riquadro: list[float] = Field(min_length=4, max_length=4)
+
+
+class SchedaRequest(BaseModel):
+    """Fase 7 — scheda tecnica aggiunta a mano dal professionista a una
+    proposta approvata: è inclusa nella relazione per definizione."""
+    proposta_id: str = Field(pattern=r"^P-C[0-9]+-[0-9]+$")
+    oggetto: str = Field(min_length=3, max_length=300)
+    tipo: Literal["scheda_tecnica", "epd", "dop", "certificato", "rapporto_prova"] = "scheda_tecnica"
+    documenta: Optional[str] = Field(default=None, max_length=1000)
+
+
+class AggiornaSchedaRequest(BaseModel):
+    """Fase 7 — scelta e dati di una scheda tecnica. I campi assenti
+    restano com'erano."""
+    inclusa: Optional[bool] = None
+    oggetto: Optional[str] = Field(default=None, min_length=3, max_length=300)
+    tipo: Optional[Literal["scheda_tecnica", "epd", "dop", "certificato", "rapporto_prova"]] = None
+    documenta: Optional[str] = Field(default=None, max_length=1000)
+    produttore: Optional[str] = Field(default=None, max_length=200)
+    modello: Optional[str] = Field(default=None, max_length=200)
+
+
+class UsaCandidatoRequest(BaseModel):
+    """Fase 7 — prodotto scelto fra quelli trovati online (posizione)."""
+    indice: int = Field(ge=0, le=20)
+
+
+class ConsegnaSchedeRequest(BaseModel):
+    """Fase 7 — come si consegnano le schede incluse."""
+    consegna: Literal["in_coda", "file", "zip"]
+
+
+class ImpostazioniOpenAIRequest(BaseModel):
+    """Chiave API e modello per la generazione delle immagini. Un campo
+    assente resta com'era."""
+    chiave: Optional[str] = Field(default=None, min_length=20, max_length=400, pattern=r"^\S+$")
+    modello: Optional[str] = Field(default=None, min_length=1, max_length=80, pattern=r"^[A-Za-z0-9._-]+$")

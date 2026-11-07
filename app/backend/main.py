@@ -21,7 +21,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from db import init_db
 from paths import SlugNonValido
-from routers import gare, sistema
+from routers import gare, grafiche, schede, sistema
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("spada.api")
@@ -58,6 +58,8 @@ def _startup():
 
 
 app.include_router(gare.router)
+app.include_router(grafiche.router)
+app.include_router(schede.router)
 app.include_router(sistema.router)
 
 
