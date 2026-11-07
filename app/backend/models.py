@@ -115,3 +115,25 @@ class CodiceLoginRequest(BaseModel):
     """Codice mostrato dalla pagina di accesso di Anthropic quando il
     ritorno automatico al login non riesce."""
     codice: str = Field(min_length=1, max_length=2000)
+
+
+class GraficaRequest(BaseModel):
+    """Fase 7 — nuova figura della relazione per una proposta approvata:
+    cosa deve mostrare, scritto dal professionista."""
+    proposta_id: str = Field(pattern=r"^P-C[0-9]+-[0-9]+$")
+    richiesta: str = Field(min_length=10, max_length=4000)
+
+
+class AggiornaGraficaRequest(BaseModel):
+    """Fase 7 — correzioni del professionista a richiesta, prompt o
+    didascalia di una figura. I campi assenti restano com'erano."""
+    richiesta: Optional[str] = Field(default=None, min_length=10, max_length=4000)
+    prompt: Optional[str] = Field(default=None, max_length=32000)
+    didascalia: Optional[str] = Field(default=None, max_length=400)
+
+
+class ImpostazioniOpenAIRequest(BaseModel):
+    """Chiave API e modello per la generazione delle immagini. Un campo
+    assente resta com'era."""
+    chiave: Optional[str] = Field(default=None, min_length=20, max_length=400, pattern=r"^\S+$")
+    modello: Optional[str] = Field(default=None, min_length=1, max_length=80, pattern=r"^[A-Za-z0-9._-]+$")
