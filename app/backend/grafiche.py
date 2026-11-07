@@ -36,6 +36,7 @@ from pathlib import Path
 from auth import get_claude_env
 from paths import SPADA_CLAUDE
 import immagini_openai
+import riferimenti
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "_pipeline" / "scripts" / "setup"))
 import deliverables_offerta as offerta  # noqa: E402
@@ -47,6 +48,9 @@ TIMEOUT_PROMPT = 8 * 60
 MAX_IMMAGINE = 20 * 1024 * 1024
 TOOLS_CONSENTITI = "Read,Grep,Glob"
 TOOLS_VIETATI = "Write,Edit,Bash,Task,Agent,NotebookEdit"
+# Istruzione per il riferimento caricato dal professionista prima che Claude lo veda.
+RIF_PREDEFINITO = ("Use the attached image as a visual reference for layout, proportions and viewpoint. "
+                   "Where the attached image and the text differ, follow the text.")
 
 _lock = threading.Lock()
 _in_corso: set[tuple[str, str, str]] = set()  # (cartella gara, cartella deliverable, id figura)
@@ -97,6 +101,7 @@ def _vista(gara: Path, dl: dict, g: dict, approvate: dict, testi: dict) -> dict:
                   "messaggio": "Operazione interrotta da un riavvio di SPADA: riprova."}
         op = None
     immagine = g.get("immagine")
+    rif = g.get("riferimento") if _file_riferimento(gara, dl, g) else None
     avvisi = []
     if (interni := offerta.riferimenti_interni(g.get("didascalia") or "")):
         avvisi.append(f"La didascalia contiene codici interni ({', '.join(interni)}): toglili, finisce nel documento.")
@@ -111,7 +116,28 @@ def _vista(gara: Path, dl: dict, g: dict, approvate: dict, testi: dict) -> dict:
         "operazione": op, "errore": errore,
         "collocata": {sid: (None if ids is None else g["id"] in ids) for sid, ids in testi.items()},
         "avvisi": avvisi, "creata_il": g.get("creata_il"),
+        "riferimento": ({"origine": rif["origine"], "fonte": riferimenti.nome_leggibile(rif["file"]) if rif.get("file") else None,
+                         "pagina": rif.get("pagina"), "riquadro": rif.get("riquadro"), "motivo": rif.get("motivo", ""),
+                         "impostato_il": rif.get("impostato_il"), "cambiato_dopo_prompt": bool(rif.get("cambiato_dopo_prompt"))}
+                        if rif else None),
+        "usa_riferimento": g.get("usa_riferimento", True),
+        "prompt_riferimento": g.get("prompt_riferimento", ""),
+        "prompt_effettivo": prompt_effettivo(gara, dl, g),
     }
+
+
+def _file_riferimento(gara: Path, dl: dict, g: dict) -> Path | None:
+    rif = g.get("riferimento") or {}
+    f = gara / dl["cartella"] / rif["immagine"] if rif.get("immagine") else None
+    return f if f and f.is_file() else None
+
+
+def prompt_effettivo(gara: Path, dl: dict, g: dict) -> str:
+    """Il prompt da usare: con il riferimento attivo, seguito dall'istruzione su come usarlo."""
+    base = (g.get("prompt") or "").strip()
+    if base and g.get("usa_riferimento", True) and _file_riferimento(gara, dl, g):
+        return f"{base}\n\n{(g.get('prompt_riferimento') or RIF_PREDEFINITO).strip()}"
+    return base
 
 
 def elenco(gara: Path, dl: dict) -> dict:
@@ -164,9 +190,11 @@ def aggiorna(gara: Path, dl: dict, gid: str, campi: dict):
     def fn(dati, g):
         if _occupata(gara, dl, g):
             raise ErroreGrafica(409, "Aspetta che finisca l'operazione in corso su questa figura.")
-        for k in ("richiesta", "prompt", "didascalia"):
+        for k in ("richiesta", "prompt", "didascalia", "prompt_riferimento"):
             if campi.get(k) is not None:
                 g[k] = campi[k].strip()
+        if campi.get("usa_riferimento") is not None:
+            g["usa_riferimento"] = bool(campi["usa_riferimento"])
         g["aggiornata_il"] = _ora()
     _modifica(gara, dl, gid, fn)
 
@@ -188,6 +216,7 @@ def elimina(gara: Path, dl: dict, gid: str):
         if _occupata(gara, dl, g):
             raise ErroreGrafica(409, "Aspetta che finisca l'operazione in corso su questa figura.")
         _archivia_immagine(gara, dl, g)
+        _archivia_riferimento(gara, dl, g)
         archiviata = {**g, "eliminata_il": _ora()}
         dati.setdefault("eliminate", []).append(archiviata)
         dati["grafiche"] = [x for x in dati["grafiche"] if x["id"] != gid]
@@ -225,6 +254,110 @@ def carica(gara: Path, dl: dict, gid: str, dati_img: bytes):
         _salva_immagine(gara, dl, g, dati_img, est, "caricata", None)
         g.pop("errore", None)
     _modifica(gara, dl, gid, fn)
+
+
+# ── Riferimento ─────────────────────────────────────────────────────
+def _archivia_riferimento(gara: Path, dl: dict, g: dict):
+    rif = g.get("riferimento") or {}
+    f = gara / dl["cartella"] / rif["immagine"] if rif.get("immagine") else None
+    if f and f.is_file():
+        archivio = f.parent / "_archivio"
+        archivio.mkdir(parents=True, exist_ok=True)
+        f.replace(archivio / f"{f.stem}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}{f.suffix}")
+
+
+def _imposta_riferimento(gara: Path, dl: dict, g: dict, sorgente: Path, estensione: str, **campi):
+    """Sposta l'immagine nel posto del riferimento della figura e registra i campi."""
+    _archivia_riferimento(gara, dl, g)
+    rel = f"grafiche/riferimenti/{g['id']}{estensione}"
+    dest = gara / dl["cartella"] / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    sorgente.replace(dest)
+    g["riferimento"] = {**campi, "immagine": rel, "impostato_il": _ora()}
+
+
+def _tmp_riferimento(gara: Path, dl: dict, gid: str, estensione: str = ".png") -> Path:
+    d = gara / dl["cartella"] / "grafiche" / "riferimenti"
+    d.mkdir(parents=True, exist_ok=True)
+    return d / f".{gid}-{threading.get_ident()}{estensione}"
+
+
+def carica_riferimento(gara: Path, dl: dict, gid: str, dati_img: bytes):
+    if len(dati_img) > MAX_IMMAGINE:
+        raise ErroreGrafica(413, "L'immagine supera 20 MB: riducila prima di caricarla.")
+    est = _tipo_immagine(dati_img)
+    if est is None:
+        raise ErroreGrafica(400, "Il riferimento deve essere un'immagine PNG o JPG.")
+    tmp = _tmp_riferimento(gara, dl, gid, est)
+    tmp.write_bytes(dati_img)
+
+    def fn(dati, g):
+        if _occupata(gara, dl, g):
+            raise ErroreGrafica(409, "Aspetta che finisca l'operazione in corso su questa figura.")
+        _imposta_riferimento(gara, dl, g, tmp, est, origine="caricato",
+                             cambiato_dopo_prompt=bool(g.get("prompt")))
+        g["prompt_riferimento"] = ""  # quella scritta per il riferimento precedente non vale più
+    try:
+        _modifica(gara, dl, gid, fn)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def ritaglia_riferimento(gara: Path, dl: dict, gid: str, riquadro: list[float]):
+    g = next((x for x in registro.leggi(gara, dl["cartella"])["grafiche"] if x["id"] == gid), None)
+    if g is None:
+        raise ErroreGrafica(404, f"Figura {gid} non trovata.")
+    rif = g.get("riferimento") or {}
+    if rif.get("origine") != "elaborato":
+        raise ErroreGrafica(409, "Si ritaglia solo un riferimento preso da un elaborato.")
+    riquadro = riferimenti.normalizza_riquadro(riquadro)
+    tmp = _tmp_riferimento(gara, dl, gid)
+    try:
+        riferimenti.ritaglia(riferimenti.risolvi(gara, rif["file"]), rif["pagina"], riquadro, tmp)
+    except riferimenti.ErroreRiferimento as e:
+        tmp.unlink(missing_ok=True)
+        raise ErroreGrafica(422, str(e))
+
+    def fn(dati, g):
+        if _occupata(gara, dl, g):
+            raise ErroreGrafica(409, "Aspetta che finisca l'operazione in corso su questa figura.")
+        precedente = g.get("riferimento") or {}
+        # Stesso disegno, inquadrato meglio: il prompt resta valido.
+        _imposta_riferimento(gara, dl, g, tmp, ".png", **{**precedente, "riquadro": riquadro})
+    try:
+        _modifica(gara, dl, gid, fn)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def togli_riferimento(gara: Path, dl: dict, gid: str):
+    def fn(dati, g):
+        if _occupata(gara, dl, g):
+            raise ErroreGrafica(409, "Aspetta che finisca l'operazione in corso su questa figura.")
+        rif = g.get("riferimento") or {}
+        if rif.get("file"):
+            # Non riproporlo alla prossima preparazione del prompt.
+            g.setdefault("riferimenti_esclusi", []).append(f"{rif['file']}#{rif.get('pagina')}")
+        _archivia_riferimento(gara, dl, g)
+        g.pop("riferimento", None)
+        g["prompt_riferimento"] = ""
+    _modifica(gara, dl, gid, fn)
+
+
+def file_riferimento(gara: Path, dl: dict, gid: str) -> Path | None:
+    g = next((x for x in registro.leggi(gara, dl["cartella"])["grafiche"] if x["id"] == gid), None)
+    return _file_riferimento(gara, dl, g) if g else None
+
+
+def pagina_riferimento(gara: Path, dl: dict, gid: str) -> Path:
+    g = next((x for x in registro.leggi(gara, dl["cartella"])["grafiche"] if x["id"] == gid), None)
+    rif = (g or {}).get("riferimento") or {}
+    if rif.get("origine") != "elaborato":
+        raise ErroreGrafica(404, "Questa figura non ha un riferimento preso da un elaborato.")
+    try:
+        return riferimenti.anteprima_pagina(gara, riferimenti.risolvi(gara, rif["file"]), rif["pagina"])
+    except riferimenti.ErroreRiferimento as e:
+        raise ErroreGrafica(422, str(e))
 
 
 def file_immagine(gara: Path, dl: dict, gid: str) -> Path | None:
@@ -286,7 +419,34 @@ def _avvia(gara: Path, dl: dict, gid: str, tipo: str, verifica, lavoro):
     threading.Thread(target=esegui, name=f"grafica-{gid}-{tipo}", daemon=True).start()
 
 
-def _prompt_per_claude(gara: Path, dl: dict, g: dict) -> str:
+def _istruzioni_riferimento(gara: Path, dl: dict, g: dict, altro: bool) -> str:
+    rif = g.get("riferimento") or {}
+    if rif.get("origine") == "caricato" and _file_riferimento(gara, dl, g):
+        rel = (gara / dl["cartella"] / rif["immagine"]).relative_to(gara)
+        return f"""5. Riferimento visivo: il professionista ha già scelto l'immagine {rel}. Guardala con Read, NON cercarne
+   altre e restituisci "riferimento": null. Scrivi "prompt_riferimento" per quell'immagine."""
+    esclusi = list(g.get("riferimenti_esclusi") or [])
+    if altro and rif.get("file"):
+        esclusi.append(f"{rif['file']}#{rif.get('pagina')}")
+    esclusi_txt = ("\n   Non riproporre queste pagine, già scartate dal professionista: "
+                   + "; ".join(f"{e.split('#')[0]} pagina {e.split('#')[-1]}" for e in dict.fromkeys(esclusi))) if esclusi else ""
+    return f"""5. Riferimento visivo: cerca negli elaborati un'immagine già esistente che mostri lo stesso oggetto o una
+   vista vicina a quella richiesta (render o foto nelle relazioni, dettagli, sezioni o piante nelle tavole).
+   Parti dagli elaborati citati nel nodo e dalle tavole collegate al criterio: nei nodi di 02_graph/nodes/ il
+   campo `file:` dà il nome del PDF sotto input/. I PDF si guardano con Read (parametro pages, poche pagine
+   per volta); quelli firmati .p7m si leggono dalla copia estratta in output/_cache/pdf/ (stesso nome senza
+   .p7m). Guarda al massimo 8 pagine in tutto: è un aiuto, non una ricerca esaustiva.{esclusi_txt}
+   Se ne trovi una davvero pertinente, restituisci "riferimento" con: "file" (il percorso del PDF che hai
+   letto, relativo alla cartella della gara), "pagina" (da 1), "riquadro" [x0, y0, x1, y1] in frazioni della
+   pagina (da 0 a 1, origine in alto a sinistra) che inquadra solo quel disegno o quell'immagine con un
+   piccolo margine, e "motivo" (in italiano, una frase). Altrimenti "riferimento": null: meglio nessun
+   riferimento che uno sbagliato.
+   Con un riferimento, "prompt_riferimento" (in inglese, due o tre frasi) dice al modello d'immagine come usare
+   l'immagine allegata: cosa tenere (geometria, impaginazione, proporzioni, punto di vista) e cosa cambiare
+   secondo la proposta. Il "prompt" resta comunque autosufficiente, senza citare l'immagine allegata."""
+
+
+def _prompt_per_claude(gara: Path, dl: dict, g: dict, altro: bool = False) -> str:
     p = _approvate(gara).get(g["proposta_id"], {"id": g["proposta_id"], "titolo": "", "sottocriterio": ""})
     nodo = next(iter(sorted((gara / "02_graph" / "proposals").glob(f"{p['id']}_*.md"))), None)
     nodo_rel = str(nodo.relative_to(gara)) if nodo else f"02_graph/proposals/{p['id']}_*.md"
@@ -310,6 +470,7 @@ Cosa leggere, in quest'ordine e senza andare oltre il necessario:
 3. gli elaborati citati nelle evidenze, nei nodi di 02_graph/nodes/ (cerca con Grep le voci, le tavole,
    le dimensioni e i materiali che servono alla figura);
 4. vincoli_offerta_tecnica.md, solo per eventuali regole del disciplinare su immagini ed elaborati grafici.
+{_istruzioni_riferimento(gara, dl, g, altro)}
 
 Il prompt deve:
 - essere in inglese e autosufficiente: il modello d'immagine non sa nulla del progetto;
@@ -330,7 +491,9 @@ La didascalia è in italiano, al massimo 25 parole, descrive cosa mostra la figu
 disciplinare e non contiene codici interni né il numero della figura.
 
 Rispondi SOLO con un oggetto JSON, senza altro testo prima o dopo:
-{{"prompt": "...", "didascalia": "...", "note": "in italiano, una o due frasi: quali dati dei documenti hai usato e cosa hai lasciato generico"}}
+{{"prompt": "...", "didascalia": "...", "note": "in italiano, una o due frasi: quali dati dei documenti hai usato e cosa hai lasciato generico",
+  "riferimento": {{"file": "...", "pagina": 1, "riquadro": [0.1, 0.2, 0.5, 0.6], "motivo": "..."}} oppure null,
+  "prompt_riferimento": "..." oppure ""}}
 """
 
 
@@ -347,7 +510,32 @@ def _estrai_json(testo: str) -> dict:
     return dati
 
 
-def prepara_prompt(gara: Path, dl: dict, gid: str):
+def _riferimento_da_claude(gara: Path, dl: dict, g: dict, d: dict):
+    """Ritaglio del riferimento proposto da Claude, già validato: (file temporaneo, campi) o None."""
+    r = d.get("riferimento")
+    if not isinstance(r, dict) or not r.get("file"):
+        return None
+    try:
+        rel = str(r["file"]).strip().lstrip("/")
+        pdf = riferimenti.risolvi(gara, rel)
+        pagina = int(r.get("pagina") or 1)
+        riquadro = riferimenti.normalizza_riquadro(r.get("riquadro") or [0, 0, 1, 1])
+        tmp = _tmp_riferimento(gara, dl, g["id"])
+        riferimenti.ritaglia(pdf, pagina, riquadro, tmp)
+    except (riferimenti.ErroreRiferimento, ValueError, TypeError) as e:
+        log.warning("Figura %s: riferimento proposto non utilizzabile: %s", g["id"], e)
+        return None
+    # Il file si registra com'è negli elaborati (.p7m), non come copia in cache.
+    originale = rel
+    if rel.startswith(str(riferimenti.CACHE_PDF)):
+        nome = Path(rel).name
+        trovato = next((p for p in (gara / "input").rglob(nome + ".p7m")), None)
+        originale = str(trovato.relative_to(gara)) if trovato else rel
+    return tmp, {"origine": "elaborato", "file": originale, "pagina": pagina, "riquadro": riquadro,
+                 "motivo": str(r.get("motivo") or "").strip()}
+
+
+def prepara_prompt(gara: Path, dl: dict, gid: str, altro_riferimento: bool = False):
     env_claude = get_claude_env()  # solleva subito se Claude non è autenticato
 
     def verifica(g):
@@ -355,7 +543,8 @@ def prepara_prompt(gara: Path, dl: dict, gid: str):
             raise ErroreGrafica(400, "Scrivi prima cosa deve mostrare la figura.")
 
     def lavoro(g):
-        argv = ["bash", str(SPADA_CLAUDE), "-p", _prompt_per_claude(gara, dl, g),
+        riferimenti.prepara_cache(gara)  # i .p7m diventano PDF leggibili da Claude (una volta sola)
+        argv = ["bash", str(SPADA_CLAUDE), "-p", _prompt_per_claude(gara, dl, g, altro_riferimento),
                 "--tools", TOOLS_CONSENTITI, "--disallowedTools", TOOLS_VIETATI]
         try:
             proc = subprocess.run(argv, cwd=str(gara), env={**os.environ, **env_claude},
@@ -366,8 +555,25 @@ def prepara_prompt(gara: Path, dl: dict, gid: str):
             raise RuntimeError(f"Claude non ha completato la preparazione (codice {proc.returncode}): "
                                f"{(proc.stderr or proc.stdout).strip()[-400:]}")
         d = _estrai_json(proc.stdout)
-        return {"prompt": str(d["prompt"]).strip(), "didascalia": str(d.get("didascalia") or "").strip(),
-                "note_prompt": str(d.get("note") or "").strip(), "prompt_preparato_il": _ora()}
+        campi = {"prompt": str(d["prompt"]).strip(), "didascalia": str(d.get("didascalia") or "").strip(),
+                 "note_prompt": str(d.get("note") or "").strip(), "prompt_preparato_il": _ora(),
+                 "prompt_riferimento": str(d.get("prompt_riferimento") or "").strip()}
+        caricato = (g.get("riferimento") or {}).get("origine") == "caricato"
+        trovato = None if caricato else _riferimento_da_claude(gara, dl, g, d)
+
+        def applica(fig):
+            fig.update(campi)
+            if caricato:
+                fig["riferimento"]["cambiato_dopo_prompt"] = False
+            elif trovato:
+                tmp, rif = trovato
+                _imposta_riferimento(gara, dl, fig, tmp, ".png", **rif)
+            else:
+                # Nessun riferimento adatto: quello proposto in precedenza non vale più.
+                _archivia_riferimento(gara, dl, fig)
+                fig.pop("riferimento", None)
+                fig["prompt_riferimento"] = ""
+        return applica
 
     _avvia(gara, dl, gid, "prompt", verifica, lavoro)
 
@@ -382,7 +588,8 @@ def genera_immagine(gara: Path, dl: dict, gid: str):
             raise ErroreGrafica(400, "Prepara o scrivi prima il prompt.")
 
     def lavoro(g):
-        dati_img, modello = immagini_openai.genera(g["prompt"])
+        rif = _file_riferimento(gara, dl, g) if g.get("usa_riferimento", True) else None
+        dati_img, modello = immagini_openai.genera(prompt_effettivo(gara, dl, g), rif)
         est = _tipo_immagine(dati_img) or ".png"
         return lambda fig: _salva_immagine(gara, dl, fig, dati_img, est, "openai", modello)
 

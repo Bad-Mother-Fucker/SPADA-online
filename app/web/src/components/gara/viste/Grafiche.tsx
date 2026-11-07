@@ -8,13 +8,15 @@
 import { useEffect, useId, useRef, useState } from "react"
 import { Link } from "react-router"
 import { toast } from "sonner"
-import { ArrowCounterClockwiseIcon, CopyIcon, ImageIcon, PencilSimpleIcon, PlusIcon, SparkleIcon, TrashIcon, UploadSimpleIcon } from "@phosphor-icons/react"
+import { ArrowCounterClockwiseIcon, CopyIcon, CropIcon, DownloadSimpleIcon, ImageIcon, MagnifyingGlassIcon, XIcon, PencilSimpleIcon, PlusIcon, SparkleIcon, TrashIcon, UploadSimpleIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, Nota, Scheletro, Suggerimento, TitoloSezione, VuotoInline } from "@/components/comuni/Primitivi"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { StatoErrore } from "@/components/stati/Stati"
 import { BadgeStato, Chip } from "@/components/gare/BadgeStato"
 import { DialogoConferma, type Conferma } from "../DialogoConferma"
@@ -191,6 +193,31 @@ function NuovaGrafica({ d, p, onChiudi }: { d: Deliverable; p: PropostaPerGrafic
   )
 }
 
+/** Area che accetta un file trascinato. dragenter/dragleave scattano anche
+    sui figli: si contano, così l'evidenza non lampeggia. */
+function useTrascinaFile(onFile: (f: File) => void, abilitato: boolean) {
+  const [sopra, setSopra] = useState(false)
+  const profondita = useRef(0)
+  const conFile = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes("Files")
+  const props = {
+    onDragEnter: (e: React.DragEvent) => { if (!conFile(e)) return; e.preventDefault(); e.stopPropagation(); profondita.current += 1; setSopra(true) },
+    onDragOver: (e: React.DragEvent) => { if (!conFile(e)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = abilitato ? "copy" : "none" },
+    onDragLeave: (e: React.DragEvent) => { if (!conFile(e)) return; e.stopPropagation(); profondita.current = Math.max(0, profondita.current - 1); if (!profondita.current) setSopra(false) },
+    onDrop: (e: React.DragEvent) => {
+      if (!conFile(e)) return
+      e.preventDefault()
+      e.stopPropagation()
+      profondita.current = 0
+      setSopra(false)
+      const file = e.dataTransfer.files[0]
+      if (!abilitato || !file) return
+      if (e.dataTransfer.files.length > 1) toast.info("Si usa un file solo: prendo il primo.")
+      onFile(file)
+    },
+  }
+  return { sopra, props }
+}
+
 /** Copia negli appunti con la conferma sul bottone stesso. */
 function BottoneCopia({ testo, etichetta = "Copia prompt", variant = "outline" }: { testo: string; etichetta?: string; variant?: "outline" | "default" }) {
   const [copiato, setCopiato] = useState(false)
@@ -202,12 +229,14 @@ function BottoneCopia({ testo, etichetta = "Copia prompt", variant = "outline" }
   return <Button size="sm" variant={variant} onClick={() => void copia()}><CopyIcon aria-hidden="true" />{copiato ? "Copiato" : etichetta}</Button>
 }
 
+type Campo = "richiesta" | "prompt" | "didascalia" | "prompt_riferimento"
+
 function CardGrafica({ d, g, openai, titolo }: { d: Deliverable; g: Grafica; openai: boolean; titolo?: string }) {
   const { slug } = useGara()
   const az = useAzioniGrafiche(slug, d.id)
   const id = useId()
   const fileRef = useRef<HTMLInputElement>(null)
-  const [modifica, setModifica] = useState<null | "richiesta" | "prompt" | "didascalia">(null)
+  const [modifica, setModifica] = useState<null | Campo>(null)
   const [valore, setValore] = useState("")
   const [progresso, setProgresso] = useState<number | null>(null)
   const [conferma, setConferma] = useState<Conferma | null>(null)
@@ -215,12 +244,17 @@ function CardGrafica({ d, g, openai, titolo }: { d: Deliverable; g: Grafica; ope
   const occupata = !!g.operazione
   const ko = (t: string) => (e: unknown) => toast.error(t, { description: comeApiError(e).message })
 
-  const apri = (campo: "richiesta" | "prompt" | "didascalia") => { setValore(g[campo]); setModifica(campo) }
+  const apri = (campo: Campo) => { setValore(g[campo]); setModifica(campo) }
   const salva = () => {
     if (!modifica) return
     az.aggiorna.mutate({ gid: g.id, [modifica]: valore.trim() }, { onSuccess: () => setModifica(null), onError: ko("Modifica non salvata") })
   }
   const preparaPrompt = () => az.prompt.mutate(g.id, { onError: ko("Prompt non avviato") })
+  const altroRiferimento = () => setConferma({
+    titolo: "Cercare un altro riferimento?", etichetta: "Cerca un altro",
+    descrizione: "Claude prepara di nuovo il prompt escludendo il riferimento attuale, che viene archiviato. Le tue correzioni al prompt e alla didascalia vengono sostituite.",
+    onConferma: () => az.prompt.mutate({ gid: g.id, altroRiferimento: true }, { onError: ko("Ricerca non avviata") }),
+  })
   const rifaiPrompt = () => setConferma({
     titolo: "Preparare di nuovo il prompt?", etichetta: "Prepara di nuovo",
     descrizione: "Claude riscrive prompt e didascalia dalla richiesta attuale. Le tue correzioni al prompt e alla didascalia vengono sostituite.",
@@ -231,26 +265,7 @@ function CardGrafica({ d, g, openai, titolo }: { d: Deliverable; g: Grafica; ope
     if (g.immagine) setConferma({ titolo: "Generare una nuova immagine?", etichetta: "Genera", descrizione: "L'immagine attuale viene archiviata, non cancellata. La generazione con OpenAI ha un costo per immagine.", onConferma: fai })
     else fai()
   }
-  const [sopra, setSopra] = useState(false)
-  const profondita = useRef(0)  // dragenter/dragleave scattano anche sui figli: si contano
   const puoCaricare = !occupata && progresso === null
-  const conFile = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes("Files")
-  const trascinamento = {
-    onDragEnter: (e: React.DragEvent) => { if (!conFile(e)) return; e.preventDefault(); profondita.current += 1; setSopra(true) },
-    onDragOver: (e: React.DragEvent) => { if (!conFile(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = puoCaricare ? "copy" : "none" },
-    onDragLeave: (e: React.DragEvent) => { if (!conFile(e)) return; profondita.current = Math.max(0, profondita.current - 1); if (!profondita.current) setSopra(false) },
-    onDrop: (e: React.DragEvent) => {
-      if (!conFile(e)) return
-      e.preventDefault()
-      profondita.current = 0
-      setSopra(false)
-      if (!puoCaricare) return
-      const file = e.dataTransfer.files[0]
-      if (!file) return
-      if (e.dataTransfer.files.length > 1) toast.info("Una figura ha una sola immagine: carico il primo file.")
-      carica(file)
-    },
-  }
   const carica = (file: File) => {
     if (!TIPI_IMMAGINE.includes(file.type)) {
       toast.error("Immagine non caricata", { description: `«${file.name}» non è un PNG o un JPG: il documento Word non accetta altri formati. Da ChatGPT scaricala come PNG.` })
@@ -263,18 +278,19 @@ function CardGrafica({ d, g, openai, titolo }: { d: Deliverable; g: Grafica; ope
       onSettled: () => setProgresso(null),
     })
   }
+  const { sopra, props: trascinamento } = useTrascinaFile(carica, puoCaricare)
   const elimina = () => setConferma({
     titolo: "Eliminare la figura?", etichetta: "Elimina", distruttiva: true,
     descrizione: `La figura «${g.richiesta.slice(0, 80)}${g.richiesta.length > 80 ? "…" : ""}» esce dall'elenco e dalle prossime stesure. L'immagine viene archiviata, non cancellata. Se il testo la cita già, togli il segnaposto o rifai la bozza.`,
     onConferma: () => az.elimina.mutate(g.id, { onError: ko("Figura non eliminata") }),
   })
 
-  const editor = (campo: "richiesta" | "prompt" | "didascalia", etichetta: string, righe: number, aiuto?: string) => (
+  const editor = (campo: Campo, etichetta: string, righe: number, aiuto?: string) => (
     <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); salva() }}>
       <Label htmlFor={`${id}-${campo}`}>{etichetta}</Label>
       {campo === "didascalia"
         ? <Input id={`${id}-${campo}`} autoFocus value={valore} maxLength={400} onChange={(e) => setValore(e.target.value)} />
-        : <Textarea id={`${id}-${campo}`} autoFocus rows={righe} value={valore} onChange={(e) => setValore(e.target.value)} className={campo === "prompt" ? "font-mono text-xs leading-relaxed" : undefined} />}
+        : <Textarea id={`${id}-${campo}`} autoFocus rows={righe} value={valore} onChange={(e) => setValore(e.target.value)} className={campo === "prompt" || campo === "prompt_riferimento" ? "font-mono text-xs leading-relaxed" : undefined} />}
       {campo === "richiesta" && titolo && <SuggerimentiRichiesta titolo={titolo} onScegli={setValore} />}
       {aiuto && <Suggerimento>{aiuto}</Suggerimento>}
       <div className="flex gap-2">
@@ -307,7 +323,7 @@ function CardGrafica({ d, g, openai, titolo }: { d: Deliverable; g: Grafica; ope
           azioni={<>
             <Button size="sm" variant="outline" onClick={g.errore.operazione === "prompt" ? preparaPrompt : genera}><ArrowCounterClockwiseIcon aria-hidden="true" />Riprova</Button>
             {g.errore.tipo === "chiave" || g.errore.tipo === "modello" ? <Button size="sm" variant="outline" asChild><Link to="../impostazioni">Apri le impostazioni</Link></Button> : null}
-            {g.errore.operazione === "immagine" && g.prompt && <BottoneCopia testo={g.prompt} etichetta="Copia il prompt per ChatGPT" />}
+            {g.errore.operazione === "immagine" && g.prompt && <BottoneCopia testo={g.prompt_effettivo} etichetta="Copia il prompt per ChatGPT" />}
           </>}>
           {g.errore.messaggio}
         </Nota>
@@ -317,18 +333,18 @@ function CardGrafica({ d, g, openai, titolo }: { d: Deliverable; g: Grafica; ope
       <div className="mt-3 border-t pt-3">
         {g.operazione?.tipo === "prompt" ? (
           <div aria-live="polite">
-            <p className="text-xs text-foreground-2">Claude sta leggendo proposta, gap collegati ed elaborati per scrivere il prompt. Di solito servono 1 o 2 minuti, puoi continuare a lavorare.</p>
+            <p className="text-xs text-foreground-2">Claude sta leggendo proposta, gap ed elaborati, e cerca un'immagine di riferimento. Di solito servono da 1 a 4 minuti: puoi continuare a lavorare.</p>
             <Skeleton className="mt-2 h-16" />
           </div>
         ) : modifica === "prompt" ? editor("prompt", "Prompt per il modello d'immagine", 10, "In inglese, i modelli d'immagine lo seguono meglio. Le etichette da scrivere nell'immagine vanno tra virgolette, in italiano.") : g.prompt ? (
           <>
             <details className="group">
               <summary className="cursor-pointer text-xs font-semibold">Prompt <span className="font-normal text-muted-foreground">{g.prompt_preparato_il ? `preparato ${quandoBreve(g.prompt_preparato_il)}` : "scritto a mano"}</span></summary>
-              <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md border bg-card p-3 font-mono text-micro leading-relaxed text-foreground-2">{g.prompt}</pre>
+              <pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md border bg-card p-3 font-mono text-micro leading-relaxed text-foreground-2">{g.prompt_effettivo || g.prompt}</pre>
             </details>
             {g.note_prompt && <p className="mt-1.5 max-w-[65ch] text-micro text-muted-foreground">{g.note_prompt}</p>}
             <div className="mt-2 flex flex-wrap gap-2">
-              <BottoneCopia testo={g.prompt} variant={openai ? "outline" : "default"} />
+              <BottoneCopia testo={g.prompt_effettivo} variant={openai ? "outline" : "default"} />
               <Button size="sm" variant="ghost" disabled={occupata} onClick={() => apri("prompt")}><PencilSimpleIcon aria-hidden="true" />Modifica</Button>
               <Button size="sm" variant="ghost" disabled={occupata || az.prompt.isPending} onClick={rifaiPrompt}><ArrowCounterClockwiseIcon aria-hidden="true" />Prepara di nuovo</Button>
             </div>
@@ -340,6 +356,12 @@ function CardGrafica({ d, g, openai, titolo }: { d: Deliverable; g: Grafica; ope
           </div>
         )}
       </div>
+
+      {/* Riferimento: immagine da cui partire, non entra nel documento */}
+      {g.operazione?.tipo !== "prompt" && (
+        <SezioneRiferimento d={d} g={g} openai={openai} occupata={occupata} modifica={modifica} editor={editor}
+          apri={apri} preparaPrompt={preparaPrompt} altroRiferimento={altroRiferimento} />
+      )}
 
       {/* Didascalia */}
       {(g.prompt || g.didascalia || modifica === "didascalia") && g.operazione?.tipo !== "prompt" && (
@@ -396,5 +418,188 @@ function CardGrafica({ d, g, openai, titolo }: { d: Deliverable; g: Grafica; ope
       </div>
       <DialogoConferma conferma={conferma} onChiudi={() => setConferma(null)} />
     </article>
+  )
+}
+
+type Riquadro = [number, number, number, number]
+
+function SezioneRiferimento({ d, g, openai, occupata, modifica, editor, apri, preparaPrompt, altroRiferimento }: {
+  d: Deliverable; g: Grafica; openai: boolean; occupata: boolean; modifica: Campo | null
+  editor: (campo: Campo, etichetta: string, righe: number, aiuto?: string) => React.ReactNode
+  apri: (campo: Campo) => void; preparaPrompt: () => void; altroRiferimento: () => void
+}) {
+  const { slug } = useGara()
+  const az = useAzioniGrafiche(slug, d.id)
+  const id = useId()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [ritaglio, setRitaglio] = useState(false)
+  const [progresso, setProgresso] = useState<number | null>(null)
+  const r = g.riferimento
+  const libero = !occupata && progresso === null
+  const ko = (t: string) => (e: unknown) => toast.error(t, { description: comeApiError(e).message })
+  const carica = (file: File) => {
+    if (!TIPI_IMMAGINE.includes(file.type)) {
+      toast.error("Riferimento non caricato", { description: `«${file.name}» non è un PNG o un JPG.` })
+      return
+    }
+    setProgresso(0)
+    az.caricaRiferimento.mutate({ gid: g.id, file, suProgresso: setProgresso }, {
+      onSuccess: () => toast.success("Riferimento caricato."), onError: ko("Riferimento non caricato"), onSettled: () => setProgresso(null),
+    })
+  }
+  const { sopra, props } = useTrascinaFile(carica, libero)
+  const url = r ? Api.urlRiferimentoGrafica(slug, d.id, g.id, r.impostato_il) : ""
+  const fonte = r?.origine === "elaborato" ? `${r.fonte || "Elaborato"}${r.pagina ? `, pagina ${r.pagina}` : ""}` : "Caricato da te"
+  const input = <input ref={fileRef} type="file" accept="image/png,image/jpeg" className="sr-only" tabIndex={-1} aria-hidden="true"
+    onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) carica(f) }} />
+
+  return (
+    <div className="mt-3 border-t pt-3" {...props} aria-labelledby={`${id}-rif`}>
+      <h6 id={`${id}-rif`} className="mb-1.5 text-xs font-semibold">Riferimento <span className="font-normal text-muted-foreground">immagine da cui partire, non entra nel documento</span></h6>
+      {r ? (
+        <div className="flex flex-wrap items-start gap-3">
+          <a href={url} target="_blank" rel="noopener" className="relative block w-full max-w-60 shrink-0">
+            <img src={url} alt={`Riferimento: ${fonte}`} className={cn("max-h-44 w-full rounded-md border bg-card object-contain", !g.usa_riferimento && "opacity-50")} />
+            {sopra && <span className={cn("pointer-events-none absolute inset-0 flex items-center justify-center rounded-md border-2 border-dashed bg-card text-center text-xs font-medium", libero ? "border-primary text-primary" : "border-border-strong text-muted-foreground")}>{libero ? "Rilascia per sostituire il riferimento" : "Aspetta che finisca l'operazione in corso"}</span>}
+          </a>
+          <div className="min-w-0 flex-1 space-y-2">
+            <p className="text-xs text-foreground-2"><span className="font-medium text-foreground">{fonte}</span>{r.motivo && <>. {r.motivo}</>}</p>
+            {r.cambiato_dopo_prompt && (
+              <Nota tono="attn" titolo="Il prompt è stato scritto per il riferimento precedente" azioni={<Button size="sm" variant="outline" disabled={occupata} onClick={preparaPrompt}><ArrowCounterClockwiseIcon aria-hidden="true" />Prepara di nuovo</Button>}>
+                Preparalo di nuovo perché Claude guardi quello attuale, oppure correggi a mano l'istruzione qui sotto.
+              </Nota>
+            )}
+            <div className="flex items-center gap-2">
+              <Checkbox id={`${id}-usa`} checked={g.usa_riferimento} disabled={occupata || az.aggiorna.isPending}
+                onCheckedChange={(v) => az.aggiorna.mutate({ gid: g.id, usa_riferimento: v === true }, { onError: ko("Scelta non salvata") })} />
+              <Label htmlFor={`${id}-usa`} className="text-xs font-normal">Usa il riferimento nella generazione</Label>
+            </div>
+            {g.usa_riferimento && !openai && g.prompt && <Suggerimento>In ChatGPT allega questa immagine insieme al prompt: il prompt copiato già dice come usarla.</Suggerimento>}
+            {modifica === "prompt_riferimento" ? editor("prompt_riferimento", "Come usare il riferimento (in inglese, si aggiunge al prompt)", 4) : g.usa_riferimento && (
+              <details>
+                <summary className="cursor-pointer text-micro text-muted-foreground">Istruzione aggiunta al prompt</summary>
+                <p className="mt-1 font-mono text-micro leading-relaxed text-foreground-2">{g.prompt_riferimento || "Use the attached image as a visual reference for layout, proportions and viewpoint. Where the attached image and the text differ, follow the text."}</p>
+                <Button size="sm" variant="ghost" className="mt-1" disabled={occupata} onClick={() => apri("prompt_riferimento")}><PencilSimpleIcon aria-hidden="true" />Modifica</Button>
+              </details>
+            )}
+            <div className="flex flex-wrap gap-1.5">
+              {r.origine === "elaborato" && <Button size="sm" variant="outline" disabled={!libero} onClick={() => setRitaglio(true)}><CropIcon aria-hidden="true" />Regola il ritaglio</Button>}
+              <Button size="sm" variant="outline" asChild><a href={url} download={`riferimento-${g.id}`}><DownloadSimpleIcon aria-hidden="true" />Scarica</a></Button>
+              <Button size="sm" variant="ghost" disabled={!libero} onClick={() => fileRef.current?.click()}><UploadSimpleIcon aria-hidden="true" />Sostituisci con un file</Button>
+              {r.origine === "elaborato" && <Button size="sm" variant="ghost" disabled={!libero || az.prompt.isPending} onClick={altroRiferimento}><MagnifyingGlassIcon aria-hidden="true" />Cerca un altro</Button>}
+              <Button size="sm" variant="ghost" disabled={!libero || az.togliRiferimento.isPending}
+                onClick={() => az.togliRiferimento.mutate(g.id, { onSuccess: () => toast.success("Riferimento tolto."), onError: ko("Riferimento non tolto") })}><XIcon aria-hidden="true" />Togli</Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <button type="button" disabled={!libero} onClick={() => fileRef.current?.click()}
+          className={cn("flex w-full max-w-md flex-col items-center gap-0.5 rounded-md border border-dashed px-3 py-3 text-center transition-colors duration-(--d-fast) ease-(--e-std) hover:bg-muted disabled:pointer-events-none disabled:opacity-60",
+            sopra && libero && "border-2 border-primary bg-primary-soft")}>
+          <span className={cn("text-xs", sopra && libero ? "font-medium text-primary" : "text-foreground-2")}>
+            {sopra ? (libero ? "Rilascia per usarla come riferimento" : "Aspetta che finisca l'operazione in corso") : g.prompt_preparato_il ? "Negli elaborati non c'è un'immagine adatta" : "Claude la cerca negli elaborati quando prepara il prompt"}
+          </span>
+          {!sopra && <span className="text-micro text-muted-foreground">Trascina qui un'immagine tua, o clicca per sceglierla.</span>}
+        </button>
+      )}
+      {progresso !== null && (
+        <div className="mt-2 max-w-md" role="progressbar" aria-label="Caricamento del riferimento" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progresso * 100)}>
+          <div className="h-1 overflow-hidden rounded-[1px] bg-muted"><div className="h-full origin-left bg-status-run transition-transform duration-(--d-base) ease-(--e-std)" style={{ transform: `scaleX(${progresso})` }} /></div>
+        </div>
+      )}
+      {input}
+      {ritaglio && r?.riquadro && <DialogoRitaglio d={d} g={g} iniziale={r.riquadro} onChiudi={() => setRitaglio(false)} />}
+    </div>
+  )
+}
+
+const RIQ_MIN = 0.03
+
+/** Pagina intera dell'elaborato con il rettangolo del ritaglio: si sposta
+    trascinandolo, si ridimensiona dagli angoli, da tastiera con le frecce
+    (Maiusc per ridimensionare). */
+function DialogoRitaglio({ d, g, iniziale, onChiudi }: { d: Deliverable; g: Grafica; iniziale: Riquadro; onChiudi: () => void }) {
+  const { slug } = useGara()
+  const az = useAzioniGrafiche(slug, d.id)
+  const [riq, setRiq] = useState<Riquadro>(iniziale)
+  const [caricata, setCaricata] = useState(false)
+  const [errore, setErrore] = useState(false)
+  const area = useRef<HTMLDivElement>(null)
+  const trascina = useRef<{ modo: string; x: number; y: number; da: Riquadro } | null>(null)
+  const url = Api.urlPaginaRiferimento(slug, d.id, g.id, g.riferimento?.impostato_il || "")
+  const limita = (v: number) => Math.min(1, Math.max(0, v))
+
+  const muovi = (modo: string, dx: number, dy: number, da: Riquadro): Riquadro => {
+    let [x0, y0, x1, y1] = da
+    if (modo === "sposta") {
+      const w = x1 - x0, h = y1 - y0
+      x0 = Math.min(1 - w, Math.max(0, x0 + dx)); y0 = Math.min(1 - h, Math.max(0, y0 + dy))
+      return [x0, y0, x0 + w, y0 + h]
+    }
+    if (modo.includes("o")) x0 = Math.min(x1 - RIQ_MIN, limita(x0 + dx))
+    if (modo.includes("e")) x1 = Math.max(x0 + RIQ_MIN, limita(x1 + dx))
+    if (modo.includes("n")) y0 = Math.min(y1 - RIQ_MIN, limita(y0 + dy))
+    if (modo.includes("s")) y1 = Math.max(y0 + RIQ_MIN, limita(y1 + dy))
+    return [x0, y0, x1, y1]
+  }
+  const inizio = (modo: string) => (e: React.PointerEvent) => {
+    e.preventDefault(); e.stopPropagation()
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    trascina.current = { modo, x: e.clientX, y: e.clientY, da: riq }
+  }
+  const sposta = (e: React.PointerEvent) => {
+    const t = trascina.current, el = area.current
+    if (!t || !el) return
+    const b = el.getBoundingClientRect()
+    setRiq(muovi(t.modo, (e.clientX - t.x) / b.width, (e.clientY - t.y) / b.height, t.da))
+  }
+  const fine = () => { trascina.current = null }
+  const tastiera = (e: React.KeyboardEvent) => {
+    const passo = 0.01
+    const dir: Record<string, [number, number]> = { ArrowLeft: [-passo, 0], ArrowRight: [passo, 0], ArrowUp: [0, -passo], ArrowDown: [0, passo] }
+    const v = dir[e.key]
+    if (!v) return
+    e.preventDefault()
+    setRiq((q) => muovi(e.shiftKey ? "se" : "sposta", v[0], v[1], q))
+  }
+  const salva = () => az.ritaglia.mutate({ gid: g.id, riquadro: riq }, {
+    onSuccess: () => { toast.success("Ritaglio aggiornato."); onChiudi() },
+    onError: (e) => toast.error("Ritaglio non salvato", { description: comeApiError(e).message }),
+  })
+  const [x0, y0, x1, y1] = riq
+  const angoli: [string, string][] = [["no", "-left-1.5 -top-1.5 cursor-nwse-resize"], ["ne", "-right-1.5 -top-1.5 cursor-nesw-resize"], ["so", "-bottom-1.5 -left-1.5 cursor-nesw-resize"], ["se", "-bottom-1.5 -right-1.5 cursor-nwse-resize"]]
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onChiudi() }}>
+      <DialogContent className="sm:max-w-5xl">
+        <DialogHeader>
+          <DialogTitle>Regola il ritaglio del riferimento</DialogTitle>
+          <DialogDescription>{g.riferimento?.fonte}{g.riferimento?.pagina ? `, pagina ${g.riferimento.pagina}` : ""}. Sposta il rettangolo trascinandolo e ridimensionalo dagli angoli. Da tastiera: frecce per spostarlo, Maiusc e frecce per ridimensionarlo.</DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[65vh] overflow-auto rounded-md border bg-muted">
+          {errore ? (
+            <div className="p-6"><Nota tono="crit" titolo="Pagina non leggibile">La pagina dell'elaborato non si apre: carica un riferimento tuo dalla figura.</Nota></div>
+          ) : (
+            <div ref={area} className="relative select-none touch-none" onPointerMove={sposta} onPointerUp={fine} onPointerCancel={fine}>
+              {!caricata && <Skeleton className="aspect-[1.41] w-full" />}
+              <img src={url} alt="Pagina dell'elaborato" draggable={false} onLoad={() => setCaricata(true)} onError={() => setErrore(true)} className={cn("block w-full", !caricata && "hidden")} />
+              {caricata && (
+                <div role="slider" tabIndex={0} aria-label="Riquadro del ritaglio" aria-valuetext={`da ${Math.round(x0 * 100)}% ${Math.round(y0 * 100)}% a ${Math.round(x1 * 100)}% ${Math.round(y1 * 100)}%`}
+                  onKeyDown={tastiera} onPointerDown={inizio("sposta")}
+                  className="absolute cursor-move border-2 border-primary bg-primary-soft outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  style={{ left: `${x0 * 100}%`, top: `${y0 * 100}%`, width: `${(x1 - x0) * 100}%`, height: `${(y1 - y0) * 100}%` }}>
+                  {angoli.map(([m, pos]) => <span key={m} onPointerDown={inizio(m)} className={cn("absolute size-3 rounded-[2px] border-2 border-primary bg-card", pos)} aria-hidden="true" />)}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => setRiq(iniziale)}>Ripristina</Button>
+          <Button type="button" variant="outline" onClick={onChiudi}>Annulla</Button>
+          <Button type="button" disabled={!caricata || az.ritaglia.isPending} onClick={salva}>{az.ritaglia.isPending ? "Ritaglio" : "Usa questo ritaglio"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

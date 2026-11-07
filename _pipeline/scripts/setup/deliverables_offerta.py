@@ -285,7 +285,12 @@ def rifai_da(gara: Path, dl: dict, stadio: str | None) -> str | None:
         shutil.copytree(cartella, archivio)
     da_capo = stadio == ordine[0]
     if da_capo and cartella.is_dir():
-        shutil.rmtree(cartella)
+        # Le figure scelte dal professionista (grafiche.json e grafiche/) non
+        # sono testo prodotto dall'agente: restano per la nuova stesura.
+        for f in cartella.iterdir():
+            if f.name in ("grafiche.json", "grafiche"):
+                continue
+            shutil.rmtree(f) if f.is_dir() else f.unlink()
     elif cartella.is_dir():
         da_togliere = ordine[ordine.index(stadio):]
         for s in da_togliere:

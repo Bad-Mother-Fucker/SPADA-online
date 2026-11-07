@@ -130,6 +130,14 @@ class AggiornaGraficaRequest(BaseModel):
     richiesta: Optional[str] = Field(default=None, min_length=10, max_length=4000)
     prompt: Optional[str] = Field(default=None, max_length=32000)
     didascalia: Optional[str] = Field(default=None, max_length=400)
+    prompt_riferimento: Optional[str] = Field(default=None, max_length=4000)
+    usa_riferimento: Optional[bool] = None
+
+
+class RitaglioRiferimentoRequest(BaseModel):
+    """Riquadro del riferimento sulla pagina dell'elaborato, in frazioni
+    (x0, y0, x1, y1; origine in alto a sinistra)."""
+    riquadro: list[float] = Field(min_length=4, max_length=4)
 
 
 class SchedaRequest(BaseModel):

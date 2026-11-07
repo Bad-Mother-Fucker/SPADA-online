@@ -205,6 +205,21 @@ export interface Grafica {
   collocata: Record<string, boolean | null>
   avvisi: string[]
   creata_il: string
+  /** Immagine da cui partire: da un elaborato (pagina e riquadro) o caricata. Non entra nel documento. */
+  riferimento: {
+    origine: "elaborato" | "caricato"
+    fonte: string | null
+    pagina: number | null
+    /** x0, y0, x1, y1 in frazioni della pagina, origine in alto a sinistra. */
+    riquadro: [number, number, number, number] | null
+    motivo: string
+    impostato_il: string
+    cambiato_dopo_prompt: boolean
+  } | null
+  usa_riferimento: boolean
+  prompt_riferimento: string
+  /** Prompt da copiare o inviare: con il riferimento attivo include l'istruzione su come usarlo. */
+  prompt_effettivo: string
 }
 export interface ElencoGrafiche {
   proposte: PropostaPerGrafica[]
@@ -450,10 +465,12 @@ export const Api = {
   grafiche: (slug: string, id: string, o?: Opzioni) => richiesta<ElencoGrafiche>(g(slug, id), o),
   creaGrafica: (slug: string, id: string, body: { proposta_id: string; richiesta: string }) =>
     richiesta<{ id: string }>(g(slug, id), { method: "POST", body: JSON.stringify(body) }),
-  aggiornaGrafica: (slug: string, id: string, gid: string, body: Partial<Pick<Grafica, "richiesta" | "prompt" | "didascalia">>) =>
+  aggiornaGrafica: (slug: string, id: string, gid: string, body: Partial<Pick<Grafica, "richiesta" | "prompt" | "didascalia" | "prompt_riferimento" | "usa_riferimento">>) =>
     richiesta<{ id: string }>(`${g(slug, id)}/${s(gid)}`, { method: "PATCH", body: JSON.stringify(body) }),
   eliminaGrafica: (slug: string, id: string, gid: string) => richiesta<void>(`${g(slug, id)}/${s(gid)}`, { method: "DELETE" }),
-  preparaPromptGrafica: (slug: string, id: string, gid: string) => richiesta(`${g(slug, id)}/${s(gid)}/prompt`, { method: "POST" }),
+  /** `altroRiferimento`: cerca un riferimento diverso da quello attuale. */
+  preparaPromptGrafica: (slug: string, id: string, gid: string, altroRiferimento = false) =>
+    richiesta(`${g(slug, id)}/${s(gid)}/prompt${altroRiferimento ? "?altro_riferimento=true" : ""}`, { method: "POST" }),
   generaImmagineGrafica: (slug: string, id: string, gid: string) => richiesta(`${g(slug, id)}/${s(gid)}/genera`, { method: "POST" }),
   caricaImmagineGrafica: (slug: string, id: string, gid: string, file: File, suProgresso?: (frazione: number) => void) => {
     const form = new FormData()
@@ -463,6 +480,19 @@ export const Api = {
   /** `versione` (data dell'immagine) cambia l'URL a ogni immagine nuova. */
   urlImmagineGrafica: (slug: string, id: string, gid: string, versione: string) =>
     `${base()}${g(slug, id)}/${s(gid)}/immagine?v=${encodeURIComponent(versione)}`,
+
+  urlRiferimentoGrafica: (slug: string, id: string, gid: string, versione: string) =>
+    `${base()}${g(slug, id)}/${s(gid)}/riferimento?v=${encodeURIComponent(versione)}`,
+  urlPaginaRiferimento: (slug: string, id: string, gid: string, versione: string) =>
+    `${base()}${g(slug, id)}/${s(gid)}/riferimento/pagina?v=${encodeURIComponent(versione)}`,
+  ritagliaRiferimento: (slug: string, id: string, gid: string, riquadro: [number, number, number, number]) =>
+    richiesta(`${g(slug, id)}/${s(gid)}/riferimento/ritaglio`, { method: "PUT", body: JSON.stringify({ riquadro }), timeoutMs: 60_000 }),
+  caricaRiferimentoGrafica: (slug: string, id: string, gid: string, file: File, suProgresso?: (frazione: number) => void) => {
+    const form = new FormData()
+    form.append("file", file)
+    return inviaConProgresso<{ id: string }>(`${g(slug, id)}/${s(gid)}/riferimento`, form, suProgresso)
+  },
+  togliRiferimento: (slug: string, id: string, gid: string) => richiesta<void>(`${g(slug, id)}/${s(gid)}/riferimento`, { method: "DELETE" }),
 
   // Schede tecniche della relazione. Proposta dell'elenco e ricerca online
   // girano in background (202): l'elenco riporta l'operazione e l'esito.
