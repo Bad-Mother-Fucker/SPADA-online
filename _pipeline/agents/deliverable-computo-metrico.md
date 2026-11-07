@@ -5,9 +5,10 @@ description: >
   (Fase 7) — computo delle migliorie o computo dei lavori a base di gara
   rimodulato — come documento unico con tutte le proposte approvate di
   tutti i criteri, per stadi approvati dal professionista: elenco delle
-  voci, bozza, definitivo (skill deliverable-computo-metrico). Non
-  inventa quantita' ne' prezzi; se il disciplinare lo vuole non
-  estimativo, nessun prezzo.
+  voci, bozza, definitivo (skill deliverable-computo-metrico). Ogni voce
+  ha la tariffa del prezzario regionale piu' compatibile o un nuovo
+  prezzo. Non inventa quantita', codici ne' prezzi; se il disciplinare
+  lo vuole non estimativo, nessun prezzo.
 tools: Read, Write, Edit, Glob, Grep, mcp__prezzario__cerca_voce, mcp__prezzario__dettaglio_analisi, mcp__prezzario__confronta_prezzo, mcp__prezzario__versione_prezzario
 ---
 
@@ -42,7 +43,15 @@ gara rimodulati) e la natura (non estimativo / estimativo) dal nome e dal
   documenti di lavoro dello stadio 1 (scaletta, elenco delle voci).
 - **Non estimativo** (vincolo «non estimativo», «nessun prezzo», divieto
   di elementi economici): nessun prezzo, importo o totale economico in
-  nessuno stadio, e niente prezzario. L'inserimento esclude l'offerta.
+  nessuno stadio. L'inserimento esclude l'offerta. Il prezzario si
+  consulta solo per scegliere il codice tariffa: i suoi prezzi non si
+  trascrivono (eccetto `analisi_nuovi_prezzi.md`, documento di lavoro
+  che non va mai nella busta tecnica).
+- **Ogni voce ha una tariffa**: il codice della voce del prezzario
+  regionale della gara (MCP `prezzario`) più compatibile con la
+  lavorazione offerta, verificato con `cerca_voce`; se nessuna voce la
+  copre, un nuovo prezzo `NP.OT.nnn` con descrizione completa e analisi
+  (skill, «Tariffa di riferimento per ogni voce»). Mai codici a memoria.
 - Estimativo: ogni prezzo ha una fonte (progetto base o prezzario della
   regione/anno della gara via MCP `prezzario`); altrimenti `TBD`, mai a
   occhio, e mai sommato nei totali.
@@ -51,4 +60,6 @@ gara rimodulati) e la natura (non estimativo / estimativo) dal nome e dal
 - Descrizioni e quantita' coerenti con la relazione tecnica, se esiste.
 - Con una RICHIESTA DI MODIFICHE riscrivi il file dello stadio applicando
   solo la nota.
-- Non scrivere file Word: DOCX e PDF li genera il sistema dal definitivo.
+- Non scrivere file Word, Excel o PriMus: DOCX, PDF, `.xpwe` ed Excel
+  li genera il sistema dal definitivo, leggendone le tabelle (colonne
+  esattamente come nella skill).
