@@ -23,9 +23,35 @@ import { useAzioniGrafiche, useGrafiche, type Deliverable } from "@/hooks/useGar
 import { Api, type ElencoGrafiche, type Grafica, type PropostaPerGrafica } from "@/lib/api"
 import { plurale, quandoBreve } from "@/lib/formato"
 import { comeApiError, risorsa } from "@/lib/risorsa"
+import { cn } from "@/lib/utils"
 import type { Tono } from "@/dominio/fasi"
 
 const MIN_RICHIESTA = 10
+const TIPI_IMMAGINE = ["image/png", "image/jpeg"]
+
+/** Richieste pronte, costruite dal titolo della proposta: un clic le mette nel
+    campo, dove si correggono. Coprono i tipi di vista più usati in relazione. */
+function suggerimentiPer(titolo: string): { etichetta: string; testo: string }[] {
+  const t = titolo.trim().replace(/[.\s]+$/, "")
+  return [
+    { etichetta: "Sezione costruttiva", testo: `Sezione costruttiva della soluzione proposta (${t}), con materiali, strati e quote principali` },
+    { etichetta: "Esploso dei componenti", testo: `Esploso assonometrico dei componenti della soluzione proposta (${t}), con etichette brevi per ogni componente` },
+    { etichetta: "Prima e dopo", testo: `Confronto affiancato tra la soluzione di progetto e la soluzione migliorativa (${t}), con le differenze evidenziate` },
+    { etichetta: "Schema di funzionamento", testo: `Schema funzionale della soluzione proposta (${t}), con le fasi o i flussi principali indicati da frecce` },
+  ]
+}
+
+/** Suggerimenti cliccabili sotto il campo della richiesta. */
+function SuggerimentiRichiesta({ titolo, onScegli }: { titolo: string; onScegli: (testo: string) => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Richieste suggerite">
+      <span className="text-micro text-muted-foreground">Parti da:</span>
+      {suggerimentiPer(titolo).map((x) => (
+        <Button key={x.etichetta} type="button" size="sm" variant="outline" title={x.testo} onClick={() => onScegli(x.testo)}>{x.etichetta}</Button>
+      ))}
+    </div>
+  )
+}
 
 function statoGrafica(g: Grafica): { tono: Tono; etichetta: string; pulsa?: boolean } {
   if (g.operazione?.tipo === "prompt") return { tono: "run", etichetta: "Prompt in preparazione", pulsa: true }
@@ -120,7 +146,7 @@ function RigaProposta({ d, p, grafiche, openai }: { d: Deliverable; p: PropostaP
       </div>
       {(grafiche.length > 0 || nuova) && (
         <div className="mt-3 space-y-3">
-          {grafiche.map((g) => <CardGrafica key={g.id} d={d} g={g} openai={openai} />)}
+          {grafiche.map((g) => <CardGrafica key={g.id} d={d} g={g} openai={openai} titolo={p.titolo} />)}
           {nuova && <NuovaGrafica d={d} p={p} onChiudi={() => setNuova(false)} />}
         </div>
       )}
@@ -133,7 +159,14 @@ function NuovaGrafica({ d, p, onChiudi }: { d: Deliverable; p: PropostaPerGrafic
   const az = useAzioniGrafiche(slug, d.id)
   const id = useId()
   const [testo, setTesto] = useState("")
+  const campo = useRef<HTMLTextAreaElement>(null)
+  const esempio = suggerimentiPer(p.titolo)[0].testo
   const valido = testo.trim().length >= MIN_RICHIESTA
+  const scegli = (t: string) => {
+    setTesto(t)
+    // Il cursore va in fondo: di solito si completa o si corregge la coda della frase.
+    requestAnimationFrame(() => { const el = campo.current; if (el) { el.focus(); el.setSelectionRange(t.length, t.length) } })
+  }
   const invia = (poiPrompt: boolean) => az.crea.mutate({ proposta_id: p.id, richiesta: testo.trim() }, {
     onSuccess: (r) => {
       onChiudi()
@@ -144,9 +177,11 @@ function NuovaGrafica({ d, p, onChiudi }: { d: Deliverable; p: PropostaPerGrafic
   return (
     <form className="space-y-2 rounded-md border border-dashed p-3" onSubmit={(e) => { e.preventDefault(); if (valido) invia(true) }}>
       <Label htmlFor={`${id}-richiesta`}>Cosa deve mostrare la figura?</Label>
-      <Textarea id={`${id}-richiesta`} rows={3} autoFocus value={testo} onChange={(e) => setTesto(e.target.value)}
-        placeholder="Es. sezione della parete divisoria con il pannello compatto e la ferramenta inox, con le quote principali" />
-      <Suggerimento>Indica il tipo di vista (sezione, esploso, schema, pianta) e cosa deve risaltare. Claude completa con i dati degli elaborati.</Suggerimento>
+      <Textarea id={`${id}-richiesta`} ref={campo} rows={3} autoFocus value={testo} onChange={(e) => setTesto(e.target.value)}
+        placeholder={esempio} aria-describedby={`${id}-aiuto`}
+        onKeyDown={(e) => { if (e.key === "Tab" && !e.shiftKey && !testo) { e.preventDefault(); scegli(esempio) } }} />
+      <SuggerimentiRichiesta titolo={p.titolo} onScegli={scegli} />
+      <Suggerimento id={`${id}-aiuto`}>Con il campo vuoto, Tab inserisce il testo d'esempio. Indica il tipo di vista e cosa deve risaltare: Claude completa con i dati degli elaborati.</Suggerimento>
       <div className="flex flex-wrap gap-2">
         <Button type="submit" disabled={!valido || az.crea.isPending}><SparkleIcon aria-hidden="true" />{az.crea.isPending ? "Aggiungo" : "Aggiungi e prepara il prompt"}</Button>
         <Button type="button" variant="outline" disabled={!valido || az.crea.isPending} onClick={() => invia(false)}>Aggiungi senza prompt</Button>
@@ -167,7 +202,7 @@ function BottoneCopia({ testo, etichetta = "Copia prompt", variant = "outline" }
   return <Button size="sm" variant={variant} onClick={() => void copia()}><CopyIcon aria-hidden="true" />{copiato ? "Copiato" : etichetta}</Button>
 }
 
-function CardGrafica({ d, g, openai }: { d: Deliverable; g: Grafica; openai: boolean }) {
+function CardGrafica({ d, g, openai, titolo }: { d: Deliverable; g: Grafica; openai: boolean; titolo?: string }) {
   const { slug } = useGara()
   const az = useAzioniGrafiche(slug, d.id)
   const id = useId()
@@ -196,7 +231,31 @@ function CardGrafica({ d, g, openai }: { d: Deliverable; g: Grafica; openai: boo
     if (g.immagine) setConferma({ titolo: "Generare una nuova immagine?", etichetta: "Genera", descrizione: "L'immagine attuale viene archiviata, non cancellata. La generazione con OpenAI ha un costo per immagine.", onConferma: fai })
     else fai()
   }
+  const [sopra, setSopra] = useState(false)
+  const profondita = useRef(0)  // dragenter/dragleave scattano anche sui figli: si contano
+  const puoCaricare = !occupata && progresso === null
+  const conFile = (e: React.DragEvent) => Array.from(e.dataTransfer.types).includes("Files")
+  const trascinamento = {
+    onDragEnter: (e: React.DragEvent) => { if (!conFile(e)) return; e.preventDefault(); profondita.current += 1; setSopra(true) },
+    onDragOver: (e: React.DragEvent) => { if (!conFile(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = puoCaricare ? "copy" : "none" },
+    onDragLeave: (e: React.DragEvent) => { if (!conFile(e)) return; profondita.current = Math.max(0, profondita.current - 1); if (!profondita.current) setSopra(false) },
+    onDrop: (e: React.DragEvent) => {
+      if (!conFile(e)) return
+      e.preventDefault()
+      profondita.current = 0
+      setSopra(false)
+      if (!puoCaricare) return
+      const file = e.dataTransfer.files[0]
+      if (!file) return
+      if (e.dataTransfer.files.length > 1) toast.info("Una figura ha una sola immagine: carico il primo file.")
+      carica(file)
+    },
+  }
   const carica = (file: File) => {
+    if (!TIPI_IMMAGINE.includes(file.type)) {
+      toast.error("Immagine non caricata", { description: `«${file.name}» non è un PNG o un JPG: il documento Word non accetta altri formati. Da ChatGPT scaricala come PNG.` })
+      return
+    }
     setProgresso(0)
     az.carica.mutate({ gid: g.id, file, suProgresso: setProgresso }, {
       onSuccess: () => toast.success("Immagine caricata."),
@@ -216,6 +275,7 @@ function CardGrafica({ d, g, openai }: { d: Deliverable; g: Grafica; openai: boo
       {campo === "didascalia"
         ? <Input id={`${id}-${campo}`} autoFocus value={valore} maxLength={400} onChange={(e) => setValore(e.target.value)} />
         : <Textarea id={`${id}-${campo}`} autoFocus rows={righe} value={valore} onChange={(e) => setValore(e.target.value)} className={campo === "prompt" ? "font-mono text-xs leading-relaxed" : undefined} />}
+      {campo === "richiesta" && titolo && <SuggerimentiRichiesta titolo={titolo} onScegli={setValore} />}
       {aiuto && <Suggerimento>{aiuto}</Suggerimento>}
       <div className="flex gap-2">
         <Button type="submit" size="sm" disabled={az.aggiorna.isPending || (campo === "richiesta" && valore.trim().length < MIN_RICHIESTA)}>{az.aggiorna.isPending ? "Salvataggio" : "Salva"}</Button>
@@ -294,25 +354,31 @@ function CardGrafica({ d, g, openai }: { d: Deliverable; g: Grafica; openai: boo
         </div>
       )}
 
-      {/* Immagine */}
-      <div className="mt-3 border-t pt-3">
+      {/* Immagine: si carica anche trascinando il file sull'area */}
+      <div className="mt-3 border-t pt-3" {...trascinamento}>
         {g.operazione?.tipo === "immagine" ? (
           <div aria-live="polite">
             <Skeleton className="aspect-[3/2] w-full max-w-md" />
             <p className="mt-2 text-xs text-foreground-2">OpenAI sta generando l'immagine: di solito meno di un minuto.</p>
           </div>
         ) : g.immagine ? (
-          <figure className="max-w-md">
+          <figure className="relative max-w-md">
             <a href={Api.urlImmagineGrafica(slug, d.id, g.id, g.immagine.caricata_il)} target="_blank" rel="noopener">
               <img src={Api.urlImmagineGrafica(slug, d.id, g.id, g.immagine.caricata_il)} alt={g.didascalia || g.richiesta} className="aspect-[3/2] w-full rounded-md border bg-card object-contain" />
             </a>
-            <figcaption className="mt-1 text-micro text-muted-foreground">{g.immagine.origine === "openai" ? `Generata con ${g.immagine.modello || "OpenAI"}` : "Caricata"} {quandoBreve(g.immagine.caricata_il)}</figcaption>
+            <figcaption className="mt-1 text-micro text-muted-foreground">{g.immagine.origine === "openai" ? `Generata con ${g.immagine.modello || "OpenAI"}` : "Caricata"} {quandoBreve(g.immagine.caricata_il)}. Trascina qui un file per sostituirla.</figcaption>
+            {sopra && (
+              <div className={cn("pointer-events-none absolute inset-x-0 top-0 flex aspect-[3/2] items-center justify-center rounded-md border-2 border-dashed text-sm font-medium", puoCaricare ? "border-primary bg-card text-primary" : "border-border-strong bg-muted text-muted-foreground")}>
+                {puoCaricare ? "Rilascia per sostituire l'immagine" : "Aspetta che finisca l'operazione in corso"}
+              </div>
+            )}
           </figure>
         ) : (
-          <div className="flex aspect-[3/2] w-full max-w-md flex-col items-center justify-center gap-1 rounded-md border border-dashed text-center">
-            <ImageIcon size={20} className="text-muted-foreground" aria-hidden="true" />
-            <span className="text-xs text-foreground-2">Nessuna immagine</span>
-            <span className="max-w-[36ch] text-micro text-muted-foreground">{!g.prompt ? "Prima prepara il prompt." : openai ? "Generala da qui o carica la tua." : "Copia il prompt in ChatGPT e carica qui il PNG."}</span>
+          <div className={cn("flex aspect-[3/2] w-full max-w-md flex-col items-center justify-center gap-1 rounded-md border border-dashed text-center transition-colors duration-(--d-fast) ease-(--e-std)",
+            sopra && (puoCaricare ? "border-2 border-primary bg-primary-soft" : "bg-muted"))}>
+            <ImageIcon size={20} className={sopra && puoCaricare ? "text-primary" : "text-muted-foreground"} aria-hidden="true" />
+            <span className={cn("text-xs", sopra && puoCaricare ? "font-medium text-primary" : "text-foreground-2")}>{sopra ? (puoCaricare ? "Rilascia per caricare l'immagine" : "Aspetta che finisca l'operazione in corso") : "Nessuna immagine"}</span>
+            {!sopra && <span className="max-w-[36ch] text-micro text-muted-foreground">{!g.prompt ? "Prepara il prompt, oppure trascina qui un'immagine che hai già." : openai ? "Generala da qui, oppure trascina qui un PNG o un JPG." : "Copia il prompt in ChatGPT, poi trascina qui il PNG scaricato."}</span>}
           </div>
         )}
         {progresso !== null && (

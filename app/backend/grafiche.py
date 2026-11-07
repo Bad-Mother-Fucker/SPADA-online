@@ -64,7 +64,17 @@ def _ora() -> str:
 
 # ── Lettura ─────────────────────────────────────────────────────────
 def _approvate(gara: Path) -> dict[str, dict]:
-    return {p["id"]: {**p, "criterio": p["id"].split("-")[1]} for p in offerta.proposte_decise(gara)["approvate"]}
+    return {p["id"]: {**p, "titolo": _titolo(p["titolo"]), "criterio": p["id"].split("-")[1]}
+            for p in offerta.proposte_decise(gara)["approvate"]}
+
+
+def _titolo(t: str) -> str:
+    """Il frontmatter si legge senza parser YAML: «classe \\"extra\\"» arriva
+    come «classe \\"extra\\» (la virgoletta finale è andata con quelle esterne)."""
+    if '\\"' not in t:
+        return t
+    t = t.replace('\\"', '"')
+    return t[:-1] + '"' if t.endswith("\\") else t
 
 
 def _testi(gara: Path, dl: dict) -> dict[str, list[str] | None]:
