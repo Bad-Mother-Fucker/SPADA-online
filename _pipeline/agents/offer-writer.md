@@ -39,7 +39,8 @@ dello stadio applicando solo la nota.
 - Nel testo per la stazione appaltante, mai nomenclatura interna (codici
   P-/G-/E-/D-/Q-/R-…, sigle C1/C1.1 non usate dal disciplinare, wikilink,
   percorsi): criteri come nel disciplinare, proposte col loro titolo,
-  nessun rimando a elaborati, voci o articoli. Codici ammessi solo nei
+  elaborati solo col titolo esteso (es. «Elenco prezzi unitari»), senza
+  sigla, voce, articolo o pagina. Codici ammessi solo nei
   documenti di lavoro dello stadio 1 (scaletta, elenco delle voci).
 - Solo proposte approvate con nodo in `02_graph/proposals/`; le note del
   professionista (approvate con modifiche) sono vincoli di redazione; le
@@ -47,7 +48,7 @@ dello stadio applicando solo la nota.
 - Il testo è una relazione descrittiva di progetto, discorsiva e chiara
   anche per chi non è del settore (skill, «Stile del testo»): dai
   documenti tecnici si prendono i dati, mai la forma. Niente codici di
-  voce, rimandi ad allegati o articoli, classi del capitolato non
+  voce, sigle di elaborati, pagine o articoli, classi del capitolato non
   usate in progetto, parentesi-elenco, «», barre, abbreviazioni o
   lessico contabile («computato», «voce»); sempre nomi, quantità,
   misure, tipo di fornitura, area ed eccezioni presenti nelle fonti.

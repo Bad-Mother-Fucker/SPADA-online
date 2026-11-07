@@ -45,9 +45,10 @@ Si usano soltanto:
 - per le proposte, il loro titolo descrittivo, mai il codice.
 
 Gli elaborati di progetto (computo, capitolato, allegati, tavole) sono
-**fonti da cui ricavare i contenuti, non da citare**: nel testo non
-compaiono né i loro nomi né voci, articoli o pagine (vedi «Stile del
-testo»).
+**fonti da cui ricavare i contenuti**: se serve nominarne uno, si usa
+solo il **titolo esteso**, senza sigla o codice dell'elaborato e senza
+voce, articolo o pagina (es. «Elenco prezzi unitari», non «Allegato H –
+Elenco prezzi unitari» né «Allegato H, p. 19»). Vedi «Stile del testo».
 
 Unica eccezione: nella **scaletta** e nell'**elenco delle voci** (stadio
 1, documenti di lavoro per il professionista) i codici interni si possono
@@ -64,8 +65,11 @@ scorrevole anche per chi non lavora nel settore.
 
 **Non deve comparire:**
 - codici delle voci di computo (es. 439/586, 444/591);
-- rimandi ad allegati, elaborati e articoli (es. «Allegato G – Computo
-  metrico estimativo», «art. 4.1.10.15 del CSA»);
+- sigle e codici degli elaborati (es. «Allegato G», «Allegato H –»,
+  «PE-AR_08», «CSA»): se un elaborato va nominato, solo il titolo esteso
+  («Computo metrico estimativo», «Elenco prezzi unitari»);
+- pagine, articoli, paragrafi o capitoli da cui è presa l'informazione
+  (es. «p. 19», «art. 4.1.10.15 del capitolato»);
 - definizioni e classi del capitolato che non descrivono ciò che è
   previsto in progetto (fasce di misura non utilizzate, classi «extra»);
 - parentesi usate per elencare dati, virgolette «», barre e
@@ -209,9 +213,10 @@ ordine, parole obiettivo rispettate (±15%).
 - Scrivi secondo «Stile del testo»: relazione descrittiva in prosa
   continua, comprensibile anche a chi non è del settore; elenchi solo
   per sequenze operative che non reggono in una frase.
-- Nessun rimando a elaborati, voci, articoli o pagine, nessun codice
-  di nodo, wikilink o percorso interno (vedi «Regola di nomenclatura»):
-  i dati delle fonti entrano nel testo, i loro riferimenti no.
+- Elaborati nominati solo col titolo esteso, senza sigla, voce,
+  articolo o pagina; nessun codice di nodo, wikilink o percorso interno
+  (vedi «Regola di nomenclatura»): i dati delle fonti entrano nel testo,
+  i loro riferimenti puntuali no.
 - Titoli di criterio e sub-criterio come nel disciplinare; i paragrafi
   hanno il titolo descrittivo della proposta, mai il suo codice.
 - Mai prezzi, importi, ribassi o elementi economici.
@@ -234,8 +239,9 @@ Se un subcriterio è sotto dell'15%, completa prima di chiudere.
 
 Parte dalla bozza approvata (con le modifiche a mano del professionista):
 - non aggiungere contenuti nuovi né proposte;
-- uniforma terminologia e numerazione; elimina ripetizioni, rimandi a
-  elaborati, voci e articoli rimasti e ogni residuo di forma da computo
+- uniforma terminologia e numerazione; elimina ripetizioni, sigle di
+  elaborati, voci, articoli e pagine rimasti (gli elaborati restano solo
+  col titolo esteso) e ogni residuo di forma da computo
   (vedi «Stile del testo»);
 - mantieni i blocchi `%%DR_…%%` non ancora risolti, togli quelli che il
   professionista ha risolto nel testo;

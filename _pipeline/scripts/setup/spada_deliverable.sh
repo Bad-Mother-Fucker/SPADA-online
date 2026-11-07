@@ -224,9 +224,9 @@ if [ "$ESITO" = "completato" ]; then
   INTERNI="$(python3 "$OFFERTA_PY" controlla "$DELIVERABLE_ID" "$STADIO")"
   if [ $? -eq 4 ]; then
     warn "Nomenclatura interna nel testo, chiedo la correzione: $INTERNI"
-    # La relazione tecnica non cita gli elaborati (skill, «Stile del testo»): i dati sì, i rimandi no.
+    # Relazione tecnica (skill, «Stile del testo»): elaborati solo col titolo esteso, senza riferimenti puntuali.
     if [ "$TIPO" = "relazione_tecnica" ]; then
-      ELABORATI="nessun rimando a elaborati, voci, articoli o pagine (i dati restano nel testo, i riferimenti no)"
+      ELABORATI="elaborati solo con il titolo esteso (es. «Elenco prezzi unitari»), senza sigla dell'elaborato, voce, articolo o pagina"
     else
       ELABORATI="elaborati con il nome con cui sono stati caricati (più voce, tavola, articolo o pagina)"
     fi
