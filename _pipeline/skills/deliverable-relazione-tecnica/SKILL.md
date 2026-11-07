@@ -95,6 +95,7 @@ Contenuto: [cosa dice, in una riga]
    Indicatori: [valori misurabili da dichiarare]
    Vincolo del professionista: [nota, se approvata con modifiche]
    Figure: [fig-NN dell'elenco del prompt, se ce ne sono per questa proposta]
+   Allegati: [sch-NN dell'elenco SCHEDE TECNICHE del prompt, se ce ne sono per questa proposta]
 2. …
 ```
 
@@ -104,7 +105,8 @@ del professionista è assegnata a un paragrafo; somma facciate ≤ limite;
 ogni subcriterio incluso ha almeno un paragrafo; criteri esclusi dalla
 Sezione B assenti; ogni figura scelta dal professionista è assegnata a
 un paragrafo e contata nelle facciate (mezza facciata, salvo il
-disciplinare).
+disciplinare); ogni scheda tecnica scelta è assegnata a un paragrafo
+(gli allegati non contano nelle facciate).
 
 ## Stadio 2 — Bozza (`2_bozza.md`)
 
@@ -131,6 +133,13 @@ ordine, parole obiettivo rispettate (±15%).
   e citala come «figura N» (N = ordine di comparsa nel documento); la
   didascalia la aggiunge l'esportazione. Il segnaposto è l'unico codice
   ammesso nel testo. Senza figure scelte: nessun segnaposto di immagine.
+- Allegati di prodotto: sono SOLO le schede dell'elenco SCHEDE TECNICHE
+  del prompt, scelte dal professionista. Citale in linea con
+  `[ALLEGATO: sch-NN]` (es. «… dalla scheda tecnica del pannello
+  ([ALLEGATO: sch-03]).»); l'esportazione scrive «Allegato T.n». Non
+  scrivere mai che è allegata una scheda, EPD, dichiarazione di
+  prestazione, certificato o rapporto di prova che non sia in elenco:
+  quei valori si dichiarano come requisiti dell'offerta, senza rimando.
 - Salti pagina `<!-- PAGEBREAK -->`.
 
 In un file a parte, `controllo_bozza.md`, la tabella
@@ -144,6 +153,9 @@ Parte dalla bozza approvata (con le modifiche a mano del professionista):
 - uniforma terminologia, numerazione e rimandi; elimina ripetizioni;
 - mantieni i blocchi `%%DR_…%%` non ancora risolti, togli quelli che il
   professionista ha risolto nel testo;
+- allinea i rimandi agli allegati all'elenco SCHEDE TECNICHE del prompt
+  (può essere cambiato dopo la bozza): ogni scheda in elenco citata con
+  `[ALLEGATO: sch-NN]`, nessun rimando a schede o certificati fuori elenco;
 - verifica il limite di facciate: se lo superi, accorcia partendo dai
   subcriteri a priorità più bassa e scrivi cosa hai tagliato in
   `controllo_definitivo.md`;

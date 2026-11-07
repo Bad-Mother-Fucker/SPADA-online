@@ -168,6 +168,13 @@ trap 'rm -f "$PROMPT_FILE"' EXIT
     echo "$FIGURE"
     echo ""
   fi
+  # Schede tecniche scelte dal professionista (solo relazione tecnica):
+  # sono gli unici documenti di prodotto che il testo può dire allegati.
+  SCHEDE="$(python3 "$(dirname "$OFFERTA_PY")/schede_offerta.py" elenco "$DELIVERABLE_ID" 2>/dev/null || true)"
+  if [ -n "$SCHEDE" ]; then
+    echo "$SCHEDE"
+    echo ""
+  fi
   nota_percorsi
   echo ""
   nota_prezzario

@@ -212,6 +212,42 @@ export interface ElencoGrafiche {
   openai: { configurata: boolean; modello: string }
   testi: Record<string, boolean>
 }
+/** Schede tecniche della relazione (Fase 7): SPADA propone, il professionista sceglie quali allegare. */
+export type TipoScheda = "scheda_tecnica" | "epd" | "dop" | "certificato" | "rapporto_prova"
+export type ConsegnaSchede = "in_coda" | "file" | "zip"
+export interface CandidatoScheda { produttore: string; modello: string; url_pdf: string; url_pagina: string; verifica: string }
+export interface Scheda {
+  id: string
+  proposta_id: string
+  proposta_approvata: boolean
+  oggetto: string
+  tipo: TipoScheda
+  documenta: string
+  origine: "spada" | "professionista"
+  inclusa: boolean
+  produttore: string
+  modello: string
+  file: { nome: string; fonte: { tipo: "caricata" | "online"; url?: string; pagina?: string; nome_originale?: string } | null; caricato_il: string; pagine: number | null; avvisi: string[] } | null
+  candidati: CandidatoScheda[]
+  note_ricerca: string
+  operazione: { tipo: "cerca"; avviata_il: string } | null
+  errore: { tipo: string; operazione: string; messaggio: string } | null
+  /** Per bozza e definitivo: true se il testo la cita, null se il testo non c'è ancora. */
+  citata: Record<string, boolean | null>
+}
+export interface ElencoSchede {
+  proposte: PropostaPerGrafica[]
+  schede: Scheda[]
+  tipi: Record<TipoScheda, string>
+  consegna: ConsegnaSchede
+  consegne: Record<ConsegnaSchede, string>
+  proposta_il: string | null
+  operazione: { tipo: "proponi"; avviata_il: string } | null
+  errore: { tipo: string; operazione: string; messaggio: string } | null
+  testi: Record<string, boolean>
+  /** File dell'ultima esportazione (ZIP o PDF sciolti), sotto output/. */
+  consegnati: string[]
+}
 export interface StatoOpenAI { configurata: boolean; chiave: string | null; modello: string; origine: "impostazioni" | "ambiente" | null }
 
 const s = (slug: string) => encodeURIComponent(slug)
@@ -240,6 +276,7 @@ function inviaConProgresso<T>(percorso: string, form: FormData, suProgresso?: (f
   })
 }
 const g = (slug: string, id: string) => `/gare/${s(slug)}/deliverables/${s(id)}/grafiche`
+const sch = (slug: string, id: string) => `/gare/${s(slug)}/deliverables/${s(id)}/schede`
 
 // ---------------------------------------------------------------- client
 
@@ -426,6 +463,29 @@ export const Api = {
   /** `versione` (data dell'immagine) cambia l'URL a ogni immagine nuova. */
   urlImmagineGrafica: (slug: string, id: string, gid: string, versione: string) =>
     `${base()}${g(slug, id)}/${s(gid)}/immagine?v=${encodeURIComponent(versione)}`,
+
+  // Schede tecniche della relazione. Proposta dell'elenco e ricerca online
+  // girano in background (202): l'elenco riporta l'operazione e l'esito.
+  schede: (slug: string, id: string, o?: Opzioni) => richiesta<ElencoSchede>(sch(slug, id), o),
+  proponiSchede: (slug: string, id: string) => richiesta(`${sch(slug, id)}/proponi`, { method: "POST" }),
+  consegnaSchede: (slug: string, id: string, consegna: ConsegnaSchede) =>
+    richiesta(`${sch(slug, id)}/consegna`, { method: "PUT", body: JSON.stringify({ consegna }) }),
+  creaScheda: (slug: string, id: string, body: { proposta_id: string; oggetto: string; tipo: TipoScheda; documenta?: string }) =>
+    richiesta<{ id: string }>(sch(slug, id), { method: "POST", body: JSON.stringify(body) }),
+  aggiornaScheda: (slug: string, id: string, sid: string, body: Partial<Pick<Scheda, "inclusa" | "oggetto" | "tipo" | "documenta" | "produttore" | "modello">>) =>
+    richiesta<{ id: string }>(`${sch(slug, id)}/${s(sid)}`, { method: "PATCH", body: JSON.stringify(body) }),
+  eliminaScheda: (slug: string, id: string, sid: string) => richiesta<void>(`${sch(slug, id)}/${s(sid)}`, { method: "DELETE" }),
+  cercaScheda: (slug: string, id: string, sid: string) => richiesta(`${sch(slug, id)}/${s(sid)}/cerca`, { method: "POST" }),
+  usaCandidatoScheda: (slug: string, id: string, sid: string, indice: number) =>
+    richiesta<{ id: string }>(`${sch(slug, id)}/${s(sid)}/usa`, { method: "POST", body: JSON.stringify({ indice }), timeoutMs: 120_000 }),
+  caricaFileScheda: (slug: string, id: string, sid: string, file: File, suProgresso?: (frazione: number) => void) => {
+    const form = new FormData()
+    form.append("file", file)
+    return inviaConProgresso<{ id: string }>(`${sch(slug, id)}/${s(sid)}/file`, form, suProgresso)
+  },
+  /** `versione` (data del file) cambia l'URL a ogni PDF nuovo. */
+  urlFileScheda: (slug: string, id: string, sid: string, versione: string) =>
+    `${base()}${sch(slug, id)}/${s(sid)}/file?v=${encodeURIComponent(versione)}`,
 
   // Generazione immagini con OpenAI: la chiave torna sempre mascherata.
   statoOpenAI: (o?: Opzioni) => richiesta<StatoOpenAI>("/sistema/openai", o),

@@ -12,7 +12,15 @@ const {
 // ── Percorsi e parametri ──────────────────────────────────────────────────────
 // Uso: node md_to_docx.js [input.md output.docx] [--font F] [--size PT]
 //        [--interlinea 1.15] [--titolo T] [--gara N] [--cig C] [--sa S] [--data D]
-//        [--senza-numeri-riga] [--figure grafiche.json]
+//        [--senza-numeri-riga] [--figure grafiche.json] [--allegati allegati.json]
+// --allegati: schede tecniche scelte dal professionista (schede_offerta.py),
+// già numerate dal backend: [{numero, titolo, nota?, file?, frontespizio, pagine: [png…]}].
+// In coda al documento: elenco degli allegati, poi per ciascuno un
+// frontespizio «Allegato T.n» e le sue pagine come immagini a pagina
+// intera; senza numeri di riga, fuori dal conteggio delle facciate.
+// Con «pagine» vuoto restano elenco e frontespizi (per il PDF, dove le
+// pagine originali si uniscono dopo la conversione); con frontespizio
+// false resta solo l'elenco (allegati consegnati come file a parte).
 // --figure: registro delle grafiche della relazione (grafiche_offerta.py);
 // ogni riga `[FIGURA: fig-NN]` diventa l'immagine con la didascalia,
 // numerata nell'ordine in cui le figure compaiono nel testo.
@@ -41,6 +49,13 @@ const FIGURE = (() => {
 const FIGURE_DIR = FIGURE_FILE ? path.dirname(path.resolve(FIGURE_FILE)) : '';
 const figureNumero = {};      // id → numero, nell'ordine di comparsa
 const figureMancanti = [];    // id collocati senza immagine
+
+// ── Allegati (schede tecniche) ────────────────────────────────────────────────
+const ALLEGATI_FILE = opt('allegati', '');
+const ALLEGATI = (() => {
+  if (!ALLEGATI_FILE || !fs.existsSync(ALLEGATI_FILE)) return [];
+  try { return JSON.parse(fs.readFileSync(ALLEGATI_FILE, 'utf8')); } catch (e) { return []; }
+})();
 
 /** Larghezza e altezza in pixel di un PNG o di un JPEG; null se non riconosciuto. */
 function dimensioniImmagine(buf) {
@@ -433,6 +448,40 @@ for (const sec of sections) {
     headers: { default: makeHeader(sec.headerTitle + ' — ' + meta.nomeGara) },
     footers: { default: makeFooter() },
     children: sec.children,
+  });
+}
+
+// Allegati in coda: una sezione a sé, senza numeri di riga.
+if (ALLEGATI.length) {
+  const figli = [
+    new Paragraph({ heading: HeadingLevel.HEADING_1, children: [run('Elenco degli allegati', { size: SIZE_H1, bold: true })] }),
+    ...ALLEGATI.map((a) => bodyPara([run('Allegato ' + a.numero + ' – ', { bold: true }), run(a.titolo),
+      ...(a.file ? [run(' – file ' + a.file, { italics: true })] : []),
+      ...(a.nota ? [runHL(' (' + a.nota + ')')] : [])], { alignment: AlignmentType.LEFT })),
+  ];
+  for (const a of ALLEGATI.filter((x) => x.frontespizio !== false)) {
+    figli.push(new Paragraph({ children: [new PageBreak()] }));
+    figli.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 4000, after: 300 },
+      children: [run('Allegato ' + a.numero, { size: SIZE_H1 + 8, bold: true })] }));
+    figli.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 }, children: [run(a.titolo, { size: SIZE_H1 })] }));
+    if (a.nota) figli.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [runHL(a.nota)] }));
+    // Pagine della scheda: ciascuna adattata all'area utile della facciata.
+    const maxW = Math.floor(CONTENT_W / 15), maxH = Math.floor((PAGE_H - MARGIN * 2) / 15 * 0.95);
+    for (const png of a.pagine || []) {
+      const buf = fs.existsSync(png) ? fs.readFileSync(png) : null;
+      const dim = buf ? dimensioniImmagine(buf) : null;
+      if (!dim) continue;
+      const k = Math.min(maxW / dim.w, maxH / dim.h);
+      figli.push(new Paragraph({ children: [new PageBreak()] }));
+      figli.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 0, after: 0 },
+        children: [new ImageRun({ type: dim.tipo, data: buf, transformation: { width: Math.round(dim.w * k), height: Math.round(dim.h * k) } })] }));
+    }
+  }
+  docSections.push({
+    properties: { page: { size: { width: PAGE_W, height: PAGE_H }, margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN } } },
+    headers: { default: makeHeader('Allegati — ' + meta.nomeGara) },
+    footers: { default: makeFooter() },
+    children: figli,
   });
 }
 

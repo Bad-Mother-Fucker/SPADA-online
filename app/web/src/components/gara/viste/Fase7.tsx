@@ -16,6 +16,7 @@ import { DialogoConferma, type Conferma } from "../DialogoConferma"
 import { PannelloFase } from "../PannelloFase"
 import { TestataVista } from "../TestataVista"
 import { PannelloGrafiche } from "./Grafiche"
+import { PannelloSchede } from "./Schede"
 import { useGara } from "../GaraContext"
 import { fileDeliverable, useDeliverableAzioni, useDeliverables, useTestoOutput, type Deliverable, type StadioDeliverable } from "@/hooks/useGaraDati"
 import { Api } from "@/lib/api"
@@ -408,6 +409,7 @@ export function Fase7Workspace() {
             </nav>
             {sel && <PannelloStadio key={sel.id} d={d} s={sel} blocco={blocco} />}
             {d.tipo === "relazione_tecnica" && <PannelloGrafiche d={d} />}
+            {d.tipo === "relazione_tecnica" && <PannelloSchede d={d} />}
           </>
         ) : <DocumentoSemplice d={d} blocco={blocco} />}
       </Split>

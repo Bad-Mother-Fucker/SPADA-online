@@ -5,7 +5,7 @@
 
 import { useMutation, useMutationState, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Api, ApiError, type ElencoGrafiche, type Grafica, type NuovaPropostaProfessionista, type DettaglioGara, type Documento as DocumentoApi, type Manifest, type StatoPrezzario } from "@/lib/api"
+import { Api, ApiError, type ElencoGrafiche, type ElencoSchede, type ConsegnaSchede, type Scheda, type TipoScheda, type Grafica, type NuovaPropostaProfessionista, type DettaglioGara, type Documento as DocumentoApi, type Manifest, type StatoPrezzario } from "@/lib/api"
 import type { Fasi, JobFase } from "@/dominio/fasi"
 import * as Md from "@/lib/md"
 import { comeApiError } from "@/lib/risorsa"
@@ -30,6 +30,7 @@ export const chiaviGara = {
   assistente: (slug: string) => ["gara", slug, "assistente"] as const,
   interventi: (slug: string) => ["gara", slug, "interventi"] as const,
   grafiche: (slug: string, id: string) => ["gara", slug, "grafiche", id] as const,
+  schede: (slug: string, id: string) => ["gara", slug, "schede", id] as const,
   sistema: ["sistema"] as const,
 }
 
@@ -491,6 +492,63 @@ export function useAzioniGrafiche(slug: string, id: string) {
     onSettled: rileggi,
   })
   return { crea, aggiorna, elimina, prompt, genera, carica }
+}
+
+// ------------------------------------------------- schede tecniche della relazione
+
+/** Elenco delle schede: finché la proposta dell'elenco o una ricerca è in
+    corso si rilegge ogni 3 secondi, poi si ferma. */
+export function useSchede(slug: string, id: string, attivo = true) {
+  return useQuery({
+    queryKey: chiaviGara.schede(slug, id),
+    queryFn: ({ signal }) => Api.schede(slug, id, { signal }),
+    enabled: attivo,
+    refetchInterval: (q) => (q.state.data && (q.state.data.operazione || q.state.data.schede.some((x) => x.operazione)) ? 3_000 : false),
+  })
+}
+
+export function useAzioniSchede(slug: string, id: string) {
+  const qc = useQueryClient()
+  const chiave = chiaviGara.schede(slug, id)
+  const rileggi = () => qc.invalidateQueries({ queryKey: chiave })
+  const ottimista = (fn: (d: ElencoSchede) => ElencoSchede) => {
+    const prima = qc.getQueryData<ElencoSchede>(chiave)
+    qc.setQueryData<ElencoSchede>(chiave, (d) => d && fn(d))
+    return { prima }
+  }
+  const ripristina = (_e: unknown, _v: unknown, ctx?: { prima?: ElencoSchede }) => { if (ctx?.prima) qc.setQueryData(chiave, ctx.prima) }
+  const ora = () => new Date().toISOString()
+  const proponi = useMutation({
+    mutationFn: () => Api.proponiSchede(slug, id),
+    onMutate: () => ottimista((d) => ({ ...d, operazione: { tipo: "proponi", avviata_il: ora() }, errore: null })),
+    onError: ripristina, onSettled: rileggi,
+  })
+  const consegna = useMutation({
+    mutationFn: (c: ConsegnaSchede) => Api.consegnaSchede(slug, id, c),
+    onMutate: (c) => ottimista((d) => ({ ...d, consegna: c })), onError: ripristina, onSettled: rileggi,
+  })
+  const crea = useMutation({ mutationFn: (b: { proposta_id: string; oggetto: string; tipo: TipoScheda; documenta?: string }) => Api.creaScheda(slug, id, b), onSettled: rileggi })
+  const aggiorna = useMutation({
+    mutationFn: (v: { sid: string } & Partial<Pick<Scheda, "inclusa" | "oggetto" | "tipo" | "documenta" | "produttore" | "modello">>) => {
+      const { sid, ...campi } = v
+      return Api.aggiornaScheda(slug, id, sid, campi)
+    },
+    // L'inclusione cambia subito nella lista: è il gesto più frequente del pannello.
+    onMutate: (v) => ottimista((d) => ({ ...d, schede: d.schede.map((x) => (x.id === v.sid ? { ...x, ...v } : x)) })),
+    onError: ripristina, onSettled: rileggi,
+  })
+  const elimina = useMutation({ mutationFn: (sid: string) => Api.eliminaScheda(slug, id, sid), onSettled: rileggi })
+  const cerca = useMutation({
+    mutationFn: (sid: string) => Api.cercaScheda(slug, id, sid),
+    onMutate: (sid) => ottimista((d) => ({ ...d, schede: d.schede.map((x) => (x.id === sid ? { ...x, operazione: { tipo: "cerca", avviata_il: ora() }, errore: null } : x)) })),
+    onError: ripristina, onSettled: rileggi,
+  })
+  const usa = useMutation({ mutationFn: (v: { sid: string; indice: number }) => Api.usaCandidatoScheda(slug, id, v.sid, v.indice), onSettled: rileggi })
+  const carica = useMutation({
+    mutationFn: (v: { sid: string; file: File; suProgresso?: (f: number) => void }) => Api.caricaFileScheda(slug, id, v.sid, v.file, v.suProgresso),
+    onSettled: rileggi,
+  })
+  return { proponi, consegna, crea, aggiorna, elimina, cerca, usa, carica }
 }
 
 export function useOpenAI(attivo = true) {
