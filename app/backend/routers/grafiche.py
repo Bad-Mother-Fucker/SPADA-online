@@ -12,7 +12,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import grafiche
 from auth import AutenticazioneClaudeNonDisponibile
-from models import AggiornaGraficaRequest, GraficaRequest
+from models import AggiornaGraficaRequest, GraficaRequest, RitaglioRiferimentoRequest
 from routers.gare import _deliverable_o_404, _gara_o_404
 
 router = APIRouter(prefix="/gare", tags=["grafiche"])
@@ -73,11 +73,12 @@ def elimina_grafica(slug: str, deliverable_id: str, gid: str):
 
 
 @router.post(BASE + "/{gid}/prompt", status_code=202)
-def prepara_prompt(slug: str, deliverable_id: str, gid: str):
-    """Claude prepara prompt e didascalia in background (1-2 minuti)."""
+def prepara_prompt(slug: str, deliverable_id: str, gid: str, altro_riferimento: bool = False):
+    """Claude prepara prompt, didascalia e riferimento in background (2-4
+    minuti). altro_riferimento: esclude dalla ricerca quello attuale."""
     _id_valido(gid)
     d, dl = _relazione(slug, deliverable_id)
-    _esegui(grafiche.prepara_prompt, d, dl, gid)
+    _esegui(grafiche.prepara_prompt, d, dl, gid, altro_riferimento)
     return {"id": gid, "operazione": "prompt"}
 
 
@@ -109,3 +110,46 @@ def leggi_immagine(slug: str, deliverable_id: str, gid: str):
         raise HTTPException(404, "Questa figura non ha ancora un'immagine.")
     # L'URL porta ?v=<data di caricamento>: un'immagine nuova ha un URL nuovo.
     return FileResponse(str(f), headers={"Cache-Control": "no-cache"})
+
+
+# ── Riferimento: immagine da cui partire, mai nel documento ─────────
+@router.get(BASE + "/{gid}/riferimento")
+def leggi_riferimento(slug: str, deliverable_id: str, gid: str):
+    _id_valido(gid)
+    d, dl = _relazione(slug, deliverable_id)
+    f = grafiche.file_riferimento(d, dl, gid)
+    if f is None:
+        raise HTTPException(404, "Questa figura non ha un'immagine di riferimento.")
+    return FileResponse(str(f), headers={"Cache-Control": "no-cache"})
+
+
+@router.get(BASE + "/{gid}/riferimento/pagina")
+def pagina_riferimento(slug: str, deliverable_id: str, gid: str):
+    """Pagina intera dell'elaborato, per regolare il ritaglio."""
+    _id_valido(gid)
+    d, dl = _relazione(slug, deliverable_id)
+    f = _esegui(grafiche.pagina_riferimento, d, dl, gid)
+    return FileResponse(str(f), media_type="image/png", headers={"Cache-Control": "no-cache"})
+
+
+@router.put(BASE + "/{gid}/riferimento/ritaglio")
+def ritaglia_riferimento(slug: str, deliverable_id: str, gid: str, body: RitaglioRiferimentoRequest):
+    _id_valido(gid)
+    d, dl = _relazione(slug, deliverable_id)
+    _esegui(grafiche.ritaglia_riferimento, d, dl, gid, body.riquadro)
+    return {"id": gid}
+
+
+@router.post(BASE + "/{gid}/riferimento")
+def carica_riferimento(slug: str, deliverable_id: str, gid: str, file: UploadFile):
+    _id_valido(gid)
+    d, dl = _relazione(slug, deliverable_id)
+    _esegui(grafiche.carica_riferimento, d, dl, gid, file.file.read(grafiche.MAX_IMMAGINE + 1))
+    return {"id": gid}
+
+
+@router.delete(BASE + "/{gid}/riferimento", status_code=204)
+def togli_riferimento(slug: str, deliverable_id: str, gid: str):
+    _id_valido(gid)
+    d, dl = _relazione(slug, deliverable_id)
+    _esegui(grafiche.togli_riferimento, d, dl, gid)

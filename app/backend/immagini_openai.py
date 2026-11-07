@@ -98,10 +98,24 @@ def rimuovi():
     _scrivi_file(f)
 
 
-def _richiesta(metodo: str, percorso: str, chiave: str, corpo: dict | None, timeout: int) -> dict:
-    dati = json.dumps(corpo).encode() if corpo is not None else None
-    req = urllib.request.Request(f"{URL_API}{percorso}", data=dati, method=metodo, headers={
-        "Authorization": f"Bearer {chiave}", "Content-Type": "application/json", "User-Agent": "spada"})
+def _richiesta(metodo: str, percorso: str, chiave: str, corpo: dict | None, timeout: int,
+               file: dict[str, tuple[str, bytes, str]] | None = None) -> dict:
+    """Richiesta JSON, o multipart se ci sono file ({campo: (nome, byte, tipo)})."""
+    headers = {"Authorization": f"Bearer {chiave}", "User-Agent": "spada"}
+    if file:
+        confine = f"spada-{os.urandom(12).hex()}"
+        parti = []
+        for k, v in (corpo or {}).items():
+            parti.append(f'--{confine}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode())
+        for campo, (nome, byte, tipo) in file.items():
+            parti.append(f'--{confine}\r\nContent-Disposition: form-data; name="{campo}"; filename="{nome}"\r\n'
+                         f"Content-Type: {tipo}\r\n\r\n".encode() + byte + b"\r\n")
+        dati = b"".join(parti) + f"--{confine}--\r\n".encode()
+        headers["Content-Type"] = f"multipart/form-data; boundary={confine}"
+    else:
+        dati = json.dumps(corpo).encode() if corpo is not None else None
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(f"{URL_API}{percorso}", data=dati, method=metodo, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read() or b"{}")
@@ -138,15 +152,26 @@ def verifica() -> dict:
     return {"ok": True, "messaggio": f"Chiave valida, modello {c['modello']} disponibile."}
 
 
-def genera(prompt: str) -> tuple[bytes, str]:
-    """Genera un'immagine dal prompt: (byte PNG, modello usato)."""
+def genera(prompt: str, riferimento=None) -> tuple[bytes, str]:
+    """Genera un'immagine dal prompt: (byte PNG, modello usato). Con un
+    riferimento (Path di un PNG o JPG) usa l'endpoint di modifica, che lo
+    prende come base dell'immagine."""
     c = configurazione()
     if not c["chiave"]:
         raise ErroreOpenAI("chiave", "Nessuna chiave OpenAI configurata.")
-    corpo = {"model": c["modello"], "prompt": prompt, "n": 1, "size": DIMENSIONE}
-    if c["modello"].startswith("dall-e"):
-        corpo.update(response_format="b64_json", size="1792x1024")
-    risposta = _richiesta("POST", "/images/generations", c["chiave"], corpo, TIMEOUT_GENERAZIONE)
+    if riferimento is not None:
+        if c["modello"].startswith("dall-e"):
+            raise ErroreOpenAI("modello", f"Il modello {c['modello']} non accetta un'immagine di riferimento: "
+                                          "togli il riferimento o usa gpt-image-1.")
+        tipo = "image/jpeg" if riferimento.suffix.lower() in (".jpg", ".jpeg") else "image/png"
+        risposta = _richiesta("POST", "/images/edits", c["chiave"],
+                              {"model": c["modello"], "prompt": prompt, "n": 1, "size": DIMENSIONE},
+                              TIMEOUT_GENERAZIONE, {"image[]": (riferimento.name, riferimento.read_bytes(), tipo)})
+    else:
+        corpo = {"model": c["modello"], "prompt": prompt, "n": 1, "size": DIMENSIONE}
+        if c["modello"].startswith("dall-e"):
+            corpo.update(response_format="b64_json", size="1792x1024")
+        risposta = _richiesta("POST", "/images/generations", c["chiave"], corpo, TIMEOUT_GENERAZIONE)
     try:
         b64 = risposta["data"][0]["b64_json"]
     except (KeyError, IndexError, TypeError):

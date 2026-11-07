@@ -183,7 +183,8 @@ export const CARTELLE_FASE: Record<number, string[]> = {
 export function elaboratiDiFase(output: string[], n: number) {
   const prefissi = CARTELLE_FASE[n] || []
   return output
-    .filter((p) => prefissi.some((pre) => p.startsWith(pre)) && !p.startsWith("11_view/"))
+    // Le figure della relazione (registro, immagini, riferimenti, archivi) si vedono nel loro pannello.
+    .filter((p) => prefissi.some((pre) => p.startsWith(pre)) && !p.startsWith("11_view/") && !/\/grafiche(\/|\.json$)|\/_archivio\//.test(p))
     .map((p) => {
       const gemello = `11_view/${p.replace(/\.md$/, ".html")}`
       const haGemello = p.endsWith(".md") && output.includes(gemello)

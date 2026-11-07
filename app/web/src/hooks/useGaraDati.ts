@@ -471,7 +471,7 @@ export function useAzioniGrafiche(slug: string, id: string) {
   const ripristina = (_e: unknown, _v: unknown, ctx?: { prima?: ElencoGrafiche }) => { if (ctx?.prima) qc.setQueryData(chiave, ctx.prima) }
   const crea = useMutation({ mutationFn: (b: { proposta_id: string; richiesta: string }) => Api.creaGrafica(slug, id, b), onSettled: rileggi })
   const aggiorna = useMutation({
-    mutationFn: (v: { gid: string } & Partial<Pick<Grafica, "richiesta" | "prompt" | "didascalia">>) => {
+    mutationFn: (v: { gid: string } & Partial<Pick<Grafica, "richiesta" | "prompt" | "didascalia" | "prompt_riferimento" | "usa_riferimento">>) => {
       const { gid, ...campi } = v
       return Api.aggiornaGrafica(slug, id, gid, campi)
     },
@@ -479,8 +479,9 @@ export function useAzioniGrafiche(slug: string, id: string) {
   })
   const elimina = useMutation({ mutationFn: (gid: string) => Api.eliminaGrafica(slug, id, gid), onSettled: rileggi })
   const prompt = useMutation({
-    mutationFn: (gid: string) => Api.preparaPromptGrafica(slug, id, gid),
-    onMutate: (gid) => segna(gid, "prompt"), onError: ripristina, onSettled: rileggi,
+    mutationFn: (v: string | { gid: string; altroRiferimento: boolean }) =>
+      typeof v === "string" ? Api.preparaPromptGrafica(slug, id, v) : Api.preparaPromptGrafica(slug, id, v.gid, v.altroRiferimento),
+    onMutate: (v) => segna(typeof v === "string" ? v : v.gid, "prompt"), onError: ripristina, onSettled: rileggi,
   })
   const genera = useMutation({
     mutationFn: (gid: string) => Api.generaImmagineGrafica(slug, id, gid),
@@ -490,7 +491,13 @@ export function useAzioniGrafiche(slug: string, id: string) {
     mutationFn: (v: { gid: string; file: File; suProgresso?: (f: number) => void }) => Api.caricaImmagineGrafica(slug, id, v.gid, v.file, v.suProgresso),
     onSettled: rileggi,
   })
-  return { crea, aggiorna, elimina, prompt, genera, carica }
+  const ritaglia = useMutation({ mutationFn: (v: { gid: string; riquadro: [number, number, number, number] }) => Api.ritagliaRiferimento(slug, id, v.gid, v.riquadro), onSettled: rileggi })
+  const caricaRiferimento = useMutation({
+    mutationFn: (v: { gid: string; file: File; suProgresso?: (f: number) => void }) => Api.caricaRiferimentoGrafica(slug, id, v.gid, v.file, v.suProgresso),
+    onSettled: rileggi,
+  })
+  const togliRiferimento = useMutation({ mutationFn: (gid: string) => Api.togliRiferimento(slug, id, gid), onSettled: rileggi })
+  return { crea, aggiorna, elimina, prompt, genera, carica, ritaglia, caricaRiferimento, togliRiferimento }
 }
 
 export function useOpenAI(attivo = true) {
