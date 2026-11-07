@@ -94,6 +94,7 @@ Contenuto: [cosa dice, in una riga]
    Evidenze da citare: [nome elaborato come caricato] sez./p.
    Indicatori: [valori misurabili da dichiarare]
    Vincolo del professionista: [nota, se approvata con modifiche]
+   Figure: [fig-NN dell'elenco del prompt, se ce ne sono per questa proposta]
 2. …
 ```
 
@@ -101,7 +102,9 @@ Controlli prima di chiudere lo stadio (scrivili in fondo, sezione
 «Controlli»): ogni proposta approvata compare una volta sola; ogni nota
 del professionista è assegnata a un paragrafo; somma facciate ≤ limite;
 ogni subcriterio incluso ha almeno un paragrafo; criteri esclusi dalla
-Sezione B assenti.
+Sezione B assenti; ogni figura scelta dal professionista è assegnata a
+un paragrafo e contata nelle facciate (mezza facciata, salvo il
+disciplinare).
 
 ## Stadio 2 — Bozza (`2_bozza.md`)
 
@@ -123,7 +126,12 @@ ordine, parole obiettivo rispettate (±15%).
 - Nessun fatto che non stia nei nodi proposta o nelle loro evidenze.
   Dove manca un dato: `%%DR_START: motivo%%` … `%%DR_END%%` (nel DOCX
   diventa evidenziato giallo) e non inventarlo.
-- Segnaposti: `[IMMAGINE: descrizione]`; salti pagina `<!-- PAGEBREAK -->`.
+- Figure: se il prompt elenca FIGURE scelte dal professionista, metti
+  `[FIGURA: fig-NN]` su una riga a sé dopo il capoverso che la introduce
+  e citala come «figura N» (N = ordine di comparsa nel documento); la
+  didascalia la aggiunge l'esportazione. Il segnaposto è l'unico codice
+  ammesso nel testo. Senza figure scelte: nessun segnaposto di immagine.
+- Salti pagina `<!-- PAGEBREAK -->`.
 
 In un file a parte, `controllo_bozza.md`, la tabella
 subcriterio | parole obiettivo | parole scritte | facciate stimate | esito.

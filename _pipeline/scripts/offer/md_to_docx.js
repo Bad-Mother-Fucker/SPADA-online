@@ -6,13 +6,16 @@ const path = require('path');
 const {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   Header, Footer, HeadingLevel, AlignmentType, BorderStyle,
-  WidthType, ShadingType, PageNumber, PageBreak, LevelFormat
+  WidthType, ShadingType, PageNumber, PageBreak, LevelFormat, ImageRun
 } = require('docx');
 
 // ── Percorsi e parametri ──────────────────────────────────────────────────────
 // Uso: node md_to_docx.js [input.md output.docx] [--font F] [--size PT]
 //        [--interlinea 1.15] [--titolo T] [--gara N] [--cig C] [--sa S] [--data D]
-//        [--senza-numeri-riga]
+//        [--senza-numeri-riga] [--figure grafiche.json]
+// --figure: registro delle grafiche della relazione (grafiche_offerta.py);
+// ogni riga `[FIGURA: fig-NN]` diventa l'immagine con la didascalia,
+// numerata nell'ordine in cui le figure compaiono nel testo.
 // Senza argomenti: percorsi storici di offer-writer (bozza_contenuto.md).
 // Font e corpo vengono dalla Sezione A di vincoli_offerta_tecnica.md
 // (li passa il backend): i default valgono solo se il disciplinare tace.
@@ -25,6 +28,39 @@ const INPUT_FILE  = POS[0] ? path.resolve(POS[0]) : path.join(ROOT, 'output/10_o
 const OUTPUT_FILE = POS[1] ? path.resolve(POS[1]) : path.join(ROOT, 'output/10_offer/bozza_offerta_tecnica.docx');
 const TITOLO      = opt('titolo', 'Relazione Tecnico-Illustrativa');
 const NUMERI_RIGA = !flag('senza-numeri-riga');
+
+// ── Figure (grafiche della relazione) ─────────────────────────────────────────
+const FIGURE_FILE = opt('figure', '');
+const FIGURE = (() => {
+  if (!FIGURE_FILE || !fs.existsSync(FIGURE_FILE)) return {};
+  try {
+    const reg = JSON.parse(fs.readFileSync(FIGURE_FILE, 'utf8'));
+    return Object.fromEntries((reg.grafiche || []).map((g) => [g.id, g]));
+  } catch (e) { return {}; }
+})();
+const FIGURE_DIR = FIGURE_FILE ? path.dirname(path.resolve(FIGURE_FILE)) : '';
+const figureNumero = {};      // id → numero, nell'ordine di comparsa
+const figureMancanti = [];    // id collocati senza immagine
+
+/** Larghezza e altezza in pixel di un PNG o di un JPEG; null se non riconosciuto. */
+function dimensioniImmagine(buf) {
+  if (buf.length > 24 && buf.readUInt32BE(0) === 0x89504e47) {
+    return { tipo: 'png', w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+  }
+  if (buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+    let i = 2;
+    while (i + 9 < buf.length) {
+      if (buf[i] !== 0xff) { i++; continue; }
+      const marker = buf[i + 1];
+      const len = buf.readUInt16BE(i + 2);
+      if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
+        return { tipo: 'jpg', w: buf.readUInt16BE(i + 7), h: buf.readUInt16BE(i + 5) };
+      }
+      i += 2 + len;
+    }
+  }
+  return null;
+}
 
 // ── Configurazione tipografica ─────────────────────────────────────────────────
 const FONT        = opt('font', 'Times New Roman');
@@ -276,6 +312,53 @@ function parseMd(content) {
       continue;
     }
 
+    // Figura scelta dal professionista: immagine + didascalia numerata
+    const figM = line.match(/^\[FIGURA:\s*(fig-\d+)\s*\]$/);
+    if (figM) {
+      flushTable();
+      const id = figM[1];
+      if (!figureNumero[id]) figureNumero[id] = Object.keys(figureNumero).length + 1;
+      const n = figureNumero[id];
+      const g = FIGURE[id] || {};
+      const file = g.immagine ? path.join(FIGURE_DIR, g.immagine) : '';
+      const buf = file && fs.existsSync(file) ? fs.readFileSync(file) : null;
+      const dim = buf ? dimensioniImmagine(buf) : null;
+      if (dim) {
+        // Larghezza utile della pagina in pixel (1 px = 15 twip), altezza al massimo ~55% della pagina.
+        const maxW = Math.floor(CONTENT_W / 15);
+        const maxH = Math.floor((PAGE_H - MARGIN * 2) / 15 * 0.55);
+        const k = Math.min(maxW / dim.w, maxH / dim.h, 1);
+        addEl(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          keepNext: true,
+          spacing: { before: 160, after: 60 },
+          children: [new ImageRun({ type: dim.tipo, data: buf,
+            transformation: { width: Math.round(dim.w * k), height: Math.round(dim.h * k) } })],
+        }));
+      } else {
+        figureMancanti.push(id);
+        addEl(new Paragraph({
+          alignment: AlignmentType.CENTER,
+          keepNext: true,
+          spacing: { before: 160, after: 60, line: LINE_SPACE },
+          border: {
+            top:    { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' },
+            left:   { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' },
+            bottom: { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' },
+            right:  { style: BorderStyle.SINGLE, size: 4, color: 'AAAAAA' },
+          },
+          children: [run(`[ Figura ${n}: immagine da caricare ]`, { italics: true, color: '888888' })],
+        }));
+      }
+      const didascalia = (g.didascalia || '').trim();
+      addEl(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: 200, line: LINE_SPACE },
+        children: [run(`Figura ${n}${didascalia ? ' — ' + didascalia : ''}`, { italics: true, size: Math.max(SIZE_BODY - 2, 16) })],
+      }));
+      continue;
+    }
+
     // Segnaposto immagine
     const imgM = line.match(/^\[IMMAGINE:\s*(.+)\]$/);
     if (imgM) {
@@ -383,6 +466,10 @@ Packer.toBuffer(doc).then(buf => {
   fs.mkdirSync(path.dirname(OUTPUT_FILE), { recursive: true });
   fs.writeFileSync(OUTPUT_FILE, buf);
   console.log('✓ Generato: ' + OUTPUT_FILE);
+  if (Object.keys(figureNumero).length) {
+    console.log('Figure inserite: ' + Object.keys(figureNumero).length
+      + (figureMancanti.length ? ' (senza immagine: ' + figureMancanti.join(', ') + ')' : ''));
+  }
 
   // Stima word count per sezione
   const wordCount = raw

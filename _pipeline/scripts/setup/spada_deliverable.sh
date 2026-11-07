@@ -162,6 +162,12 @@ trap 'rm -f "$PROMPT_FILE"' EXIT
   echo "Proposte da usare: solo quelle approvate dal professionista nella Fase 6, secondo lo stato dei nodi in 02_graph/proposals/ (vale sopra registri, schede, memoria e stadi precedenti, che possono riportare decisioni superate):"
   python3 "$OFFERTA_PY" proposte
   echo ""
+  # Figure scelte dal professionista (solo relazione tecnica, se ce ne sono).
+  FIGURE="$(python3 "$(dirname "$OFFERTA_PY")/grafiche_offerta.py" elenco "$DELIVERABLE_ID" 2>/dev/null || true)"
+  if [ -n "$FIGURE" ]; then
+    echo "$FIGURE"
+    echo ""
+  fi
   nota_percorsi
   echo ""
   nota_prezzario

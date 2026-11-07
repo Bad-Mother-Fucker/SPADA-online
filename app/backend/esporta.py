@@ -47,7 +47,9 @@ def esporta(gara: Path, dl: dict, sorgente: Path, formato: str) -> Path:
     for k, v in _formato_sezione_a(gara).items():
         argv += [f"--{k}", v]
     if dl["tipo"] != "relazione_tecnica":
-        argv.append("--senza-numeri-riga")  # la numerazione delle righe serve al limite di facciate della relazione
+        argv.append("--senza-numeri-riga")
+    elif (registro := cartella / "grafiche.json").is_file():
+        argv += ["--figure", str(registro)]  # [FIGURA: fig-NN] → immagine e didascalia  # la numerazione delle righe serve al limite di facciate della relazione
     r = subprocess.run(argv, cwd=gara, capture_output=True, text=True, timeout=TIMEOUT)
     if r.returncode != 0 or not docx.is_file():
         raise RuntimeError(f"Conversione in DOCX non riuscita: {(r.stderr or r.stdout).strip()[-400:]}")
