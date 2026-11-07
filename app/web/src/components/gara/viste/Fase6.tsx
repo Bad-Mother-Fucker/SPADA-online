@@ -11,6 +11,7 @@ import { DialogoConferma, type Conferma } from "../DialogoConferma"
 import { BottoneScelta, Card, Scheletro, Split, TitoloSezione, VuotoInline } from "@/components/comuni/Primitivi"
 import { StatoErrore } from "@/components/stati/Stati"
 import { BadgeStato, Chip } from "@/components/gare/BadgeStato"
+import { Blocchi } from "@/components/comuni/Markdown"
 import { PannelloFase } from "../PannelloFase"
 import { TestataVista } from "../TestataVista"
 import { useGara } from "../GaraContext"
@@ -18,7 +19,7 @@ import { useEsegui, type AzionePrimaria } from "../AzioniFase"
 import { ETICHETTA_SEV, Prove, TONO_SEV } from "./Fase5"
 import { useAzioniPropostaProfessionista, useCriteri, useDettaglioProposta, useGap, useProposte, useProposteProfessionista } from "@/hooks/useGaraDati"
 import { quandoBreve } from "@/lib/formato"
-import { paragrafi, type Decisione } from "@/lib/md"
+import { blocchi, type Decisione } from "@/lib/md"
 import { comeApiError, risorsa } from "@/lib/risorsa"
 import { cn } from "@/lib/utils"
 import type { Proposta } from "@/dominio/registri"
@@ -254,6 +255,8 @@ export function Fase6Dettaglio() {
     ...storicoDecisioni.filter((x) => x.riferimento === p!.id).map((x) => ({ cosa: DEC[x.decisione].etichetta, chi: "operatore", quando: quandoBreve(x.quando), tono: DEC[x.decisione].tono, nota: x.nota })),
   ]
   const fm = (nodo.data?.frontmatter || {}) as Record<string, unknown> & { evidence_documents?: { doc?: string; sezione?: string; estratto?: string }[] }
+  // Prima della conferma la proposta non è ancora un nodo: testo e prove vengono dalla scheda del criterio (Fase 5).
+  const daScheda = nodo.data?.fonte === "output_criterio"
 
   return (
     <>
@@ -288,17 +291,19 @@ export function Fase6Dettaglio() {
         {rn.stato === "caricamento" ? <Scheletro righe={4} /> : rn.stato === "ok" && nodo.data ? (
           <Card>
             <TitoloSezione>Contenuto della proposta</TitoloSezione>
-            <div className="space-y-2 text-sm leading-[1.6] text-foreground-2">{paragrafi(nodo.data.corpo, 8).map((par, i) => <p key={i}>{par}</p>)}</div>
+            {daScheda && <p className="mb-3 text-micro text-muted-foreground">Testo integrale dalla scheda del criterio {String(fm.criterio || "")} (Fase 5). Diventa un nodo del grafo alla conferma della revisione.</p>}
+            <Blocchi blocchi={blocchi(nodo.data.corpo)} />
             <div className="mt-4 flex flex-wrap gap-1.5 border-t pt-4">
               {typeof fm.criterio === "string" && fm.criterio && <Chip>criterio {fm.criterio}</Chip>}
               {typeof fm.sottocriterio === "string" && fm.sottocriterio && <Chip>{fm.sottocriterio}</Chip>}
               {fm.punteggio_stimato !== undefined && <Chip>{String(fm.punteggio_stimato)} punti stimati</Chip>}
               {typeof fm.confidence === "string" && fm.confidence && <Chip mono>confidence: {fm.confidence}</Chip>}
               {typeof fm.stato === "string" && fm.stato && <BadgeStato tono="ok">{fm.stato}</BadgeStato>}
+              {typeof fm.audit === "string" && fm.audit && <BadgeStato tono={/integrare|respint|scart/i.test(fm.audit) ? "attn" : "ok"}>audit: {fm.audit}</BadgeStato>}
             </div>
             {(fm.evidence_documents || []).length > 0 && (
               <div className="mt-4">
-                <h4 className="mb-2 text-xs font-semibold">Prove documentali del nodo</h4>
+                <h4 className="mb-2 text-xs font-semibold">{daScheda ? "Prove documentali della proposta" : "Prove documentali del nodo"}</h4>
                 <Prove prove={(fm.evidence_documents || []).map((e) => ({ fonte: `${e.doc || "documento"}${e.sezione ? `, ${e.sezione}` : ""}`, testo: e.estratto || "", contraria: false }))} vuoto="" />
               </div>
             )}
@@ -307,7 +312,7 @@ export function Fase6Dettaglio() {
           <Card>
             <TitoloSezione>Contenuto della proposta</TitoloSezione>
             <p className="text-sm text-foreground-2">{p.sintesi || "Il registro riporta questa proposta senza un contenuto esteso."}</p>
-            <p className="mt-2 text-micro text-muted-foreground">Questa è la sintesi del registro. Il testo integrale e le prove collegate compaiono quando la proposta diventa un nodo del grafo, cioè dopo l'elaborazione del feedback.</p>
+            <p className="mt-2 text-micro text-muted-foreground">Questa è la sintesi del registro: la proposta non compare né fra i nodi del grafo né nella scheda del criterio della Fase 5, quindi testo integrale e prove non sono disponibili.</p>
             <div className="mt-4 flex flex-wrap gap-1.5 border-t pt-4">
               {p.criterio && <Chip>criterio {p.criterio}</Chip>}
               {p.punteggio && <Chip>{p.punteggio} punti</Chip>}

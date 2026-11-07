@@ -192,8 +192,8 @@ export function useProposteOperatore(slug: string, attivo = true) {
 }
 
 export const ID_NODO_PROPOSTA = /^P-C\d+-\d+$/
-export interface NodoProposta { frontmatter: Record<string, unknown> & { evidence_documents?: { doc?: string; sezione?: string; estratto?: string }[] }; corpo: string }
-/** Esiste solo dopo che feedback-processor ha elaborato la proposta: un 404 è normale. */
+export interface NodoProposta { frontmatter: Record<string, unknown> & { evidence_documents?: { doc?: string; sezione?: string; estratto?: string }[] }; corpo: string; fonte?: "output_criterio" }
+/** Nodo del grafo dopo feedback-processor; prima, testo e prove dalla scheda del criterio (fonte "output_criterio"). */
 export function useDettaglioProposta(slug: string, id: string | null) {
   return useQuery({
     queryKey: chiaviGara.proposta(slug, id || ""),

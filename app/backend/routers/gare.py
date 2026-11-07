@@ -22,6 +22,7 @@ from models import (
     ProposaOperatoreRequest, PropostaProfessionistaRequest, RichiestaModificheRequest, TestoStadioRequest,
 )
 from paths import DB_PATH, PIPELINE_DIR, SlugNonValido, gara_dir, percorso_sotto_gara, valida_slug
+from proposte_output import dettaglio_da_output
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "_pipeline" / "scripts" / "domande"))
 import domande as registro_domande  # noqa: E402
@@ -704,15 +705,19 @@ PROPOSTA_ID_RE = re.compile(r"^P-C[0-9]+-[0-9]+$")
 @router.get("/{slug}/proposte/{proposta_id}")
 def dettaglio_proposta(slug: str, proposta_id: str):
     """Vista dettaglio proposta (Sprint 10.1): frontmatter + corpo del
-    nodo in 02_graph/proposals/. Esiste solo per proposte già elaborate
-    da feedback-processor — prima di quel momento la proposta vive solo
-    dentro Cx_output.md, non ancora come nodo del grafo."""
+    nodo in 02_graph/proposals/. Prima che feedback-processor la elabori
+    la proposta vive solo dentro Cx_output.md: in quel caso testo
+    integrale e prove si leggono da lì (fonte "output_criterio"), perché
+    la revisione della Fase 6 possa decidere sul contenuto completo."""
     if not PROPOSTA_ID_RE.match(proposta_id):
         raise HTTPException(400, f"id proposta non valido: {proposta_id!r}")
     d = _gara_o_404(slug)
     corrispondenze = list((d / "02_graph" / "proposals").glob(f"{proposta_id}_*.md")) if (d / "02_graph" / "proposals").exists() else []
     if not corrispondenze:
-        raise HTTPException(404, f"Nodo proposta non trovato per {proposta_id} (feedback non ancora elaborato?)")
+        da_output = dettaglio_da_output(d, proposta_id)
+        if da_output is None:
+            raise HTTPException(404, f"Proposta {proposta_id} non trovata né fra i nodi del grafo né nella scheda del criterio.")
+        return da_output
     f = corrispondenze[0]
     meta, ok = leggi_frontmatter(f)
     if not ok:
