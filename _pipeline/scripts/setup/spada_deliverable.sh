@@ -152,6 +152,10 @@ trap 'rm -f "$PROMPT_FILE"' EXIT
     fi
   else
     echo "Segui esattamente le istruzioni in $COMANDO_FILE (risolto da $SPADA_CLAUDE_DIR/commands/deliverables/${TIPO}.md). Scrivi l'output in $OUTPUT_DIR/."
+    if [ "$TIPO" = "altro" ]; then
+      # Stesse regole di scrittura della relazione tecnica, da un'unica fonte.
+      echo "Se il documento è un testo descrittivo per la commissione (relazione di sintesi, elenco descrittivo delle proposte, altre relazioni), applica le sezioni «Regola di nomenclatura», «Stile del testo» e «Lunghezza: avvicinarsi al limite» di $SPADA_CLAUDE_DIR/skills/deliverable-relazione-tecnica/SKILL.md: leggile prima di scrivere. Il limite di facciate è nel vincolo di formato del deliverable; stima le facciate come nella sezione «Stima delle facciate» e scrivi nel riepilogo finale facciate stimate e percentuale del limite."
+    fi
   fi
   if [ -n "$NOTA" ]; then
     echo ""

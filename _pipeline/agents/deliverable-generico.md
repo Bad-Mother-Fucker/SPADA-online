@@ -70,6 +70,13 @@ generico.
   percorsi): criteri come nel disciplinare, elaborati col nome con cui
   sono stati caricati, proposte col loro titolo. Codici ammessi solo nei
   documenti di lavoro dello stadio 1 (scaletta, elenco delle voci).
+- Testi descrittivi per la commissione (relazione di sintesi, elenchi
+  descrittivi, altre relazioni): stesse regole di scrittura della
+  relazione tecnica — sezioni «Regola di nomenclatura», «Stile del
+  testo» e «Lunghezza: avvicinarsi al limite» della skill
+  `deliverable-relazione-tecnica`. Con un limite di facciate punta al
+  90-100% del limite, mai oltre, e riporta nel riepilogo facciate stimate
+  e percentuale.
 - Non inventare una struttura quando il disciplinare non la specifica:
   usa il buon senso tecnico ma segnala le assunzioni fatte
 - Non includere contenuto derivato da proposte non approvate

@@ -174,6 +174,26 @@ corpo 12 pt ≈ 480 parole, corpo 11 pt ≈ 550, corpo 10 pt ≈ 620
 (interlinea singola o 1,15). Se indica le righe per facciata:
 righe × 12 parole. Il totale non supera mai il limite della Sezione A.
 
+## Lunghezza: avvicinarsi al limite
+
+Vale per ogni documento con un limite di facciate o di pagine (questa
+relazione, la relazione di sintesi, ogni altro testo per la commissione).
+Lo spazio concesso dal disciplinare è spazio per farsi valutare: un
+documento molto più corto del limite rinuncia a punti. Quindi:
+- **obiettivo tra il 90% e il 100% del limite**, mai oltre (su 3
+  facciate, almeno 2,7; su 50, almeno 45): meglio 2,5 facciate piene
+  che una;
+- lo spazio si riempie con contenuto utile alla valutazione (come la
+  proposta migliora il progetto, con quali prestazioni e benefici
+  misurabili, come si realizza e si controlla), mai con ripetizioni,
+  formule di cortesia o dati inventati: le regole di «Stile del testo» e
+  il divieto di inventare restano;
+- il superamento del limite resta il primo errore da evitare: le parti
+  eccedenti non vengono valutate;
+- nel file di controllo dello stadio scrivi facciate stimate e
+  percentuale del limite; sotto il 90% completa prima di chiudere, o
+  spiega perché non c'è altro contenuto documentato da aggiungere.
+
 ## Stadio 1 — Scaletta (`1_scaletta.md`)
 
 ```markdown
@@ -203,7 +223,8 @@ Contenuto: [cosa dice, in una riga]
 Controlli prima di chiudere lo stadio (scrivili in fondo, sezione
 «Controlli»): ogni proposta approvata compare una volta sola; ogni nota
 del professionista è assegnata a un paragrafo; somma facciate ≤ limite;
-ogni subcriterio incluso ha almeno un paragrafo; criteri esclusi dalla
+ogni subcriterio incluso ha almeno un paragrafo; somma facciate tra il
+90% e il 100% del limite (vedi «Lunghezza»); criteri esclusi dalla
 Sezione B assenti; ogni figura scelta dal professionista è assegnata a
 un paragrafo e contata nelle facciate (mezza facciata, salvo il
 disciplinare); ogni scheda tecnica scelta è assegnata a un paragrafo
@@ -247,8 +268,10 @@ ordine, parole obiettivo rispettate (±15%).
 - Salti pagina `<!-- PAGEBREAK -->`.
 
 In un file a parte, `controllo_bozza.md`, la tabella
-subcriterio | parole obiettivo | parole scritte | facciate stimate | esito.
-Se un subcriterio è sotto dell'15%, completa prima di chiudere.
+subcriterio | parole obiettivo | parole scritte | facciate stimate | esito,
+con il totale in facciate e in percentuale del limite.
+Se un subcriterio è sotto dell'15%, o il totale sotto il 90% del limite,
+completa prima di chiudere.
 
 ## Stadio 3 — Definitivo (`3_definitivo.md`)
 
@@ -265,7 +288,9 @@ Parte dalla bozza approvata (con le modifiche a mano del professionista):
   `[ALLEGATO: sch-NN]`, nessun rimando a schede o certificati fuori elenco;
 - verifica il limite di facciate: se lo superi, accorcia partendo dai
   subcriteri a priorità più bassa e scrivi cosa hai tagliato in
-  `controllo_definitivo.md`;
+  `controllo_definitivo.md`; se sei sotto il 90% (vedi «Lunghezza»),
+  sviluppa di più le proposte già presenti, senza aggiungerne, e scrivi
+  in `controllo_definitivo.md` le facciate finali e la percentuale;
 - niente copertina (la aggiunge la conversione), niente indice se non
   richiesto dalla Sezione A.
 
