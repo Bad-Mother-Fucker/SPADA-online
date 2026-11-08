@@ -17,8 +17,8 @@
 #     --riesegui        → riparte dal primo stadio; l'output precedente
 #                         si archivia, non si cancella
 #     --riesegui --argomento '{"stadio": "bozza"}'
-#                       → rifa' da zero solo quello stadio (i successivi
-#                         tornano da produrre); archiviati anche loro
+#                       → rifa' da zero solo quello stadio (archiviato);
+#                         i successivi gia' prodotti restano, superati
 #     --argomento '{"stadio": "bozza", "nota": "…"}'
 #                       → rifa' quello stadio applicando la nota del
 #                         professionista (richiesta di modifiche)
@@ -55,8 +55,8 @@ cd "$GARA_DIR"
 mkdir -p _state
 
 # ── Riesecuzione: prima si archivia (copia, mai cancellato senza copia)
-#    e si azzera lo stadio da rifare, con i successivi; senza stadio
-#    nell'argomento si riparte da capo ───────────────────────────────
+#    e si azzera solo lo stadio da rifare (i successivi restano,
+#    superati); senza stadio nell'argomento si riparte da capo ───────
 [ "$FLAG" = "--riesegui" ] && [ -z "$ARGOMENTO" ] && ARGOMENTO='{"da_capo": true}'
 if [ "$FLAG" = "--riesegui" ]; then
   ARCHIVIO="$(python3 "$OFFERTA_PY" rifai "$DELIVERABLE_ID" "$ARGOMENTO")" || error "Deliverable '$DELIVERABLE_ID' non trovato fra i documenti dell'offerta."

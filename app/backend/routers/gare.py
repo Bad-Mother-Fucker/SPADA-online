@@ -647,8 +647,8 @@ def modifica_stadio(slug: str, deliverable_id: str, stadio: str, body: Richiesta
 def rifai_stadio(slug: str, deliverable_id: str, stadio: str):
     """Rifà da zero un solo stadio, con i dati attuali (decisioni della
     Fase 6 comprese) e gli stadi precedenti così come approvati. La
-    versione attuale e quelle degli stadi successivi si archiviano; i
-    successivi tornano da produrre. Lo stadio 1 equivale a «da capo»."""
+    versione attuale si archivia; gli stadi successivi già prodotti
+    restano, segnati superati. Lo stadio 1 equivale a «da capo»."""
     d, dl, voce = _stadio_o_404(slug, deliverable_id, stadio)
     _deliverable_libero(slug, deliverable_id)
     stadi = deliverables_offerta.stato_deliverable(d, dl)["stadi"]

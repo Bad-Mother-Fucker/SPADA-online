@@ -300,11 +300,12 @@ def _file_dello_stadio(dl: dict, stadio: str, ultimo: bool) -> list[str]:
 
 
 def rifai_da(gara: Path, dl: dict, stadio: str | None) -> str | None:
-    """Prepara la riesecuzione da uno stadio (None o il primo = da capo).
+    """Prepara la riesecuzione di uno stadio (None o il primo = da capo).
     Quanto c'era si copia in output/_archivio/<ora>/deliverables/<id>/,
-    mai cancellato senza copia; poi si tolgono i file di quello stadio e
-    dei successivi e il loro stato, così lo stadio riparte da zero e i
-    successivi tornano da produrre. Restituisce la cartella d'archivio."""
+    mai cancellato senza copia; poi si tolgono il file e lo stato di quello
+    stadio soltanto, così riparte da zero. Gli stadi successivi già
+    prodotti restano, segnati superati: il professionista li rivede o li
+    rifà quando vuole. Restituisce la cartella d'archivio."""
     import shutil
     ordine = [s[0] for s in stadi_di(dl["tipo"])]
     stadio = stadio or ordine[0]
@@ -326,18 +327,19 @@ def rifai_da(gara: Path, dl: dict, stadio: str | None) -> str | None:
                 continue
             shutil.rmtree(f) if f.is_dir() else f.unlink()
     elif cartella.is_dir():
-        da_togliere = ordine[ordine.index(stadio):]
-        for s in da_togliere:
-            for modello in _file_dello_stadio(dl, s, s == ordine[-1]):
-                for f in cartella.glob(modello):
-                    f.unlink()
+        for modello in _file_dello_stadio(dl, stadio, stadio == ordine[-1]):
+            for f in cartella.glob(modello):
+                f.unlink()
 
     def fn(v):
         if da_capo:
             v.clear()
             return
-        for s in ordine[ordine.index(stadio):]:
-            v.get("stadi", {}).pop(s, None)
+        stadi = v.setdefault("stadi", {})
+        stadi.pop(stadio, None)
+        for dopo in ordine[ordine.index(stadio) + 1:]:
+            if stadi.get(dopo, {}).get("stato") in ("approvato", "da_approvare"):
+                stadi[dopo]["stato"] = "superato"
         v.update(stato="pronto", errore=None)
         v.pop("nota", None)
     _aggiorna(gara, dl["id"], fn)

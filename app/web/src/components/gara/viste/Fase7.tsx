@@ -68,6 +68,18 @@ function useAzioni() {
       titolo: `Rifare da capo «${d.nome}»?`, descrizione: aStadi(d) ? "Si riparte dal primo stadio, con le decisioni e i dati attuali. Il lavoro già fatto, comprese le tue modifiche, viene archiviato, non cancellato." : "Il documento viene rigenerato con le decisioni e i dati attuali; quello attuale viene archiviato.", etichetta: "Rifai da capo",
       onConferma: () => az.riesegui.mutate(d.id, esito(`${d.nome}: riesecuzione accodata.`, "Riesecuzione non riuscita")),
     }),
+    /** Rifà un solo stadio: quelli prima restano come approvati, quelli dopo restano ma vanno rivisti. */
+    rifaiStadio: (d: Deliverable, s: StadioDeliverable) => {
+      const i = d.stadi.findIndex((x) => x.id === s.id)
+      const prima = d.stadi.slice(0, i)
+      const dopo = d.stadi.slice(i + 1).filter((x) => x.stato !== "da_produrre")
+      const elenco = (xs: StadioDeliverable[]) => xs.map((x) => `«${x.etichetta}»`).join(" e ")
+      setConferma({
+        titolo: `Rifare solo «${s.etichetta}»?`, etichetta: `Rifai ${s.etichetta.toLowerCase()}`,
+        descrizione: `L'agente lo riscrive da zero con le decisioni e i dati attuali${prima.length ? `, seguendo ${elenco(prima)} come approvat${prima.length > 1 ? "i" : "a"}` : ""}. La versione attuale${s.prodotto_il && s.stato !== "da_produrre" ? ", con le tue eventuali modifiche," : ""} viene archiviata, non cancellata.${dopo.length ? ` ${elenco(dopo)} ${dopo.length === 1 ? "resta com'è, segnato da rifare" : "restano come sono, segnati da rifare"}: ${dopo.length === 1 ? "lo rigeneri" : "li rigeneri"} quando vuoi.` : ""}`,
+        onConferma: () => az.rifai.mutate({ id: d.id, stadio: s.id }, esito(`${s.etichetta}: nuova versione accodata.`, "Riesecuzione non riuscita")),
+      })
+    },
     dialogo: <DialogoConferma conferma={conferma} onChiudi={() => setConferma(null)} />,
     occupato: az.esegui.isPending || az.riesegui.isPending || az.approva.isPending || az.modifica.isPending || az.salva.isPending || az.rifai.isPending,
   }
@@ -78,7 +90,9 @@ function AzioneCard({ d, blocco, avvia, daCapo }: { d: Deliverable; blocco: stri
   if (d.job) return <ControlloInterruzione job={d.job} compatto />
   const attesa = inAttesa(d)
   if (attesa) return <Button size="sm" asChild><Link to={`deliverable/${encodeURIComponent(d.id)}`}>Rivedi {attesa.etichetta.toLowerCase()}</Link></Button>
-  if (d.stato === "da_rivedere") return <Button size="sm" disabled={!!blocco} title={blocco || "Scritto prima della conferma delle decisioni: va rifatto"} onClick={daCapo}>Rifai</Button>
+  if (d.stato === "da_rivedere") return aStadi(d)
+    ? <Button size="sm" asChild><Link to={`deliverable/${encodeURIComponent(d.id)}`} title="Scritto prima della conferma delle decisioni: scegli se rifare uno stadio o tutto">Rifai…</Link></Button>
+    : <Button size="sm" disabled={!!blocco} title={blocco || "Scritto prima della conferma delle decisioni: va rifatto"} onClick={daCapo}>Rifai</Button>
   if (d.stato === "completata") return null
   const prossimo = prossimoDaProdurre(d)
   const etichetta = d.stato === "interrotta" ? "Riprendi" : d.stato === "errore" ? "Riprova" : aStadi(d) && prossimo ? `Produci ${prossimo.etichetta.toLowerCase()}` : "Avvia"
@@ -183,7 +197,7 @@ export function Fase7Elenco() {
 /** Il testo di uno stadio: lettura, modifica a mano, approvazione, richiesta di modifiche, esportazione. */
 function PannelloStadio({ d, s, blocco }: { d: Deliverable; s: StadioDeliverable; blocco: string | null }) {
   const { slug, output } = useGara()
-  const { az, avvia, dialogo } = useAzioni()
+  const { az, avvia, rifaiStadio, dialogo } = useAzioni()
   const testo = useTestoOutput(slug, s.stato === "da_produrre" ? null : s.file, s.prodotto_il)
   const [modo, setModo] = useState<"leggi" | "modifica" | "nota">("leggi")
   const [bozza, setBozza] = useState("")
@@ -222,17 +236,7 @@ function PannelloStadio({ d, s, blocco }: { d: Deliverable; s: StadioDeliverable
   }
   // Stadi precedenti non approvati: lo stadio non si può rifare (parte da quelli).
   const precedenteAperto = d.stadi.slice(0, i).find((x) => x.stato !== "approvato") || null
-  const rifai = () => {
-    const dopo = d.stadi.slice(i + 1).filter((x) => x.stato !== "da_produrre")
-    setConferma({
-      titolo: `Rifare «${s.etichetta}» da zero?`, etichetta: `Rifai ${s.etichetta.toLowerCase()}`,
-      descrizione: `L'agente lo riscrive da capo con le decisioni e i dati attuali${i > 0 ? `, seguendo ${d.stadi.slice(0, i).map((x) => `«${x.etichetta}»`).join(" e ")} come approvat${i > 1 ? "i" : "a"}` : ""}. La versione attuale${s.prodotto_il && s.stato !== "da_produrre" ? ", con le tue eventuali modifiche," : ""} viene archiviata, non cancellata.${dopo.length ? ` ${dopo.map((x) => `«${x.etichetta}»`).join(" e ")} ${dopo.length === 1 ? "viene archiviato e torna" : "vengono archiviati e tornano"} da produrre.` : ""}`,
-      onConferma: () => az.rifai.mutate({ id: d.id, stadio: s.id }, {
-        onSuccess: () => toast.success(`${s.etichetta}: nuova versione accodata.`),
-        onError: toastKo("Riesecuzione non riuscita"),
-      }),
-    })
-  }
+  const rifai = () => rifaiStadio(d, s)
   const esporta = (formato: "docx" | "pdf") => {
     // Si rigenera sempre dal definitivo attuale: il testo può essere cambiato a mano.
     const t = toast.loading(`Preparo il ${formato.toUpperCase()}…`)
@@ -369,7 +373,7 @@ export function Fase7Workspace() {
   const { slug, gara } = useGara()
   const { id = "" } = useParams()
   const q = useDeliverables(slug)
-  const { daCapo, dialogo } = useAzioni()
+  const { daCapo, rifaiStadio, dialogo } = useAzioni()
   const d = (q.data || []).find((x) => x.id === id) || null
   const blocco = motivoBlocco(gara.fasi, 7)
   const st = d ? statoDel(d, !!blocco) : STATO_DEL.da_eseguire
@@ -395,14 +399,25 @@ export function Fase7Workspace() {
           {blocco && <Nota tono="neu" titolo="Produzione bloccata">{blocco}</Nota>}
           {d.stato === "da_rivedere" && !lavora(d) && (
             <Nota tono="attn" titolo="Da aggiornare">
-              {d.nota || "Scritto prima delle ultime decisioni sulle proposte."} Rifallo da capo per ripartire dalle decisioni attuali, oppure rifai un solo stadio dal suo pannello.
+              {d.nota || "Scritto prima delle ultime decisioni sulle proposte."} Rifallo da capo per ripartire dalle decisioni attuali, oppure rifai solo uno stadio dal riquadro «Rifai» qui sotto.
             </Nota>
           )}
           {d.errore && d.stato === "errore" && <Nota tono="crit" titolo="Ultima esecuzione non riuscita" role="alert">{d.errore}</Nota>}
           {!lavora(d) && d.stadi.some((s) => s.stato !== "da_produrre") && (
             <Card>
-              <TitoloSezione>Da capo</TitoloSezione>
-              <p className="mb-2 text-micro text-foreground-2">{aStadi(d) ? "Riparte dal primo stadio con le decisioni e i dati attuali; quanto fatto finora viene archiviato. Per rifare un solo stadio usa «Rifai» nel suo pannello." : "Rigenera il documento con le decisioni e i dati attuali; quello attuale viene archiviato."}</p>
+              <TitoloSezione>Rifai</TitoloSezione>
+              {aStadi(d) ? (
+                <>
+                  <p className="mb-2 text-micro text-foreground-2">Rifai un solo stadio con le decisioni e i dati attuali: quelli prima restano approvati, quelli dopo restano ma vanno rivisti. Ogni versione sostituita viene archiviata.</p>
+                  <div className="mb-3 grid gap-1.5">
+                    {d.stadi.slice(1).map((s, k) => {
+                      const aperto = d.stadi.slice(0, k + 1).find((x) => x.stato !== "approvato")
+                      return <Button key={s.id} size="sm" variant="outline" className="w-full" disabled={!!blocco || !!aperto} title={blocco || (aperto ? `Prima approva «${aperto.etichetta}»` : `Riscrive solo «${s.etichetta}»`)} onClick={() => rifaiStadio(d, s)}>Solo {s.etichetta.toLowerCase()}</Button>
+                    })}
+                  </div>
+                  <p className="mb-2 text-micro text-foreground-2">Da capo riparte da «{d.stadi[0]?.etichetta}» e archivia tutto il lavoro fatto finora.</p>
+                </>
+              ) : <p className="mb-2 text-micro text-foreground-2">Rigenera il documento con le decisioni e i dati attuali; quello attuale viene archiviato.</p>}
               <Button size="sm" variant="outline" className="w-full" disabled={!!blocco} onClick={() => daCapo(d)}>Rifai da capo</Button>
             </Card>
           )}
