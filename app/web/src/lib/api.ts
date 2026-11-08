@@ -312,6 +312,8 @@ export const Api = {
   runLog: (slug: string, o?: Opzioni) => richiesta<{ runs?: unknown[] }>(`/gare/${s(slug)}/run-log`, o),
   elencoOutput: (slug: string, o?: Opzioni) => richiesta<string[]>(`/gare/${s(slug)}/output`, o),
   percorsoOutput: (slug: string, p: string) => `${base()}/gare/${s(slug)}/output/${p}`,
+  /** Lo stesso file come download (Content-Disposition: attachment). */
+  scaricaOutput: (slug: string, p: string) => `${base()}/gare/${s(slug)}/output/${p}?scarica=1`,
 
   /** Testo grezzo di un elaborato: serve alle viste che ne fanno il parsing. */
   async testoOutput(slug: string, p: string, o?: Opzioni): Promise<string> {

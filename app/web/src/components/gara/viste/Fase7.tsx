@@ -235,7 +235,15 @@ function PannelloStadio({ d, s, blocco }: { d: Deliverable; s: StadioDeliverable
     // Si rigenera sempre dal definitivo attuale: il testo può essere cambiato a mano.
     const t = toast.loading(`Preparo il ${formato.toUpperCase()}…`)
     az.esporta.mutate({ id: d.id, formato }, {
-      onSuccess: (r) => { toast.success(`${formato.toUpperCase()} pronto.`, { id: t }); window.open(Api.percorsoOutput(slug, r.percorso), "_blank", "noopener") },
+      onSuccess: (r) => {
+        // Il file arriva secondi dopo il clic: window.open a quel punto è un popup
+        // non richiesto e il browser lo blocca in silenzio. Un link di download no;
+        // il bottone nel messaggio resta come ripiego.
+        const url = Api.scaricaOutput(slug, r.percorso)
+        const scarica = () => { const a = document.createElement("a"); a.href = url; a.download = r.percorso.split("/").pop() || ""; document.body.append(a); a.click(); a.remove() }
+        toast.success(`${formato.toUpperCase()} pronto.`, { id: t, action: { label: "Scarica", onClick: scarica }, duration: 15_000 })
+        scarica()
+      },
       onError: (e) => toast.error(`${formato.toUpperCase()} non generato`, { id: t, description: comeApiError(e).message }),
     })
   }

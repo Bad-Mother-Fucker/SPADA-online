@@ -824,12 +824,14 @@ def elenco_output(slug: str):
 
 
 @router.get("/{slug}/output/{percorso:path}")
-def leggi_output(slug: str, percorso: str):
+def leggi_output(slug: str, percorso: str, scarica: bool = False):
+    """scarica=1: come allegato (download col suo nome) invece che da aprire
+    nel browser; serve alle esportazioni DOCX e PDF."""
     _gara_o_404(slug)
     file_path = percorso_sotto_gara(slug, "output", percorso)
     if not file_path.is_file():
         raise HTTPException(404, f"File non trovato: {percorso}")
-    return FileResponse(str(file_path))
+    return FileResponse(str(file_path), filename=file_path.name if scarica else None)
 
 
 @router.get("/{slug}/avanzamento")
