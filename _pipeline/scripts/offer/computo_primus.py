@@ -46,7 +46,7 @@ from xml.sax.saxutils import escape
 
 RE_CRITERIO = re.compile(r"^##\s+(?:Criterio\s+)?([A-Z]|\d+)\s*[—–-]\s*(.+?)\s*$")
 RE_SUB = re.compile(r"^###\s+([A-Z]?\d*(?:\.\d+)+|[A-Z]\.\d+)\s*[—–-]\s*(.+?)\s*$")
-RE_NUMERO = re.compile(r"^\s*(\d{1,3}(?:\.\d{3})*(?:,\d+)?|\d+(?:[.,]\d+)?)")
+RE_NUMERO = re.compile(r"^\s*([-−–]?)\s*(\d{1,3}(?:\.\d{3})*(?:,\d+)?|\d+(?:[.,]\d+)?)")
 TITOLO_ELENCO = re.compile(r"^##\s+Elenco\s+(?:delle\s+tariffe|dei\s+prezzi|dei\s+nuovi\s+prezzi)", re.I)
 
 
@@ -65,12 +65,12 @@ def _numero(testo: str) -> float | None:
     m = RE_NUMERO.match(testo.replace(" ", " "))
     if not m:
         return None
-    s = m.group(1)
+    segno, s = m.group(1), m.group(2)  # il segno meno: righe «in detrazione» del computo globale
     if "," in s:
         s = s.replace(".", "").replace(",", ".")
     elif re.fullmatch(r"\d{1,3}(?:\.\d{3})+", s):
         s = s.replace(".", "")
-    return float(s)
+    return -float(s) if segno else float(s)
 
 
 def _colonna(intest: list[str], *chiavi: str, esclusa: str | None = None) -> int | None:

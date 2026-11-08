@@ -32,9 +32,11 @@ chiedere, l'approvazione avviene nell'interfaccia.
 
 Prima di scrivere guarda se il deliverable è il **CME completo**
 (`cme_completo: true`): allora produci solo il computo metrico estimativo
-delle migliorie, con quantità e prezzo unitario di ogni voce (prezzario
-o analisi dei nuovi prezzi), e le versioni in `derivate` le ricava il
-professionista in PriMus (skill, sezione «Il CME completo»). Altrimenti
+globale (tutto il computo di progetto: voci immutate, voci sostituite in
+detrazione e lavorazioni offerte), con quantità e prezzo unitario di ogni
+voce (progetto, prezzario o analisi dei nuovi prezzi), e le versioni in
+`derivate` le ricava il professionista in PriMus (skill, sezione «Il CME
+completo»). Altrimenti
 stabilisci la variante (migliorie / lavori a base di gara rimodulati) e
 la natura (non estimativo / estimativo) dal nome e dal `vincolo_formato`
 del deliverable.

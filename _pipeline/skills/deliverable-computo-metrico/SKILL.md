@@ -55,15 +55,39 @@ toglierli, e l'esportazione in DOCX/PDF li rifiuta.
 ## Il CME completo (deliverable `cme_completo`)
 
 Se i dati del deliverable hanno `cme_completo: true`, il computo da
-produrre è **uno solo**: il **computo metrico estimativo completo**
-delle migliorie (variante A), con **quantità e prezzo unitario di ogni
-voce** e i relativi importi. Le versioni chieste dal disciplinare
-(elencate in `derivate`: non estimativo, globale, quadro comparativo,
-estimativi della busta economica…) **non si scrivono**: il
-professionista le ricava in PriMus dal file del CME (togliendo i prezzi,
-aggiungendo le voci di progetto, applicando il ribasso). Il resto di
-questa sezione «quale computo» non si applica: il CME completo è sempre
-estimativo.
+produrre è **uno solo**: il **computo metrico estimativo globale**
+(variante B: tutto il computo di progetto), con **quantità e prezzo
+unitario di ogni voce** e i relativi importi. Le versioni chieste dal
+disciplinare (elencate in `derivate`: non estimativo, sole migliorie,
+quadro comparativo, estimativi della busta economica…) **non si
+scrivono**: il professionista le ricava in PriMus dal file del CME
+(togliendo i prezzi, filtrando le voci delle migliorie, applicando il
+ribasso). Il resto di questa sezione «quale computo» non si applica: il
+CME completo è sempre estimativo e sempre globale.
+
+**Struttura del CME globale**, nell'ordine e con le categorie del
+computo metrico estimativo di progetto, per ogni voce di progetto:
+- **voce immutata** (nessuna proposta la tocca): riportata com'è —
+  tariffa, descrizione, U.M., quantità e prezzo di progetto;
+- **voce sostituita da una miglioria**: tre righe consecutive —
+  1. la voce di progetto com'è, con quantità e prezzo di progetto;
+  2. la stessa voce **in detrazione**: stessa tariffa, descrizione che
+     inizia con «In detrazione:», quantità **negativa** uguale a quella
+     di progetto (es. `-420,52`), stesso prezzo, importo negativo;
+  3. la **lavorazione offerta**: tariffa scelta (prezzario o
+     `NP.OT.nnn`), descrizione della miglioria, quantità e prezzo;
+- **lavorazione nuova** di una miglioria senza voce di progetto: una
+  riga con la tariffa offerta, nella categoria del progetto più
+  pertinente.
+Colonna «Rimodulata»: «no» per le immutate, «progetto», «detrazione» e
+«miglioria» per le tre righe delle sostituite. In questo modo il totale
+del CME è il totale di progetto più la differenza delle migliorie, e in
+PriMus le versioni derivate si ottengono filtrando le righe.
+
+Volume: il computo di progetto può avere centinaia di voci. Le voci
+immutate si trascrivono dal computo di progetto senza riscriverle
+(tariffa, descrizione ridotta come lì, U.M., quantità, prezzo); il
+lavoro di ragionamento riguarda solo le voci toccate dalle proposte.
 
 **Prezzo unitario di ogni voce, sempre:**
 - voce del prezzario regionale → il **prezzo del prezzario** della gara
@@ -72,8 +96,8 @@ estimativo.
 - nuovo prezzo (`NP.OT.…`) → il **prezzo di applicazione** della sua
   analisi in `analisi_nuovi_prezzi.json` (skill `analisi-nuovi-prezzi`,
   stadio 2), arrotondato come lì;
-- voce di progetto mantenuta senza modifiche di prezzo → il prezzo
-  dell'elenco prezzi di progetto.
+- voce di progetto immutata, e righe «progetto» e «in detrazione» delle
+  voci sostituite → il prezzo dell'elenco prezzi di progetto.
 Nessun prezzo `TBD` nel definitivo: se un'analisi ha componenti stimate,
 il prezzo c'è comunque (la stima è dichiarata nell'analisi) e la riga
 finisce in «Da verificare». Il sistema, generando il file PriMus, prende

@@ -104,7 +104,7 @@ def _slug(testo: str) -> str:
 # prezzi. Le altre versioni il professionista le ricava in PriMus dal suo
 # file: restano elencate nel deliverable come «derivate».
 CHIAVE_CME = "computo_metrico|cme-completo"
-NOME_CME = "Computo metrico estimativo completo"
+NOME_CME = "Computo metrico estimativo globale"
 
 
 def _chiave(voce: dict) -> str:
@@ -136,9 +136,10 @@ def raggruppa(manifest: dict) -> list[dict]:
                                        for v in cme["voci_manifest"]))
         cme.update(nome=NOME_CME, cme_completo=True, derivate=richieste,
                    fonte="; ".join(dict.fromkeys(v.get("fonte", "") for v in cme["voci_manifest"] if v.get("fonte"))),
-                   vincolo_formato="Computo metrico estimativo con quantità e prezzi unitari di ogni voce (prezzario "
-                                   "regionale o analisi dei nuovi prezzi), in un file PriMus da cui il professionista "
-                                   "ricava le versioni richieste dal disciplinare.")
+                   vincolo_formato="Computo metrico estimativo globale: tutto il computo di progetto con le voci "
+                                   "sostituite in detrazione e le lavorazioni offerte, quantità e prezzi unitari di ogni "
+                                   "voce (progetto, prezzario regionale o analisi dei nuovi prezzi), in un file PriMus da "
+                                   "cui il professionista ricava le versioni richieste dal disciplinare.")
     usati: set[str] = set()
     out = []
     for g in gruppi.values():
