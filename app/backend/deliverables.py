@@ -35,6 +35,8 @@ def elenca_deliverables(gara_dir: Path) -> list[dict]:
             "cartella": dl["cartella"].removeprefix("output/"),
             "stato": st["stato"], "stadi": st["stadi"], "nota": st["nota"], "errore": st["errore"],
             "esportazioni": esportazioni,
+            # CME completo: versioni chieste dal disciplinare che il professionista ricava in PriMus.
+            "derivate": dl.get("derivate", []),
         })
     return out
 

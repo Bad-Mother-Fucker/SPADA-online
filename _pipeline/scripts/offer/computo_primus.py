@@ -22,12 +22,17 @@ Cosa legge del definitivo (skill deliverable-computo-metrico):
   «## Elenco delle tariffe»               → descrizione di riferimento e
     fonte di ogni tariffa (prezzario regionale o nuovo prezzo)
 
+Prezzi dei nuovi prezzi (--analisi analisi_nuovi_prezzi.json, estimativo):
+la voce NP.… senza prezzo nella tabella prende il prezzo di applicazione
+della sua analisi (skill analisi-nuovi-prezzi, stesso calcolo dei suoi
+script); le voci che restano senza prezzo finiscono fra gli avvisi.
+
 Non estimativo (--non-estimativo): nessun prezzo, in nessun file, anche
 se una colonna di prezzi fosse rimasta nel testo. Le quantità non
 numeriche (TBD) diventano 0 e finiscono nel foglio «Da verificare».
 
 Uso: computo_primus.py <3_definitivo.md> <base_uscita> [--titolo T]
-       [--gara G] [--non-estimativo]
+       [--gara G] [--non-estimativo] [--analisi analisi_nuovi_prezzi.json]
 Stampa il JSON {"xpwe", "xlsx", "voci", "avvisi"}.
 """
 import argparse
@@ -350,10 +355,41 @@ def fogli_excel(voci, elenco, avvisi, non_estimativo: bool):
     return fogli
 
 
-def converti(sorgente: Path, base: Path, titolo: str, gara: str, non_estimativo: bool) -> dict:
+def prezzi_analisi(f: Path) -> dict[str, float]:
+    """Codice NP → prezzo di applicazione, calcolato dagli script della
+    skill analisi-nuovi-prezzi (un solo calcolo, non una copia)."""
+    if not f.is_file():
+        return {}
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "skills" / "analisi-nuovi-prezzi" / "scripts"))
+    import analisi_np
+    doc = json.loads(f.read_text(encoding="utf-8"))
+    out = {}
+    for a in doc.get("analisi", []):
+        r = analisi_np.calcola(a, doc.get("parametri", {}))
+        if a.get("codice") and r.get("prezzo_applicazione") is not None:
+            out[a["codice"].strip()] = float(r["prezzo_applicazione"])
+    return out
+
+
+def completa_prezzi(voci: list[dict], da_analisi: dict[str, float], avvisi: list[str]):
+    """Prezzo delle voci NP dall'analisi quando la tabella non lo riporta;
+    avviso per ogni voce che resta senza prezzo."""
+    for v in voci:
+        if v["prezzo"] is None and v["tariffa"] in da_analisi:
+            v["prezzo"] = da_analisi[v["tariffa"]]
+            avvisi.append(f"Voce {v['n']}: prezzo di {v['tariffa']} preso dall'analisi dei nuovi prezzi "
+                          f"({v['prezzo']:.2f}): la tabella del definitivo non lo riportava.")
+        elif v["prezzo"] is None:
+            avvisi.append(f"Voce {v['n']}: prezzo unitario mancante"
+                          f"{' (nuovo prezzo senza analisi)' if v['tariffa'].startswith('NP') else ''}, importato come 0.")
+
+
+def converti(sorgente: Path, base: Path, titolo: str, gara: str, non_estimativo: bool, analisi: Path | None = None) -> dict:
     voci, tariffe, avvisi = leggi(sorgente.read_text(encoding="utf-8"), non_estimativo)
     if not voci:
         raise ValueError("Nessuna voce di computo riconosciuta nel definitivo (servono tabelle con Descrizione, U.M. e Quantità).")
+    if not non_estimativo:
+        completa_prezzi(voci, prezzi_analisi(analisi) if analisi else {}, avvisi)
     supercat, cat, elenco = struttura(voci, tariffe)
     f_xpwe, f_xlsx = base.with_suffix(".xpwe"), base.with_suffix(".xlsx")
     f_xpwe.write_text(xpwe(titolo, gara, supercat, cat, elenco, voci), encoding="utf-8")
@@ -368,9 +404,10 @@ def main() -> int:
     ap.add_argument("--titolo", default="Computo metrico")
     ap.add_argument("--gara", default="")
     ap.add_argument("--non-estimativo", action="store_true")
+    ap.add_argument("--analisi", type=Path)
     a = ap.parse_args()
     try:
-        r = converti(a.sorgente, a.base, a.titolo, a.gara, a.non_estimativo)
+        r = converti(a.sorgente, a.base, a.titolo, a.gara, a.non_estimativo, a.analisi)
     except (OSError, ValueError) as e:
         print(str(e), file=sys.stderr)
         return 1

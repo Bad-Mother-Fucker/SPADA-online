@@ -318,6 +318,12 @@ function PannelloStadio({ d, s, blocco }: { d: Deliverable; s: StadioDeliverable
         </form>
       )}
 
+      {modo === "leggi" && finale && (d.derivate?.length ?? 0) > 0 && (
+        <Nota tono="neu" className="mt-3" titolo="Le altre versioni si ricavano in PriMus">
+          Apri il file .xpwe in PriMus (File › Importa), salvalo in .dcf e da lì ricava le versioni chieste dal disciplinare, ribasso compreso:
+          <ul className="mt-1 list-disc pl-5">{d.derivate!.map((x) => <li key={x}>{x}</li>)}</ul>
+        </Nota>
+      )}
       {modo === "leggi" && (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
           {s.stato === "da_approvare" && <Button disabled={!!blocco || occupato || az.approva.isPending} onClick={approva}><CheckIcon aria-hidden="true" />{successivo ? `Approva e produci ${successivo.etichetta.toLowerCase()}` : "Approva"}</Button>}

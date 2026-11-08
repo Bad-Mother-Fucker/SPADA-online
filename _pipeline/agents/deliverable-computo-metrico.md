@@ -30,9 +30,14 @@ chiedere, l'approvazione avviene nell'interfaccia.
 | bozza | `2_bozza.md` |
 | definitivo | `3_definitivo.md` |
 
-Prima di scrivere stabilisci la variante (migliorie / lavori a base di
-gara rimodulati) e la natura (non estimativo / estimativo) dal nome e dal
-`vincolo_formato` del deliverable.
+Prima di scrivere guarda se il deliverable è il **CME completo**
+(`cme_completo: true`): allora produci solo il computo metrico estimativo
+delle migliorie, con quantità e prezzo unitario di ogni voce (prezzario
+o analisi dei nuovi prezzi), e le versioni in `derivate` le ricava il
+professionista in PriMus (skill, sezione «Il CME completo»). Altrimenti
+stabilisci la variante (migliorie / lavori a base di gara rimodulati) e
+la natura (non estimativo / estimativo) dal nome e dal `vincolo_formato`
+del deliverable.
 
 # Regole assolute
 

@@ -98,7 +98,18 @@ def _slug(testo: str) -> str:
     return out or "deliverable"
 
 
+# Un solo computo: tutte le voci di tipo computo_metrico del disciplinare
+# (non estimativo, globale, quadro comparativo, estimativi della busta
+# economica…) diventano UN deliverable, il CME completo con quantità e
+# prezzi. Le altre versioni il professionista le ricava in PriMus dal suo
+# file: restano elencate nel deliverable come «derivate».
+CHIAVE_CME = "computo_metrico|cme-completo"
+NOME_CME = "Computo metrico estimativo completo"
+
+
 def _chiave(voce: dict) -> str:
+    if (voce.get("tipo") or "") == "computo_metrico":
+        return CHIAVE_CME
     fonte = re.sub(r"\s+", " ", (voce.get("fonte") or "").lower())
     fonte = re.sub(r",?\s*p(p)?\.\s*[\d\-–, ]+$", "", fonte).strip()  # la pagina non distingue il documento
     return fonte or f"{voce.get('tipo', 'altro')}|{nome_documento(voce.get('nome', ''), voce.get('tipo', '')).lower()}"
@@ -120,6 +131,14 @@ def raggruppa(manifest: dict) -> list[dict]:
             if criterio not in g["criteri"]:
                 g["criteri"].append(criterio)
             g["voci_manifest"].append({"id": f"{criterio}-{i}", **voce})
+    if (cme := gruppi.get(CHIAVE_CME)):
+        richieste = list(dict.fromkeys(f"{v.get('nome', '').strip()} ({v.get('fonte', '').strip()})".replace(" ()", "")
+                                       for v in cme["voci_manifest"]))
+        cme.update(nome=NOME_CME, cme_completo=True, derivate=richieste,
+                   fonte="; ".join(dict.fromkeys(v.get("fonte", "") for v in cme["voci_manifest"] if v.get("fonte"))),
+                   vincolo_formato="Computo metrico estimativo con quantità e prezzi unitari di ogni voce (prezzario "
+                                   "regionale o analisi dei nuovi prezzi), in un file PriMus da cui il professionista "
+                                   "ricava le versioni richieste dal disciplinare.")
     usati: set[str] = set()
     out = []
     for g in gruppi.values():
@@ -236,6 +255,8 @@ RE_NON_ESTIMATIVO = re.compile(r"non\s+estimativ|senza\s+prezz|nessun\s+prezz|se
 
 
 def non_estimativo(dl: dict) -> bool:
+    if dl.get("cme_completo"):
+        return False  # le versioni senza prezzi si ricavano in PriMus, il CME li ha tutti
     testo = " ".join([dl.get("nome", ""), dl.get("vincolo_formato", "")]
                      + [f"{v.get('nome', '')} {v.get('vincolo_formato', '')}" for v in dl.get("voci_manifest", [])])
     return bool(RE_NON_ESTIMATIVO.search(testo.lower()))
@@ -251,7 +272,8 @@ def file_primus(gara: Path, dl: dict) -> dict | None:
     base = gara / dl["cartella"] / (re.sub(r"[^A-Za-z0-9]+", "_", dl["nome"]).strip("_")[:60] or dl["id"])
     nome_gara = (_leggi(gara / "manifest.json", {}) or {}).get("nome") or ""
     try:
-        esito = computo_primus.converti(sorgente, base, dl["nome"], nome_gara, non_estimativo(dl))
+        esito = computo_primus.converti(sorgente, base, dl["nome"], nome_gara, non_estimativo(dl),
+                                        gara / dl["cartella"] / "analisi_nuovi_prezzi.json")
         esito.update(xpwe=Path(esito["xpwe"]).name, xlsx=Path(esito["xlsx"]).name)
     except Exception as e:  # noqa: BLE001 — il definitivo resta valido anche senza i file PriMus
         esito = {"errore": str(e)}

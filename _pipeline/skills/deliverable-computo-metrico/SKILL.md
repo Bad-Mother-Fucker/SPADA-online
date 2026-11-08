@@ -52,6 +52,34 @@ usare per brevità. Dalla bozza in poi, mai. Alla fine di ogni stadio il
 sistema controlla il testo: se trova codici interni ti chiede di
 toglierli, e l'esportazione in DOCX/PDF li rifiuta.
 
+## Il CME completo (deliverable `cme_completo`)
+
+Se i dati del deliverable hanno `cme_completo: true`, il computo da
+produrre è **uno solo**: il **computo metrico estimativo completo**
+delle migliorie (variante A), con **quantità e prezzo unitario di ogni
+voce** e i relativi importi. Le versioni chieste dal disciplinare
+(elencate in `derivate`: non estimativo, globale, quadro comparativo,
+estimativi della busta economica…) **non si scrivono**: il
+professionista le ricava in PriMus dal file del CME (togliendo i prezzi,
+aggiungendo le voci di progetto, applicando il ribasso). Il resto di
+questa sezione «quale computo» non si applica: il CME completo è sempre
+estimativo.
+
+**Prezzo unitario di ogni voce, sempre:**
+- voce del prezzario regionale → il **prezzo del prezzario** della gara
+  (server MCP `prezzario`, `cerca_voce`/`dettaglio_analisi` sulla
+  tariffa scelta), mai a memoria;
+- nuovo prezzo (`NP.OT.…`) → il **prezzo di applicazione** della sua
+  analisi in `analisi_nuovi_prezzi.json` (skill `analisi-nuovi-prezzi`,
+  stadio 2), arrotondato come lì;
+- voce di progetto mantenuta senza modifiche di prezzo → il prezzo
+  dell'elenco prezzi di progetto.
+Nessun prezzo `TBD` nel definitivo: se un'analisi ha componenti stimate,
+il prezzo c'è comunque (la stima è dichiarata nell'analisi) e la riga
+finisce in «Da verificare». Il sistema, generando il file PriMus, prende
+il prezzo dei nuovi prezzi dall'analisi anche se la colonna è rimasta
+vuota, ma la tabella del definitivo deve averlo.
+
 ## Prima di tutto: quale computo, e se ha prezzi
 
 Dai dati del deliverable (nome, `vincolo_formato`, `fonte`):

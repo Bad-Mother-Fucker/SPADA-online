@@ -123,6 +123,8 @@ export interface Deliverable {
   id: string; criterio: string; criteri: string[]; trasversale: boolean; nome: string; vincolo_formato: string; fonte: string; tipo: string
   agente: string; skill: string | null; cartella: string; stato?: string; prodotto?: boolean; errore?: string | null; nota?: string | null
   stadi: StadioDeliverable[]; esportazioni: { docx?: string; pdf?: string }; job?: JobFase & { stadio?: string | null }
+  /** CME completo: versioni chieste dal disciplinare da ricavare in PriMus dal suo file. */
+  derivate?: string[]
 }
 export function useDeliverables(slug: string, attivo = true) {
   return useQuery({
