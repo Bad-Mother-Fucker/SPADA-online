@@ -228,6 +228,38 @@ def concludi(gara: Path, dl: dict, stadio: str, esito: str, errore: str | None =
                 stadi[dopo]["stato"] = "superato"
     _aggiorna(gara, dl["id"], fn)
     ricalcola_fase7(gara)
+    if esito == "completato" and stadio == ordine[-1] and dl["tipo"] == "computo_metrico":
+        file_primus(gara, dl)
+
+
+RE_NON_ESTIMATIVO = re.compile(r"non\s+estimativ|senza\s+prezz|nessun\s+prezz|senza\s+importi|elementi\s+economici")
+
+
+def non_estimativo(dl: dict) -> bool:
+    testo = " ".join([dl.get("nome", ""), dl.get("vincolo_formato", "")]
+                     + [f"{v.get('nome', '')} {v.get('vincolo_formato', '')}" for v in dl.get("voci_manifest", [])])
+    return bool(RE_NON_ESTIMATIVO.search(testo.lower()))
+
+
+def file_primus(gara: Path, dl: dict) -> dict | None:
+    """Computo per ACCA PriMus (.xpwe) ed Excel accanto al definitivo,
+    rigenerati a ogni definitivo prodotto o modificato a mano. Non blocca
+    mai lo stadio: un errore si registra nello stato del deliverable."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "offer"))
+    import computo_primus
+    sorgente = gara / dl["cartella"] / stadi_di(dl["tipo"])[-1][2]
+    base = gara / dl["cartella"] / (re.sub(r"[^A-Za-z0-9]+", "_", dl["nome"]).strip("_")[:60] or dl["id"])
+    nome_gara = (_leggi(gara / "manifest.json", {}) or {}).get("nome") or ""
+    try:
+        esito = computo_primus.converti(sorgente, base, dl["nome"], nome_gara, non_estimativo(dl))
+        esito.update(xpwe=Path(esito["xpwe"]).name, xlsx=Path(esito["xlsx"]).name)
+    except Exception as e:  # noqa: BLE001 — il definitivo resta valido anche senza i file PriMus
+        esito = {"errore": str(e)}
+
+    def fn(v):
+        v["primus"] = {**esito, "generato_il": _ora()}
+    _aggiorna(gara, dl["id"], fn)
+    return esito
 
 
 def approva(gara: Path, dl: dict, stadio: str) -> str | None:
@@ -262,7 +294,9 @@ def _file_dello_stadio(dl: dict, stadio: str, ultimo: bool) -> list[str]:
     controllo (controllo_bozza.md, …) e, per l'ultimo, le esportazioni."""
     voce = next(s for s in stadi_di(dl["tipo"]) if s[0] == stadio)
     nomi = [voce[2], f"controllo_{stadio}.md"] if voce[2] else []
-    return nomi + (["*.docx", "*.pdf"] if ultimo else [])
+    if dl["tipo"] == "computo_metrico" and stadio == "bozza":
+        nomi.append("analisi_nuovi_prezzi.md")  # documento di lavoro della bozza (skill, nuovi prezzi)
+    return nomi + (["*.docx", "*.pdf", "*.xpwe", "*.xlsx"] if ultimo else [])
 
 
 def rifai_da(gara: Path, dl: dict, stadio: str | None) -> str | None:

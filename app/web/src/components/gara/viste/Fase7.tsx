@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { Link, useParams } from "react-router"
 import { toast } from "sonner"
-import { ArrowCounterClockwiseIcon, CheckIcon, DownloadSimpleIcon, FilePdfIcon, FileDocIcon, PencilSimpleIcon } from "@phosphor-icons/react"
+import { ArrowCounterClockwiseIcon, CheckIcon, DownloadSimpleIcon, FileArrowDownIcon, FilePdfIcon, FileDocIcon, FileXlsIcon, PencilSimpleIcon } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
@@ -182,7 +182,7 @@ export function Fase7Elenco() {
 
 /** Il testo di uno stadio: lettura, modifica a mano, approvazione, richiesta di modifiche, esportazione. */
 function PannelloStadio({ d, s, blocco }: { d: Deliverable; s: StadioDeliverable; blocco: string | null }) {
-  const { slug } = useGara()
+  const { slug, output } = useGara()
   const { az, avvia, dialogo } = useAzioni()
   const testo = useTestoOutput(slug, s.stato === "da_produrre" ? null : s.file, s.prodotto_il)
   const [modo, setModo] = useState<"leggi" | "modifica" | "nota">("leggi")
@@ -192,6 +192,8 @@ function PannelloStadio({ d, s, blocco }: { d: Deliverable; s: StadioDeliverable
   const i = d.stadi.findIndex((x) => x.id === s.id)
   const successivo = d.stadi[i + 1] || null
   const finale = !successivo
+  // Computo metrico: accanto al definitivo il sistema scrive il file per PriMus (.xpwe) e l'Excel.
+  const primus = finale && d.tipo === "computo_metrico" ? fileDeliverable(output, d).filter((p) => /\.(xpwe|xlsx)$/.test(p)) : []
   const occupato = lavora(d)
   const inCorso = stadioInLavorazione(d) === s.id
   const prossimo = prossimoDaProdurre(d)
@@ -319,6 +321,13 @@ function PannelloStadio({ d, s, blocco }: { d: Deliverable; s: StadioDeliverable
             <>
               <Button variant={s.stato === "da_approvare" ? "outline" : "default"} disabled={az.esporta.isPending} onClick={() => esporta("docx")}><FileDocIcon aria-hidden="true" />Scarica DOCX</Button>
               <Button variant="outline" disabled={az.esporta.isPending} onClick={() => esporta("pdf")}><FilePdfIcon aria-hidden="true" />Scarica PDF</Button>
+              {primus.map((p) => (
+                <Button key={p} variant="outline" asChild>
+                  <a href={Api.percorsoOutput(slug, p)} download>{p.endsWith(".xpwe")
+                    ? <><FileArrowDownIcon aria-hidden="true" />PriMus (.xpwe)</>
+                    : <><FileXlsIcon aria-hidden="true" />Excel per PriMus</>}</a>
+                </Button>
+              ))}
             </>
           )}
           <Button variant="outline" disabled={!!blocco || occupato} onClick={() => setModo("nota")}>Chiedi modifiche</Button>

@@ -14,6 +14,12 @@ Prima di tutto stabilisci dalla skill la variante (migliorie o lavori a
 base di gara rimodulati) e se il computo è **non estimativo**: in quel
 caso nessun prezzo né importo in nessuno stadio, a pena di esclusione.
 
+Ogni voce riporta la tariffa del prezzario regionale della gara più
+compatibile con la lavorazione offerta (server MCP `prezzario`), o un
+nuovo prezzo `NP.OT.nnn` con analisi in `analisi_nuovi_prezzi.md`. Dal
+definitivo il sistema genera anche il computo per PriMus (`.xpwe`) e
+l'Excel.
+
 ## Prerequisiti
 
 Almeno una proposta approvata in `02_graph/proposals/`. Se manca, non

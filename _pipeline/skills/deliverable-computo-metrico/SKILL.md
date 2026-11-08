@@ -14,9 +14,16 @@ segue fedelmente quello approvato (modifiche a mano comprese).
 
 | Stadio | File | Cosa decide il professionista |
 |---|---|---|
-| 1. Elenco delle voci | `1_voci.md` | quali lavorazioni entrano e da dove vengono le quantità |
-| 2. Bozza del computo | `2_bozza.md` | descrizioni, quantità, unità di misura |
-| 3. Definitivo | `3_definitivo.md` | documento da consegnare (DOCX/PDF dall'interfaccia) |
+| 1. Elenco delle voci | `1_voci.md` | quali lavorazioni entrano, da dove vengono le quantità, quale tariffa del prezzario |
+| 2. Bozza del computo | `2_bozza.md` (+ `analisi_nuovi_prezzi.md`) | descrizioni, quantità, unità di misura, tariffe e nuovi prezzi |
+| 3. Definitivo | `3_definitivo.md` | documento da consegnare (DOCX/PDF, PriMus `.xpwe` ed Excel dall'interfaccia) |
+
+Dal definitivo il sistema genera da solo, oltre a DOCX e PDF, il computo
+per ACCA PriMus (`.xpwe`, da importare con File › Importa) e un Excel
+con le colonne del computo PriMus: criteri del disciplinare come Super
+categorie, sub-criteri come Categorie, una voce di elenco prezzi per
+ogni tariffa. Per questo le tabelle del definitivo devono avere
+esattamente le colonne indicate allo stadio 3.
 
 Non generare file Word né script: la conversione la fa il sistema.
 
@@ -58,11 +65,62 @@ Dai dati del deliverable (nome, `vincolo_formato`, `fonte`):
 
 **Non estimativo** se il vincolo dice «non estimativo», «nessun prezzo»,
 «senza importi» o vieta elementi economici: allora **nessun prezzo,
-importo, totale economico, sconto o rimando a voci di prezzario con
-prezzo**, in nessuno stadio (l'inserimento è causa di esclusione). Non
-consultare il prezzario. Solo se il vincolo chiede esplicitamente un
-computo estimativo si usano i prezzi (progetto base o server MCP
-`prezzario` della regione/anno della gara, mai a occhio: `TBD`).
+importo, totale economico o sconto** in nessuno stadio e in nessun
+documento per la stazione appaltante (l'inserimento è causa di
+esclusione). Il **codice tariffa** del prezzario sì: identifica la
+lavorazione, non è un prezzo; il prezzario si consulta per scegliere il
+codice, ma prezzi e importi letti lì non si trascrivono mai nel
+computo. Solo se il vincolo chiede esplicitamente un computo estimativo
+si usano i prezzi (progetto base o server MCP `prezzario` della
+regione/anno della gara, mai a occhio: `TBD`).
+
+## Tariffa di riferimento per ogni voce
+
+Ogni voce del computo riporta una **tariffa**: il codice della voce del
+prezzario regionale della gara (server MCP `prezzario`, regione e anno
+indicati nel prompt) **più compatibile con la lavorazione offerta**,
+oppure un **nuovo prezzo** se il prezzario non ne ha una compatibile.
+
+Come si sceglie:
+1. Parti dalla tariffa della voce di progetto sostituita (computo
+   metrico estimativo ed elenco prezzi di progetto): i codici del
+   prezzario regionale vi compaiono così come sono nel database (es.
+   `CAM26_R02.090.070.C`, a volte con suffisso ` (CAM)`). Se la
+   lavorazione offerta resta descritta da quella voce (stessa
+   lavorazione, stessa unità di misura, caratteristiche offerte
+   comprese nel testo della voce o sue varianti), tieni quel codice.
+2. Altrimenti cerca con `cerca_voce` (più ricerche con i termini tecnici
+   della lavorazione: materiale, classe, prestazione) e scegli la voce
+   il cui testo copre la lavorazione offerta: stessa natura, stessa
+   unità di misura, la variante (lettera finale del codice) che
+   corrisponde a dimensione, classe o spessore offerti. Leggi
+   l'articolo esteso prima di sceglierla.
+3. Se nessuna voce copre la lavorazione offerta (caratteristica
+   migliorativa che il prezzario non contempla, prodotto o prestazione
+   diversi), la voce è un **nuovo prezzo**: codice `NP.OT.001`,
+   `NP.OT.002`… in ordine di computo (`OT` = offerta tecnica, così non
+   si confonde con i nuovi prezzi del progetto, es. `NP.ARR.001`).
+   Le voci di progetto già a nuovo prezzo (`NP.…` del progetto) restano
+   nuovi prezzi dell'offerta se la lavorazione cambia.
+
+Mai un codice inventato o «assimilato» a memoria: ogni codice citato
+deve esistere nel prezzario (verificalo con `cerca_voce`). Una voce di
+prezzario che copre solo in parte la lavorazione offerta non basta: è un
+nuovo prezzo.
+
+**Nuovi prezzi.** Per ciascuno: descrizione estesa completa della
+lavorazione (come una voce di prezzario: cosa comprende, materiali,
+classi, posa, oneri), unità di misura e, nel file di lavoro
+`analisi_nuovi_prezzi.md` (stadio 2), l'analisi del prezzo costruita
+come le analisi del prezzario: prendi a modello l'analisi di una voce
+analoga (`dettaglio_analisi`) e componi manodopera, materiali, noli e
+trasporti con voci elementari del prezzario (codice, U.M., quantità per
+unità di lavorazione, prezzo), più spese generali e utile d'impresa
+nelle percentuali del prezzario. Un componente senza voce elementare
+nel prezzario resta `TBD — prezzo da preventivo` e si segnala.
+`analisi_nuovi_prezzi.md` è un documento di lavoro per il
+professionista: **non va mai nella busta tecnica**, e nel computo non
+estimativo i suoi prezzi non compaiono in nessun altro file.
 
 ## Fonti
 
@@ -85,22 +143,46 @@ quotati, `TBD — da definire` e segnalala.
 
 ## Criterio C1 — [titolo]
 ### P-C1-001 — [titolo proposta]
-| Voce di progetto | Descrizione di progetto (sintesi) | U.M. | Q.tà di progetto | Intervento | Fonte quantità |
-|---|---|---|---|---|---|
-| 116 | Consolidamento murature con rete PRFV | mq | 420,52 | miglioramento qualitativo | CME voce 116 |
+| Voce di progetto | Tariffa di progetto | Descrizione di progetto (sintesi) | U.M. | Q.tà di progetto | Intervento | Fonte quantità | Tariffa proposta | Corrispondenza |
+|---|---|---|---|---|---|---|---|---|
+| 116 | CAM26_E.05.020.010.A | Consolidamento murature con rete PRFV | mq | 420,52 | miglioramento qualitativo | CME voce 116 | CAM26_E.05.020.010.B | assimilabile: la variante B è la rete a maglia offerta |
+| 29 | NP.ARR.001 | Pareti divisorie HPL | mq | 1,00 | sostituzione | CME voce 29 | NP.OT.001 | nuovo prezzo: il prezzario non ha pannelli HPL compatti a nucleo pieno |
 ```
+
+«Corrispondenza»: `identica` (la voce del prezzario descrive già la
+lavorazione offerta), `assimilabile: …` (copre la lavorazione offerta;
+spiega in una riga perché), `nuovo prezzo: …` (perché nessuna voce la
+copre). Il professionista approva qui la scelta delle tariffe.
 
 Variante B: in più, l'elenco delle categorie del computo di progetto e
 il numero di voci invariate per categoria. In fondo: «Da verificare»
 (proposte senza lavorazioni a computo collegate, voci non trovate,
-stesse voci toccate da più proposte).
+stesse voci toccate da più proposte, tariffe incerte fra due voci del
+prezzario, con i due codici).
 
 ## Stadio 2 — Bozza (`2_bozza.md`)
 
 Per ogni voce dell'elenco approvato una riga:
 
-| N. | Voce | Descrizione della lavorazione offerta | U.M. | Quantità | Rif. progetto | Criterio / sub-criterio (come nel disciplinare) |
-|---|---|---|---|---|---|---|
+| N. | Tariffa | Voce di progetto sostituita | Descrizione della lavorazione offerta | U.M. | Quantità | Rif. progetto | Criterio / sub-criterio (come nel disciplinare) |
+|---|---|---|---|---|---|---|---|
+
+- «Tariffa» = quella approvata nell'elenco delle voci (codice del
+  prezzario così come è nel database, o `NP.OT.nnn`).
+- In fondo alla bozza, la sezione **«## Elenco delle tariffe»**, una
+  riga per tariffa usata, in ordine di prima comparsa:
+
+  | Tariffa | Fonte | Descrizione della voce di riferimento | U.M. |
+  |---|---|---|---|
+  | CAM26_E.05.020.010.B | Prezzario Regione Campania 2026 | [descrizione ridotta della voce del prezzario] | mq |
+  | NP.OT.001 | Nuovo prezzo | [descrizione estesa completa del nuovo prezzo] | mq |
+
+  Fonte con il nome del prezzario come lo restituisce
+  `versione_prezzario`. Nessun prezzo in questa tabella, neanche nel
+  computo estimativo (lì il prezzo sta nella colonna della voce).
+- Scrivi anche `analisi_nuovi_prezzi.md` (vedi «Tariffa di riferimento
+  per ogni voce»), una sezione per nuovo prezzo; se non ce ne sono,
+  il file dice «Nessun nuovo prezzo».
 
 - La descrizione dice cosa si offre in più rispetto al progetto (marca,
   classe, prestazione, controllo), coerente con la relazione tecnica e
@@ -121,14 +203,28 @@ Per ogni voce dell'elenco approvato una riga:
 se non estimativo, «Il presente computo non contiene prezzi né importi».]
 
 ## Criterio [n] — [denominazione del disciplinare]
-[tabella]
+### [n.m] — [denominazione del sub-criterio]
+| N. | Tariffa | Voce di progetto sostituita | Descrizione della lavorazione offerta | U.M. | Quantità | Rif. progetto | Criterio / sub-criterio |
+|---|---|---|---|---|---|---|---|
+
+## Elenco delle tariffe
+| Tariffa | Fonte | Descrizione della voce di riferimento | U.M. |
+|---|---|---|---|
 
 ## Riepilogo
 | Criterio (come nel disciplinare) | Lavorazioni migliorate | Voci |
 ```
 
+Le tabelle sono lette dal convertitore PriMus: mantieni titoli
+`## Criterio X — …` e `### X.n — …`, le intestazioni di colonna così
+come sono, una voce per riga, la quantità come numero all'inizio della
+cella (`2,55` o `2,55 (come da computo di progetto)`; `TBD` solo se
+davvero da definire). Estimativo: aggiungi le colonne «Prezzo
+unitario» e «Importo» dopo «Quantità».
+
 Nessun contenuto nuovo rispetto alla bozza approvata; controlla che
-nessuna cifra economica sia rimasta (non estimativo) e che ogni proposta
+nessuna cifra economica sia rimasta (non estimativo), che ogni tariffa
+della tabella sia nell'«Elenco delle tariffe» e che ogni proposta
 citata esista e sia approvata.
 
 ## Richiesta di modifiche
