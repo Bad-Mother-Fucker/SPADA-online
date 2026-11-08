@@ -58,8 +58,11 @@ ciascuno segui i sette passi; i file di uscita sono in
 ### 0. Apri la memoria della skill (sempre, prima di tutto)
 
 La skill impara da ogni correzione del professionista. Prima di scrivere
-un numero, leggi — se esistono — in `memoria/` (percorso: cartella di
-questa skill, risolta da `$SPADA_CLAUDE_DIR/skills/analisi-nuovi-prezzi/`):
+un numero, leggi — se esistono — in `memoria/`. Dentro SPADA la memoria
+sta nei dati, `$SPADA_HOME/_data/analisi-nuovi-prezzi/memoria/` (gli
+script la usano da soli; `python3 scripts/analisi_np.py memoria stato`
+stampa il percorso); fuori da SPADA è la cartella `memoria/` di questa
+skill:
 
 | File | Cosa ci trovi | Come usarlo |
 |---|---|---|
@@ -303,10 +306,10 @@ mai dalla directory della gara.
 |---|---|
 | `references/metodo.md` | prima analisi della sessione; dubbi su una sezione, le percentuali, il controllo aritmetico |
 | `references/fonti.md` | quando non trovi un prezzo: dove cercare, in che ordine, come citare una stima |
-| `references/manodopera_ance.md` | per il costo orario della manodopera: tabelle ANCE per provincia ed edizione; lo aggiorna `aggiorna_manodopera.py`, le sezioni «DA CONFERMARE» le conferma il professionista |
+| `references/manodopera_ance.md` | per il costo orario della manodopera: tabelle ANCE per provincia ed edizione. È la copia iniziale: dentro SPADA quella aggiornata da `aggiorna_manodopera.py` sta in `$SPADA_HOME/_data/analisi-nuovi-prezzi/manodopera_ance.md` e, se esiste, è quella da leggere; le sezioni «DA CONFERMARE» le conferma il professionista |
 | `scripts/aggiorna_manodopera.py` | `applicabile --data-bando … --provincia …` prima di ogni analisi; `online` / `pdf <file>` per aggiornare la tabella a mano |
 | `references/formato_output.md` | sempre prima di scrivere: schema JSON, template markdown, frontmatter delle analisi approvate |
 | `references/esempio.md` | un'analisi completa svolta, da leggere la prima volta per capire il livello di dettaglio atteso |
 | `scripts/analisi_np.py` | `verifica`, `rendi`, `xlsx`, `apprendi`, `memoria stato` — `--help` per l'uso |
 | `assets/ANALISI_NUOVI_PREZZI_METODO.xls` | il foglio del professionista: il layout da riprodurre |
-| `memoria/` | lezioni, prezzi appresi, analisi approvate (per macchina, non versionata) |
+| `memoria/` | lezioni, prezzi appresi, analisi approvate (per macchina, non versionata; dentro SPADA in `$SPADA_HOME/_data/analisi-nuovi-prezzi/memoria/`) |

@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import re
 import sys
 import tempfile
@@ -36,7 +37,14 @@ import urllib.request
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
-FILE_TABELLE = SKILL_DIR / "references" / "manodopera_ance.md"
+TABELLE_INIZIALI = SKILL_DIR / "references" / "manodopera_ance.md"
+# Dentro SPADA la tabella aggiornata sta nei dati (SPADA_HOME/_data), non
+# nella skill: la skill è nella copia di lavoro della repo e un file
+# tracciato riscritto qui la lascerebbe modificata. La copia nella skill
+# resta il punto di partenza, copiata al primo aggiornamento.
+_DATI = Path(os.environ["SPADA_HOME"]) / "_data" / "analisi-nuovi-prezzi" if os.environ.get("SPADA_HOME") else None
+FILE_TABELLE = _DATI / "manodopera_ance.md" if _DATI and (_DATI / "manodopera_ance.md").is_file() else TABELLE_INIZIALI
+FILE_TABELLE_AGGIORNATO = _DATI / "manodopera_ance.md" if _DATI else TABELLE_INIZIALI
 LIVELLI = ["1° livello — operaio comune", "2° livello — operaio qualificato",
            "3° livello — operaio specializzato", "4° livello — operaio 4° liv."]
 FONTI_ONLINE = {  # provincia -> pagina indice delle tabelle, filtro sul titolo del post
@@ -187,13 +195,16 @@ def aggiungi_sezione(testo_file: str, sezione: str) -> str:
 
 
 def proponi(provincia: str, estratto: dict, pdf_url: str, post_url: str | None, dry_run: bool) -> dict:
+    global FILE_TABELLE
     testo = FILE_TABELLE.read_text(encoding="utf-8")
     note = [e for e in edizioni(testo) if e["provincia"].lower() == provincia.lower()]
     if any(e["tabella"] == estratto["tabella"] or e["decorrenza"] == estratto["decorrenza"] for e in note):
         return {"esito": "gia_presente", "tabella": estratto["tabella"], "decorrenza": estratto["decorrenza"].isoformat()}
     sez = sezione_md(provincia.title(), estratto, pdf_url, post_url)
     if not dry_run:
-        FILE_TABELLE.write_text(aggiungi_sezione(testo, sez), encoding="utf-8")
+        FILE_TABELLE_AGGIORNATO.parent.mkdir(parents=True, exist_ok=True)
+        FILE_TABELLE_AGGIORNATO.write_text(aggiungi_sezione(testo, sez), encoding="utf-8")
+        FILE_TABELLE = FILE_TABELLE_AGGIORNATO  # le letture successive vedono la tabella aggiornata
     return {"esito": "aggiunta" if not dry_run else "proposta", "tabella": estratto["tabella"],
             "decorrenza": estratto["decorrenza"].isoformat(), "sezione": sez}
 

@@ -2,3 +2,7 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 python-multipart>=0.0.9
 PyYAML>=6.0
+# Skill analisi-nuovi-prezzi (gira col Python di SPADA): Excel delle
+# analisi e lettura delle tabelle ANCE in PDF.
+openpyxl>=3.1
+pypdf>=4.0

@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import os
 import re
 import shutil
 import sys
@@ -56,7 +57,10 @@ MESI_VALIDITA_PREZZI = 12
 PCT_STANDARD = {"sicurezza_pct": 3.0, "spese_generali_pct": 15.0, "utile_pct": 10.0}
 SOGLIA_CONSOLIDAMENTO = 60
 SKILL_DIR = Path(__file__).resolve().parent.parent
-MEMORIA_DEFAULT = SKILL_DIR / "memoria"
+# Dentro SPADA la memoria sta nei dati (SPADA_HOME/_data), non nella skill,
+# che è nella copia di lavoro della repo; fuori da SPADA resta accanto alla skill.
+MEMORIA_DEFAULT = (Path(os.environ["SPADA_HOME"]) / "_data" / "analisi-nuovi-prezzi" / "memoria"
+                   if os.environ.get("SPADA_HOME") else SKILL_DIR / "memoria")
 
 
 # ── aritmetica ──────────────────────────────────────────────────────────
