@@ -77,6 +77,12 @@ scorrevole anche per chi non lavora nel settore.
 - lessico contabile: non «computato», «voce», «computo», ma «previsto» e
   «fornito»; «contabilizzato» solo dove serve davvero.
 
+Eccezione: gli **allegati dell'offerta** (le schede tecniche scelte dal
+professionista, vedi «Allegati di prodotto») non sono elaborati di
+progetto. Il loro rimando, col segnaposto `[ALLEGATO: sch-NN]` tra
+parentesi alla fine della frase che si appoggia alla scheda, è ammesso e
+voluto: l'esportazione lo scrive «Allegato T.n».
+
 **Deve comparire sempre:**
 - ogni elemento con il suo nome identificativo (per le piante il nome
   scientifico), ogni quantità, ogni misura (per gli alberi circonferenza
