@@ -231,9 +231,15 @@ if [ "$ESITO" = "completato" ]; then
   INTERNI="$(python3 "$OFFERTA_PY" controlla "$DELIVERABLE_ID" "$STADIO")"
   if [ $? -eq 4 ]; then
     warn "Nomenclatura interna nel testo, chiedo la correzione: $INTERNI"
+    # Relazione tecnica (skill, «Stile del testo»): elaborati solo col titolo esteso, senza riferimenti puntuali.
+    if [ "$TIPO" = "relazione_tecnica" ]; then
+      ELABORATI="elaborati solo con il titolo esteso (es. «Elenco prezzi unitari»), senza sigla dell'elaborato, voce, articolo o pagina"
+    else
+      ELABORATI="elaborati con il nome con cui sono stati caricati (più voce, tavola, articolo o pagina)"
+    fi
     CORREZIONE="Nel testo che hai scritto ci sono riferimenti con la nomenclatura interna del sistema, vietata nei documenti per la stazione appaltante:
 $INTERNI
-Riscrivi quei passaggi: criteri e sub-criteri con numerazione e denominazione del disciplinare, elaborati con il nome con cui sono stati caricati (più voce, tavola, articolo o pagina), proposte con il loro titolo descrittivo. Niente codici P-/G-/E-/D-/Q-/R-/X-, TAV-M-, wikilink [[…]] o percorsi interni. Non cambiare nient'altro."
+Riscrivi quei passaggi: criteri e sub-criteri con numerazione e denominazione del disciplinare, $ELABORATI, proposte con il loro titolo descrittivo. Niente codici P-/G-/E-/D-/Q-/R-/X-, TAV-M-, wikilink [[…]] o percorsi interni. Non cambiare nient'altro."
     # shellcheck disable=SC2046
     bash "$SPADA_CLAUDE" -p "$CORREZIONE" --resume "$SESSIONE" \
       --model "$(modello_cli "$MODELLO")" $(effort_cli "$EFFORT") \

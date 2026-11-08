@@ -42,16 +42,110 @@ Si usano soltanto:
   disciplinare** (es. «criterio 1 — Materiali ed impiantistica,
   sub-criterio 1.1»: verifica la forma esatta nella tabella dei criteri
   del disciplinare);
-- per gli elaborati, il **nome dell'elaborato così come è stato
-  caricato** (es. «9_CME_Computo_Metrico_Estimativo», «Relazione
-  Generale e Tecnica»), con voce, articolo, tavola o pagina;
 - per le proposte, il loro titolo descrittivo, mai il codice.
+
+Gli elaborati di progetto (computo, capitolato, allegati, tavole) sono
+**fonti da cui ricavare i contenuti**: se serve nominarne uno, si usa
+solo il **titolo esteso**, senza sigla o codice dell'elaborato e senza
+voce, articolo o pagina (es. «Elenco prezzi unitari», non «Allegato H –
+Elenco prezzi unitari» né «Allegato H, p. 19»). Vedi «Stile del testo».
 
 Unica eccezione: nella **scaletta** e nell'**elenco delle voci** (stadio
 1, documenti di lavoro per il professionista) i codici interni si possono
 usare per brevità. Dalla bozza in poi, mai. Alla fine di ogni stadio il
 sistema controlla il testo: se trova codici interni ti chiede di
 toglierli, e l'esportazione in DOCX/PDF li rifiuta.
+
+## Stile del testo (bozza e definitivo)
+
+La relazione è una **relazione descrittiva di progetto**, non un estratto
+del computo o del capitolato. Dai documenti tecnici si ricavano i
+contenuti, mai la forma: il testo deve essere discorsivo, chiaro e
+scorrevole anche per chi non lavora nel settore.
+
+**Non deve comparire:**
+- codici delle voci di computo (es. 439/586, 444/591);
+- sigle e codici degli elaborati (es. «Allegato G», «Allegato H –»,
+  «PE-AR_08», «CSA»): se un elaborato va nominato, solo il titolo esteso
+  («Computo metrico estimativo», «Elenco prezzi unitari»);
+- pagine, articoli, paragrafi o capitoli da cui è presa l'informazione
+  (es. «p. 19», «art. 4.1.10.15 del capitolato»);
+- definizioni e classi del capitolato che non descrivono ciò che è
+  previsto in progetto (fasce di misura non utilizzate, classi «extra»);
+- parentesi usate per elencare dati, virgolette «», barre e
+  abbreviazioni: «litri» e non «l», «230-250» e non «230/250»;
+- lessico contabile: non «computato», «voce», «computo», ma «previsto» e
+  «fornito»; «contabilizzato» solo dove serve davvero.
+
+**Deve comparire sempre:**
+- ogni elemento con il suo nome identificativo (per le piante il nome
+  scientifico), ogni quantità, ogni misura (per gli alberi circonferenza
+  del tronco, volume del contenitore, altezza di impalcatura), il tipo di
+  fornitura (zolla o contenitore) e l'area di destinazione;
+- le eccezioni alla regola generale, introdotte con formule come «ad
+  eccezione di»;
+- solo dati presenti nelle fonti: se un dato non è indicato (per esempio
+  il contenitore di una specie) non si inventa e non si aggiunge.
+
+**Come organizzare ogni blocco descrittivo:**
+1. apri con le caratteristiche comuni a tutti gli elementi (dimensioni,
+   modalità di fornitura, requisiti) e con le relative eccezioni;
+2. passa al dettaglio raggruppato per area o per ambito, non nell'ordine
+   in cui i dati compaiono nelle fonti; introducilo con «Nello specifico»
+   e collega le parti con «invece» e «infine»;
+3. chiudi riassumendo in una frase le lavorazioni accessorie (per
+   esempio la messa a dimora), senza codici.
+
+**Forma:**
+- frasi complete e collegate tra loro: niente elenchi telegrafici tra
+  parentesi o separati da punto e virgola;
+- futuro per le prescrizioni («saranno fornite», «dovranno aver
+  subito»), presente per descrivere il progetto («è prevista»,
+  «presentano»);
+- intervalli per esteso quando la frase scorre meglio («compresa tra 20 e
+  25 cm»), altrimenti col trattino («16-18 cm»);
+- quantità in cifre seguite dal nome («11 esemplari di Fraxinus ornus»),
+  ma l'unità in lettere («un esemplare»);
+- paragrafi brevi, uno per ogni blocco logico.
+
+**Esempio.** Non così:
+
+> Gli alberi del nucleo sono computati con circonferenza del tronco
+> 20-25 cm (il Sorbus aucuparia, 16-18 cm), in zolla o in contenitore,
+> con almeno tre trapianti in vivaio e altezza d'impalcatura non
+> inferiore a 230/250 cm. Le voci dell'Allegato G – Computo metrico
+> estimativo sono la 439/586 (Fraxinus ornus, 11, Area Eventi), la
+> 440/587 (Quercus ilex, 3, contenitore 150 l), la 442/589 (Cercis
+> siliquastrum, 5, contenitore 240 l), la 274/555 (Fraxinus ornus, 2,
+> Area Mercatale), la 275/556 (Populus alba, 1, Area Mercatale), la
+> 720/631 (Quercus pubescens, 3, contenitore 165 l, Casa del Metaverso) e
+> la 721/632 (Sorbus aucuparia, 1, 16-18 cm, zolla, Casa del Metaverso);
+> la messa a dimora è computata alle voci 444/591, 277/558 e 722/633
+> («alberi 20-25 cm»). L'Allegato f2 – CSA parte II tecnica generale
+> definisce all'art. 4.1.10.15 la classe «extra» (circonferenza oltre
+> 25 cm, altezza oltre 2,5 m) e all'art. 4.1.10.14 la fascia 30-35 cm
+> «con almeno tre trapianti».
+
+Ma così:
+
+> Gli alberi previsti per il nucleo presentano una circonferenza del
+> tronco generalmente compresa tra 20 e 25 cm, ad eccezione del Sorbus
+> aucuparia, per il quale è prevista una circonferenza di 16-18 cm. Le
+> piante saranno fornite in zolla o in contenitore, dovranno aver subito
+> almeno tre trapianti in vivaio e presentare un'altezza di impalcatura
+> non inferiore a 230-250 cm.
+>
+> Nello specifico, nell'Area Eventi è prevista la messa a dimora di 11
+> esemplari di Fraxinus ornus, 3 esemplari di Quercus ilex forniti in
+> contenitore da 150 litri e 5 esemplari di Cercis siliquastrum in
+> contenitore da 240 litri. Nell'Area Mercatale sono invece previsti 2
+> esemplari di Fraxinus ornus e un esemplare di Populus alba. Per l'area
+> destinata alla Casa del Metaverso sono infine previsti 3 esemplari di
+> Quercus pubescens, forniti in contenitore da 165 litri, e un esemplare
+> di Sorbus aucuparia, con circonferenza del tronco di 16-18 cm, fornito
+> in zolla. Le relative operazioni di messa a dimora sono contabilizzate
+> separatamente e riguardano complessivamente gli alberi con
+> circonferenza del tronco di 20-25 cm.
 
 ## Fonti (leggi prima di ogni stadio)
 
@@ -91,7 +185,8 @@ Contenuto: [cosa dice, in una riga]
 ### C1.1 — [titolo subcriterio] ([facciate] facc · ~[parole] parole)
 1. **[Titolo paragrafo]** — P-C1-001 · ~[parole] parole
    Contenuto: [cosa si dichiara, su quali voci di computo/elaborati]
-   Evidenze da citare: [nome elaborato come caricato] sez./p.
+   Fonti dei dati: [nome elaborato come caricato] sez./p. (solo per
+   il professionista: nel testo non si citano)
    Indicatori: [valori misurabili da dichiarare]
    Vincolo del professionista: [nota, se approvata con modifiche]
    Figure: [fig-NN dell'elenco del prompt, se ce ne sono per questa proposta]
@@ -117,11 +212,13 @@ ordine, parole obiettivo rispettate (±15%).
   numerazione e denominazione del disciplinare (es. «# Criterio 1 —
   Materiali ed impiantistica»). Ogni proposta dichiara
   in chiaro il criterio a cui si riferisce (lo chiede il disciplinare).
-- Prima persona plurale, registro tecnico, prosa continua; elenchi solo
-  per indicatori e sequenze operative.
-- Cita gli elaborati con il nome con cui sono stati caricati, più voce,
-  tavola, articolo o pagina (es. «voce 116 di 9_CME_Computo_Metrico_Estimativo»);
-  mai wikilink, codici di nodo o percorsi interni (vedi «Regola di nomenclatura»).
+- Scrivi secondo «Stile del testo»: relazione descrittiva in prosa
+  continua, comprensibile anche a chi non è del settore; elenchi solo
+  per sequenze operative che non reggono in una frase.
+- Elaborati nominati solo col titolo esteso, senza sigla, voce,
+  articolo o pagina; nessun codice di nodo, wikilink o percorso interno
+  (vedi «Regola di nomenclatura»): i dati delle fonti entrano nel testo,
+  i loro riferimenti puntuali no.
 - Titoli di criterio e sub-criterio come nel disciplinare; i paragrafi
   hanno il titolo descrittivo della proposta, mai il suo codice.
 - Mai prezzi, importi, ribassi o elementi economici.
@@ -151,7 +248,10 @@ Se un subcriterio è sotto dell'15%, completa prima di chiudere.
 
 Parte dalla bozza approvata (con le modifiche a mano del professionista):
 - non aggiungere contenuti nuovi né proposte;
-- uniforma terminologia, numerazione e rimandi; elimina ripetizioni;
+- uniforma terminologia e numerazione; elimina ripetizioni, sigle di
+  elaborati, voci, articoli e pagine rimasti (gli elaborati restano solo
+  col titolo esteso) e ogni residuo di forma da computo
+  (vedi «Stile del testo»);
 - mantieni i blocchi `%%DR_…%%` non ancora risolti, togli quelli che il
   professionista ha risolto nel testo;
 - allinea i rimandi agli allegati all'elenco SCHEDE TECNICHE del prompt
