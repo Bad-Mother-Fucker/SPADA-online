@@ -13,7 +13,8 @@ _pipeline/
 ├── VERSION              versione semver corrente (tag git corrispondente ad ogni release)
 ├── settings.json        hook PostToolUse condivisi (render artifact HTML)
 ├── agents/               agenti specializzati (.md, formato subagent Claude Code)
-├── skills/               skill operative (SKILL.md + eventuali risorse)
+├── skills/               skill operative (SKILL.md + eventuali risorse); skills/<nome>/memoria/
+│                         è la memoria per macchina di una skill che impara (non versionata)
 ├── comandi/              slash command (.md) — montati come ~/.claude/commands
 ├── scripts/              script di supporto (render, graph lint, offerta docx, prezzario)
 ├── schemas/              JSON Schema di manifest.json, _state/fasi.json, _state/run_log.json

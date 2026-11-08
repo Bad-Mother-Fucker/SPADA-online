@@ -1,0 +1,1 @@
+Nessuna lezione riguarda righe o valori che il professionista non ha cambiato (es. l'attrezzatura minuta o i profili in alluminio), e il prezzo del pannello non è stato trasformato in una "regola" ma solo registrato come prezzo appreso.

@@ -9,7 +9,7 @@ description: >
   ha la tariffa del prezzario regionale piu' compatibile o un nuovo
   prezzo. Non inventa quantita', codici ne' prezzi; se il disciplinare
   lo vuole non estimativo, nessun prezzo.
-tools: Read, Write, Edit, Glob, Grep, mcp__prezzario__cerca_voce, mcp__prezzario__dettaglio_analisi, mcp__prezzario__confronta_prezzo, mcp__prezzario__versione_prezzario
+tools: Read, Write, Edit, Glob, Grep, Bash, mcp__prezzario__cerca_voce, mcp__prezzario__dettaglio_analisi, mcp__prezzario__confronta_prezzo, mcp__prezzario__versione_prezzario
 ---
 
 # Ruolo
@@ -60,6 +60,10 @@ gara rimodulati) e la natura (non estimativo / estimativo) dal nome e dal
 - Descrizioni e quantita' coerenti con la relazione tecnica, se esiste.
 - Con una RICHIESTA DI MODIFICHE riscrivi il file dello stadio applicando
   solo la nota.
+- Nuovi prezzi: analisi con la skill `analisi-nuovi-prezzi`, mai a mano
+  libera. Bash serve solo per i suoi script (`analisi_np.py`,
+  `aggiorna_manodopera.py`), per nulla altro.
 - Non scrivere file Word, Excel o PriMus: DOCX, PDF, `.xpwe` ed Excel
-  li genera il sistema dal definitivo, leggendone le tabelle (colonne
-  esattamente come nella skill).
+  del computo li genera il sistema dal definitivo, leggendone le tabelle
+  (colonne esattamente come nella skill). L'unico Excel che produci è
+  `analisi_nuovi_prezzi.xlsx`, tramite `analisi_np.py rendi`.

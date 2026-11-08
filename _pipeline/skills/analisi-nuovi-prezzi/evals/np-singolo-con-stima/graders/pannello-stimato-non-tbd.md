@@ -1,0 +1,1 @@
+La riga del pannello HPL in analisi_nuovi_prezzi.json ha un costo_unitario numerico e una fonte che inizia con «stima — » e dice su cosa si basa; nessuna occorrenza di «TBD» o «da definire» nei file prodotti; la riga compare in da_verificare.

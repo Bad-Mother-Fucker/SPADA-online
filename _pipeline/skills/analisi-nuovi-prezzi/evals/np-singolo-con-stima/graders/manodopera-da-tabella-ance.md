@@ -1,0 +1,1 @@
+Le righe di manodopera citano come fonte la tabella ANCE Napoli n. 373 (dal 01/10/2026) con i costi orari di references/manodopera_ance.md (34,97 e 32,37 €/h per 3° e 2° livello, oltre 15 dip.), non una voce del prezzario.

@@ -1,0 +1,7 @@
+name: np-singolo-con-stima
+description: >
+  Un solo nuovo prezzo, computo non estimativo, materiale principale senza
+  voce di prezzario né preventivo: l'analisi deve essere completa, con il
+  pannello a un prezzo stimato dichiarato «stima — …» (mai TBD), manodopera
+  dalla tabella ANCE/ministeriale dell'anno, sfrido dentro la quantità,
+  percentuali 3/15/10, JSON + markdown coerenti e copia _generato.

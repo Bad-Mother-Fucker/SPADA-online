@@ -1,0 +1,1 @@
+analisi_nuovi_prezzi.md contiene, per NP.OT.001, le sezioni MANODOPERA (almeno due livelli con ore per m² e nota sul ragionamento), MATERIALI (pannello con «compreso sfrido» nella descrizione e quantità >1, profili/struttura, ferramenta), MEZZI D'OPERA, VARIE, le righe 5.0 (3%), 5.1 (15%), 6. (10%), TOTALE GENERALE e PREZZO DI APPLICAZIONE; nessuna riga di sfrido separata.

@@ -1,0 +1,1 @@
+Ogni costo non stimato cita una fonte verificabile («prezzario Campania 2026 — <codice>» per un codice interrogato con cerca_voce o dettaglio_analisi nella sessione, o la tabella manodopera); nessuna fonte generica come «prezzi di mercato».

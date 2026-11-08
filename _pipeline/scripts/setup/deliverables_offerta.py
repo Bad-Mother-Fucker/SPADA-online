@@ -295,7 +295,10 @@ def _file_dello_stadio(dl: dict, stadio: str, ultimo: bool) -> list[str]:
     voce = next(s for s in stadi_di(dl["tipo"]) if s[0] == stadio)
     nomi = [voce[2], f"controllo_{stadio}.md"] if voce[2] else []
     if dl["tipo"] == "computo_metrico" and stadio == "bozza":
-        nomi.append("analisi_nuovi_prezzi.md")  # documento di lavoro della bozza (skill, nuovi prezzi)
+        # documenti di lavoro della bozza (skill analisi-nuovi-prezzi) e la
+        # copia «generato» su cui la skill impara allo stadio dopo
+        nomi += ["analisi_nuovi_prezzi.md", "analisi_nuovi_prezzi.json", "analisi_nuovi_prezzi.xlsx",
+                 "_generato/analisi_nuovi_prezzi.json"]
     return nomi + (["*.docx", "*.pdf", "*.xpwe", "*.xlsx"] if ultimo else [])
 
 

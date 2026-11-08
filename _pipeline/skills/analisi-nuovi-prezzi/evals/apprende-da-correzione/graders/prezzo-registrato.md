@@ -1,0 +1,1 @@
+memoria_test/prezzi_appresi.json contiene il pannello HPL a 68,00 €/m², regione Campania, anno 2026, fonte che cita il preventivo Abet Laminati; la lezione o la nota ricorda che la skill aveva stimato 62,00.

@@ -15,7 +15,7 @@ segue fedelmente quello approvato (modifiche a mano comprese).
 | Stadio | File | Cosa decide il professionista |
 |---|---|---|
 | 1. Elenco delle voci | `1_voci.md` | quali lavorazioni entrano, da dove vengono le quantità, quale tariffa del prezzario |
-| 2. Bozza del computo | `2_bozza.md` (+ `analisi_nuovi_prezzi.md`) | descrizioni, quantità, unità di misura, tariffe e nuovi prezzi |
+| 2. Bozza del computo | `2_bozza.md` (+ `analisi_nuovi_prezzi.{json,md,xlsx}`) | descrizioni, quantità, unità di misura, tariffe e nuovi prezzi |
 | 3. Definitivo | `3_definitivo.md` | documento da consegnare (DOCX/PDF, PriMus `.xpwe` ed Excel dall'interfaccia) |
 
 Dal definitivo il sistema genera da solo, oltre a DOCX e PDF, il computo
@@ -110,17 +110,21 @@ nuovo prezzo.
 
 **Nuovi prezzi.** Per ciascuno: descrizione estesa completa della
 lavorazione (come una voce di prezzario: cosa comprende, materiali,
-classi, posa, oneri), unità di misura e, nel file di lavoro
-`analisi_nuovi_prezzi.md` (stadio 2), l'analisi del prezzo costruita
-come le analisi del prezzario: prendi a modello l'analisi di una voce
-analoga (`dettaglio_analisi`) e componi manodopera, materiali, noli e
-trasporti con voci elementari del prezzario (codice, U.M., quantità per
-unità di lavorazione, prezzo), più spese generali e utile d'impresa
-nelle percentuali del prezzario. Un componente senza voce elementare
-nel prezzario resta `TBD — prezzo da preventivo` e si segnala.
-`analisi_nuovi_prezzi.md` è un documento di lavoro per il
-professionista: **non va mai nella busta tecnica**, e nel computo non
-estimativo i suoi prezzi non compaiono in nessun altro file.
+classi, posa, oneri) e unità di misura. L'analisi del prezzo si
+costruisce **con la skill `analisi-nuovi-prezzi`** (stadio 2; leggi il
+suo SKILL.md prima di scrivere), che produce `analisi_nuovi_prezzi.json`,
+`analisi_nuovi_prezzi.md` e la copia `_generato/` nella cartella del
+deliverable: metodo del professionista (manodopera dalla tabella ANCE
+in vigore, materiali, mezzi d'opera, varie; sicurezza 3% e spese
+generali 15% su totale A; utile 10% su totale B; incidenza di ogni
+sottovoce), voci elementari del prezzario della gara come fonte di
+materiali e noli, e **stime dichiarate** («stima — …») dove manca un
+prezzo — mai `TBD`. Allo stadio 3 la stessa skill confronta l'analisi
+approvata con quella generata e **impara** dalle correzioni del
+professionista (`apprendi --archivia`): è parte dello stadio, non
+un'opzione. `analisi_nuovi_prezzi.*` sono documenti di lavoro per il
+professionista: **non vanno mai nella busta tecnica**, e nel computo
+non estimativo i loro prezzi non compaiono in nessun altro file.
 
 ## Fonti
 
@@ -180,9 +184,13 @@ Per ogni voce dell'elenco approvato una riga:
   Fonte con il nome del prezzario come lo restituisce
   `versione_prezzario`. Nessun prezzo in questa tabella, neanche nel
   computo estimativo (lì il prezzo sta nella colonna della voce).
-- Scrivi anche `analisi_nuovi_prezzi.md` (vedi «Tariffa di riferimento
-  per ogni voce»), una sezione per nuovo prezzo; se non ce ne sono,
-  il file dice «Nessun nuovo prezzo».
+- Per i nuovi prezzi segui la skill `analisi-nuovi-prezzi` (vedi
+  «Tariffa di riferimento per ogni voce»): `analisi_nuovi_prezzi.json`
+  come fonte di verità, poi `python3 "$SPADA_CLAUDE_DIR/skills/analisi-nuovi-prezzi/scripts/analisi_np.py" rendi <cartella>`
+  e `verifica <cartella>` (markdown, Excel, copia `_generato/`); una
+  sezione per `NP.OT.nnn`, nell'ordine del computo. Se non ce ne sono,
+  `analisi_nuovi_prezzi.md` dice «Nessun nuovo prezzo» e il JSON ha
+  `analisi: []`.
 
 - La descrizione dice cosa si offre in più rispetto al progetto (marca,
   classe, prestazione, controllo), coerente con la relazione tecnica e
@@ -221,6 +229,14 @@ come sono, una voce per riga, la quantità come numero all'inizio della
 cella (`2,55` o `2,55 (come da computo di progetto)`; `TBD` solo se
 davvero da definire). Estimativo: aggiungi le colonne «Prezzo
 unitario» e «Importo» dopo «Quantità».
+
+Se il computo ha nuovi prezzi: la descrizione estesa di ogni
+`NP.OT.nnn` nell'«Elenco delle tariffe» coincide con quella in
+`analisi_nuovi_prezzi.json` (fonte: l'analisi approvata, che il
+professionista può aver corretto a mano). Poi chiudi il ciclo di
+apprendimento della skill `analisi-nuovi-prezzi`:
+`python3 "$SPADA_CLAUDE_DIR/skills/analisi-nuovi-prezzi/scripts/analisi_np.py" apprendi <cartella> --archivia`,
+rifinisci le lezioni candidate come dice il suo SKILL.md («Apprendimento», B e C).
 
 Nessun contenuto nuovo rispetto alla bozza approvata; controlla che
 nessuna cifra economica sia rimasta (non estimativo), che ogni tariffa

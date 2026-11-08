@@ -1,0 +1,99 @@
+{
+  "schema": "analisi-nuovi-prezzi/1.0",
+  "gara": "liceo-rossi-efficientamento",
+  "deliverable_id": "C1-0",
+  "documento": "Computo metrico delle migliorie",
+  "stadio": "definitivo",
+  "generato_il": "2026-11-08T14:32:00Z",
+  "non_estimativo": true,
+  "prezzario": {
+    "regione": "Campania",
+    "anno": 2026,
+    "identificativo": "Campania-2026-ab12cd"
+  },
+  "parametri": {
+    "sicurezza_pct": 3.0,
+    "spese_generali_pct": 15.0,
+    "utile_pct": 10.0,
+    "fonte": "metodo standard"
+  },
+  "analisi": [
+    {
+      "codice": "NP.OT.001",
+      "descrizione_sintetica": "Pareti divisorie in pannelli HPL compatto a nucleo pieno sp. 13 mm su struttura in alluminio",
+      "descrizione_estesa": "Fornitura e posa in opera di pareti divisorie per servizi igienici in pannelli di laminato HPL compatto a nucleo pieno, spessore 13 mm, classe di reazione al fuoco B-s2,d0, bordi arrotondati, su struttura portante in profili di alluminio anodizzato con piedini regolabili; comprese ferramenta in acciaio inox, serrature libero/occupato, tracciamento, tagli, sfridi, fissaggi, pulizia finale. Esclusa la demolizione delle pareti esistenti.",
+      "unita_misura": "m²",
+      "proposta": "Pareti divisorie dei servizi in HPL compatto",
+      "criterio": "1.1 — Qualità dei materiali",
+      "voce_computo": "29 — 9_CME_Computo_Metrico_Estimativo",
+      "voce_prezzario_analoga": "CAM26_R02.090.070.C",
+      "sezioni": {
+        "manodopera": [
+          {
+            "n": "1.1",
+            "descrizione": "Operaio specializzato (3° livello)",
+            "um": "h",
+            "quantita": 0.75,
+            "costo_unitario": 34.97,
+            "fonte": "tabella ANCE Napoli n. 373 (dal 01/10/2026), oltre 15 dip.",
+            "nota": "squadra di 2, 0,6 h/m² ciascuno: tracciamento, posa struttura, posa pannelli; da analisi CAM26_R02.090.070.C (0,55) + tracciamento"
+          },
+          {
+            "n": "1.2",
+            "descrizione": "Operaio qualificato (2° livello)",
+            "um": "h",
+            "quantita": 0.75,
+            "costo_unitario": 32.37,
+            "fonte": "tabella ANCE Napoli n. 373 (dal 01/10/2026), oltre 15 dip."
+          }
+        ],
+        "materiali": [
+          {
+            "n": "2.1",
+            "descrizione": "Pannello HPL compatto nucleo pieno sp. 13 mm, classe B-s2,d0, compreso sfrido 8%",
+            "um": "m²",
+            "quantita": 1.08,
+            "costo_unitario": 68.0,
+            "fonte": "preventivo Abet Laminati del 05/11/2026"
+          },
+          {
+            "n": "2.2",
+            "descrizione": "Profili in alluminio anodizzato per struttura e fissaggio",
+            "um": "m",
+            "quantita": 3.2,
+            "costo_unitario": 6.8,
+            "fonte": "prezzario Campania 2026 — CAM26_P01.010.040.B"
+          },
+          {
+            "n": "2.3",
+            "descrizione": "Ferramenta inox: cerniere, pomoli, serrature libero/occupato",
+            "um": "cad",
+            "quantita": 0.45,
+            "costo_unitario": 38.0,
+            "fonte": "preventivo Abet Laminati del 05/11/2026"
+          }
+        ],
+        "mezzi_opera": [
+          {
+            "n": "3.1",
+            "descrizione": "Attrezzatura minuta ed elettroutensili (nolo a freddo)",
+            "um": "h",
+            "quantita": 0.6,
+            "costo_unitario": 1.9,
+            "fonte": "prezzario Campania 2026 — CAM26_N.01.020.010.A"
+          }
+        ],
+        "varie": []
+      },
+      "confronto": {
+        "codice": "CAM26_R02.090.070.C",
+        "prezzo_prezzario": 95.1,
+        "spiegazione": "il pannello HPL a nucleo pieno costa circa il doppio del laminato della voce di prezzario; la posa è analoga"
+      },
+      "note": [
+        "Ore di posa da analisi prezzario CAM26_R02.090.070.C (0,55 h/m² per livello), maggiorate a 0,60 per il tracciamento su struttura."
+      ],
+      "da_verificare": []
+    }
+  ]
+}

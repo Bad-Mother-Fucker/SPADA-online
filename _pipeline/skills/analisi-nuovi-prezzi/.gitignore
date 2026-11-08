@@ -1,0 +1,9 @@
+# La memoria della skill è per macchina (come _data/): non si versiona.
+# Le regole mature si promuovono a mano in references/metodo.md.
+memoria/*
+!memoria/README.md
+!memoria/.gitkeep
+!memoria/analisi_approvate/
+memoria/analisi_approvate/*
+!memoria/analisi_approvate/.gitkeep
+__pycache__/

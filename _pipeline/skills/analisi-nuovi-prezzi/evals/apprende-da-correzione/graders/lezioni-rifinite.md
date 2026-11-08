@@ -1,0 +1,1 @@
+memoria_test/lezioni.md contiene una lezione nella sezione Manodopera sulle ore di posa (≥0,75 h/m² per livello per pannellature su struttura regolabile) con il motivo «livellamento e tracciamento», e una nella sezione Materiali sulla ferramenta da non dimenticare; nessuna riga resta con segnaposto fra parentesi quadre.

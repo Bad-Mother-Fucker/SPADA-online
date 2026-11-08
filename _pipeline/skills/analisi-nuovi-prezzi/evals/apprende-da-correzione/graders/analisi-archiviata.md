@@ -1,0 +1,1 @@
+memoria_test/analisi_approvate/ contiene un file per NP.OT.001 con frontmatter (codice, tag, unita_misura, prezzo_applicazione 212.81, incidenze, regione, anno_prezzario, gara, approvata_il, modificata_dal_professionista: true).
